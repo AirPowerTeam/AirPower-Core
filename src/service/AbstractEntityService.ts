@@ -1,8 +1,8 @@
 import type { AirEntity, ClassConstructor, IJson } from 'airpower'
-import type { QueryRequest } from '../model/QueryRequest.ts'
+import type { QueryRequest } from '../model'
 import { AirClassTransformer, AirEvent } from 'airpower'
-import { CoreEvents } from '../enum/CoreEvents.ts'
-import { QueryPageResponse } from '../model/QueryPageResponse.ts'
+import { CoreEvents } from '../enum'
+import { QueryPageResponse } from '../model'
 import { AbstractService } from './AbstractService.ts'
 
 /**

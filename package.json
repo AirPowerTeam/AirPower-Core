@@ -1,7 +1,7 @@
 {
   "name": "@airpower/core",
   "type": "module",
-  "version": "1.2.4",
+  "version": "0.0.2",
   "description": "AirPower-Core",
   "author": {
     "name": "Hamm",
@@ -25,7 +25,8 @@
   "module": "dist/airpower.es.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "docs"
   ],
   "scripts": {
     "build": "tsc && vite build",
@@ -34,7 +35,9 @@
   },
   "dependencies": {
     "@types/crypto-js": "^4.2.2",
-    "crypto-js": "^4.2.0"
+    "airpower": "^1.2.4",
+    "crypto-js": "^4.2.0",
+    "vue": "^3.5.13"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.11.0",

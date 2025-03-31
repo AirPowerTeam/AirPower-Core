@@ -1,4 +1,4 @@
-import { CoreConfig } from '../config/CoreConfig.ts'
+import { CoreConfig } from '../config'
 
 /**
  * # HTTP 异常

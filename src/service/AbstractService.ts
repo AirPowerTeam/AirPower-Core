@@ -1,6 +1,6 @@
 import type { ClassConstructor } from 'airpower'
 import type { Ref } from 'vue'
-import type { AbstractHttp } from '../http/AbstractHttp.ts'
+import type { AbstractHttp } from '../http'
 import { AirModel } from 'airpower'
 
 /**

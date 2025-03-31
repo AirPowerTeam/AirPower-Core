@@ -12,7 +12,7 @@ export default defineConfig({
       fileName: format => `airpower.${format}.js`,
     },
     rollupOptions: {
-      external: ['ant-design-vue'], // 若依赖第三方库（如 lodash），需在此声明
+      external: [],
       output: {
         globals: {},
       },
