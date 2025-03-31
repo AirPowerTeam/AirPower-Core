@@ -50,7 +50,7 @@ export abstract class AbstractHttp {
    * @param url 请求的 `URL`
    * @param errorCallback  异常回调
    */
-  static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback: (error: HttpResponseError) => void): R {
+  static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback?: (error: HttpResponseError) => void): R {
     const service = Object.assign(new this()) as R
     if (url.includes(AirConstant.PREFIX_HTTP) || url.includes(AirConstant.PREFIX_HTTPS)) {
       service.url = url
@@ -242,29 +242,29 @@ export abstract class AbstractHttp {
         const error = new HttpResponseError(response.message, response.code)
         if (response.code === CoreConfig.unAuthorizeCode) {
           // 需要登录
-          if (this.isThrowError) {
+          if (this.isThrowError || !this.errorCallback) {
             reject(error)
             return
           }
-          this.errorCallback && this.errorCallback(error)
+          this.errorCallback(error)
           return
         }
         if (response.code !== CoreConfig.successCode) {
-          if (this.isThrowError) {
+          if (this.isThrowError || !this.errorCallback) {
             reject(error)
             return
           }
-          this.errorCallback && this.errorCallback(error)
+          this.errorCallback(error)
           return
         }
         resolve(response.data as AirAny)
       }).catch((e) => {
         const error = new HttpResponseError(e.message)
-        if (this.isThrowError) {
+        if (this.isThrowError || !this.errorCallback) {
           reject(error)
           return
         }
-        this.errorCallback && this.errorCallback(error)
+        this.errorCallback(error)
       }).finally(() => {
         this.stopLoading()
       })
