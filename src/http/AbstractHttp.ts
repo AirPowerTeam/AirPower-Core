@@ -1,10 +1,9 @@
 import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
-import type { HttpResponse } from './HttpResponse'
 import { AirClassTransformer, AirConstant } from 'airpower'
 import { Constant, CoreConfig } from '../config'
 import { HttpContentType } from './HttpContentType'
 import { HttpMethod } from './HttpMethod'
-import { HttpResponseError } from './HttpResponseError'
+import { HttpResponse } from './HttpResponse'
 
 /**
  * # 网络请求类
@@ -39,7 +38,7 @@ export abstract class AbstractHttp {
   /**
    * ### 错误回调
    */
-  private errorCallback?: (error: HttpResponseError) => void
+  private errorCallback?: (error: HttpResponse) => void
   /**
    * ### 是否直接抛出错误
    */
@@ -50,7 +49,7 @@ export abstract class AbstractHttp {
    * @param url 请求的 `URL`
    * @param errorCallback  异常回调
    */
-  static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback?: (error: HttpResponseError) => void): R {
+  static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback?: (error: HttpResponse) => void): R {
     const service = Object.assign(new this()) as R
     if (url.includes(AirConstant.PREFIX_HTTP) || url.includes(AirConstant.PREFIX_HTTPS)) {
       service.url = url
@@ -239,27 +238,28 @@ export abstract class AbstractHttp {
     return new Promise((resolve, reject) => {
       this.startLoading()
       this.request(body).then((response) => {
-        const error = new HttpResponseError(response.message, response.code)
         if (response.code === CoreConfig.unAuthorizeCode) {
           // 需要登录
           if (this.isThrowError || !this.errorCallback) {
-            reject(error)
+            reject(response)
             return
           }
-          this.errorCallback(error)
+          this.errorCallback(response)
           return
         }
         if (response.code !== CoreConfig.successCode) {
           if (this.isThrowError || !this.errorCallback) {
-            reject(error)
+            reject(response)
             return
           }
-          this.errorCallback(error)
+          this.errorCallback(response)
           return
         }
         resolve(response.data as AirAny)
       }).catch((e) => {
-        const error = new HttpResponseError(e.message)
+        const error = new HttpResponse()
+        error.message = e.message
+        error.code = CoreConfig.defaultErrorCode
         if (this.isThrowError || !this.errorCallback) {
           reject(error)
           return

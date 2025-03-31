@@ -191,13 +191,15 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
 
   /**
    * ### 显示成功消息
+   * @param successMessage 成功消息
    */
-  protected abstract showSuccess(message: string): void
+  protected abstract showSuccess(successMessage: string): void
 
   /**
    * ### 显示错误信息
+   * @param errorMessage 错误信息
    */
-  protected abstract showError(message: string): void
+  protected abstract showError(errorMessage: string): void
 
   /**
    * ### 创建一个实体的实例
