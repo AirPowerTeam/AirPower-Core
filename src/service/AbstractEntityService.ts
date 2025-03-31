@@ -1,7 +1,6 @@
 import type { AirEntity, ClassConstructor, IJson } from 'airpower'
 import type { QueryRequest } from '../model'
-import { AirClassTransformer, AirEvent } from 'airpower'
-import { CoreEvents } from '../enum'
+import { AirClassTransformer } from 'airpower'
 import { QueryPageResponse } from '../model'
 import { AbstractService } from './AbstractService'
 
@@ -106,12 +105,11 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
    * ### 添加一条新的数据
    * @param data 保存的数据
    * @param message `可选` 添加成功的消息提示内容
-   * @param title `可选` 添加成功的消息提示标题 默认 `添加成功`
    * @param apiUrl `可选` 自定义请求URL
    */
-  async add(data: E, message?: string, title = '添加成功', apiUrl = this.urlForAdd): Promise<number> {
+  async add(data: E, message = '添加成功', apiUrl = this.urlForAdd): Promise<number> {
     const saved = await this.api(apiUrl).postGet(data, this.entityClass)
-    AirEvent.emit(CoreEvents.ADD_SUCCESS, title, message, saved)
+    this.showSuccess(message)
     return saved.id
   }
 
@@ -119,12 +117,11 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
    * ### 修改一条数据
    * @param data 修改的数据实体
    * @param message `可选` 修改成功的消息提示内容
-   * @param title `可选` 修改成功的消息提示标题 默认 `修改成功`
    * @param apiUrl `可选` 自定义请求URL
    */
-  async update(data: E, message?: string, title = '修改成功', apiUrl = this.urlForUpdate): Promise<void> {
+  async update(data: E, message = '修改成功', apiUrl = this.urlForUpdate): Promise<void> {
     await this.api(apiUrl).post(data)
-    AirEvent.emit(CoreEvents.UPDATE_SUCCESS, title, message, data)
+    this.showSuccess(message)
   }
 
   /**
@@ -133,31 +130,29 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
    * 如包含 `ID` 则更新 如不包含 则创建
    * @param data 保存的数据实体
    * @param message `可选` 保存成功的消息提示内容
-   * @param title `可选` 保存成功的消息提示标题 默认 `保存成功`
    */
-  async save(data: E, message?: string, title = '保存成功'): Promise<number> {
+  async save(data: E, message = '保存成功'): Promise<number> {
     if (data.id) {
-      await this.update(data, message, title)
+      await this.update(data, message)
       return data.id
     }
-    return this.add(data, message, title)
+    return this.add(data, message)
   }
 
   /**
    * ### 根据 `ID` 删除一条数据
    * @param id 删除的数据 `ID`
    * @param message `可选` 删除成功的消息提示内容
-   * @param title `可选` 删除成功的消息提示标题 默认 `删除成功`
    * @param apiUrl `可选` 自定义请求URL
    */
-  async delete(id: number, message?: string, title = '删除成功', apiUrl = this.urlForDelete): Promise<void> {
+  async delete(id: number, message = '删除成功', apiUrl = this.urlForDelete): Promise<void> {
     const instance = this.newEntityInstance(id)
     try {
       await this.api(apiUrl).throwError().post(instance)
-      AirEvent.emit(CoreEvents.DELETE_SUCCESS, title, message, instance)
+      this.showSuccess(message)
     }
     catch (err) {
-      AirEvent.emit(CoreEvents.DELETE_FAIL, '删除失败', (err as Error).message, instance)
+      this.showError((err as Error).message)
     }
   }
 
@@ -165,17 +160,16 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
    * ### 根据 `ID` 禁用一条数据
    * @param id 禁用的数据 `ID`
    * @param message `可选` 禁用成功的消息提示内容
-   * @param title `可选` 禁用成功的消息提示标题 默认 `禁用成功`
    * @param apiUrl `可选` 自定义请求URL
    */
-  async disable(id: number, message?: string, title = '禁用成功', apiUrl = this.urlForDisable): Promise<void> {
+  async disable(id: number, message = '禁用成功', apiUrl = this.urlForDisable): Promise<void> {
     const instance = this.newEntityInstance(id)
     try {
       await this.api(apiUrl).throwError().addHttpHeader('a', 'b').post(instance)
-      AirEvent.emit(CoreEvents.DISABLE_SUCCESS, title, message, instance)
+      this.showSuccess(message)
     }
     catch (err) {
-      AirEvent.emit(CoreEvents.ENABLE_FAIL, '禁用失败', (err as Error).message, instance)
+      this.showError((err as Error).message)
     }
   }
 
@@ -183,19 +177,27 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
    * ### 根据 `ID` 启用一条数据
    * @param id 启用的数据 `ID`
    * @param message `可选` 启用成功的消息提示内容
-   * @param title `可选` 启用成功的消息提示标题 默认 `启用成功`
    * @param apiUrl `可选` 自定义请求URL
    */
-  async enable(id: number, message?: string, title = '启用成功', apiUrl = this.urlForEnable): Promise<void> {
-    const instance = this.newEntityInstance(id)
+  async enable(id: number, message = '启用成功', apiUrl = this.urlForEnable): Promise<void> {
     try {
       await this.api(apiUrl).throwError().post(this.newEntityInstance(id))
-      AirEvent.emit(CoreEvents.ENABLE_SUCCESS, title, message, instance)
+      this.showSuccess(message)
     }
     catch (err) {
-      AirEvent.emit(CoreEvents.ENABLE_FAIL, '启用失败', (err as Error).message, instance)
+      this.showError((err as Error).message)
     }
   }
+
+  /**
+   * ### 显示成功消息
+   */
+  protected abstract showSuccess(message: string): void
+
+  /**
+   * ### 显示错误信息
+   */
+  protected abstract showError(message: string): void
 
   /**
    * ### 创建一个实体的实例
