@@ -1,7 +1,7 @@
 import type { AirEntity } from 'airpower'
 import { AirModel, Field } from 'airpower'
-import { Page } from './Page.ts'
-import { QuerySort } from './QuerySort.ts'
+import { Page } from './Page'
+import { QuerySort } from './QuerySort'
 
 /**
  * # 查询分页响应雷

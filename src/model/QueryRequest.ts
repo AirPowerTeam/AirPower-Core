@@ -1,6 +1,6 @@
 import type { AirEntity, ClassConstructor } from 'airpower'
 import { AirClassTransformer, AirModel, Field } from 'airpower'
-import { QuerySort } from './QuerySort.ts'
+import { QuerySort } from './QuerySort'
 
 /**
  * # 请求类

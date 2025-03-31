@@ -11,7 +11,6 @@ export class CoreConfig {
 
   /**
    * ### `AccessToken` 对应的 `Key`
-   * `缓存的名称` 和 `Api传输的Header` 都叫这个名字
    */
   static authorizationHeaderKey = 'Authorization'
 

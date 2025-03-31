@@ -3,7 +3,7 @@ import type { QueryRequest } from '../model'
 import { AirClassTransformer, AirEvent } from 'airpower'
 import { CoreEvents } from '../enum'
 import { QueryPageResponse } from '../model'
-import { AbstractService } from './AbstractService.ts'
+import { AbstractService } from './AbstractService'
 
 /**
  * # 实体 `API` 服务超类

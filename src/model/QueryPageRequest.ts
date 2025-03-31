@@ -1,7 +1,7 @@
 import type { AirEntity } from 'airpower'
 import { Field } from 'airpower'
-import { Page } from './Page.ts'
-import { QueryRequest } from './QueryRequest.ts'
+import { Page } from './Page'
+import { QueryRequest } from './QueryRequest'
 
 /**
  * # 查询分页请求类

@@ -1,11 +1,11 @@
 import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
-import type { HttpResponse } from './HttpResponse.ts'
+import type { HttpResponse } from './HttpResponse'
 import { AirClassTransformer, AirConstant, AirEvent } from 'airpower'
 import { Constant, CoreConfig } from '../config'
 import { CoreEvents } from '../enum'
-import { HttpContentType } from './HttpContentType.ts'
-import { HttpMethod } from './HttpMethod.ts'
-import { HttpResponseError } from './HttpResponseError.ts'
+import { HttpContentType } from './HttpContentType'
+import { HttpMethod } from './HttpMethod'
+import { HttpResponseError } from './HttpResponseError'
 
 /**
  * # 网络请求类
