@@ -1,8 +1,7 @@
 import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
 import type { HttpResponse } from './HttpResponse'
-import { AirClassTransformer, AirConstant, AirEvent } from 'airpower'
+import { AirClassTransformer, AirConstant } from 'airpower'
 import { Constant, CoreConfig } from '../config'
-import { CoreEvents } from '../enum'
 import { HttpContentType } from './HttpContentType'
 import { HttpMethod } from './HttpMethod'
 import { HttpResponseError } from './HttpResponseError'
@@ -38,15 +37,20 @@ export abstract class AbstractHttp {
   private headers: IJson = {}
 
   /**
-   * ### 是否回调错误
+   * ### 错误回调
    */
-  private isCallbackError = false
+  private errorCallback?: (error: HttpResponseError) => void
+  /**
+   * ### 是否直接抛出错误
+   */
+  private isThrowError = false
 
   /**
    * ### 创建一个客户端
    * @param url 请求的 `URL`
+   * @param errorCallback  异常回调
    */
-  static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string): R {
+  static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback: (error: HttpResponseError) => void): R {
     const service = Object.assign(new this()) as R
     if (url.includes(AirConstant.PREFIX_HTTP) || url.includes(AirConstant.PREFIX_HTTPS)) {
       service.url = url
@@ -59,6 +63,7 @@ export abstract class AbstractHttp {
     if (accessToken) {
       service.headers[CoreConfig.authorizationHeaderKey] = accessToken
     }
+    service.errorCallback = errorCallback
     return service
   }
 
@@ -81,15 +86,6 @@ export abstract class AbstractHttp {
    */
   getTimeout(): number {
     return this.timeout
-  }
-
-  /**
-   * ### 设置是否回调错误
-   * @param isCallbackError 是否回调错误
-   */
-  callbackError(isCallbackError = true): this {
-    this.isCallbackError = isCallbackError
-    return this
   }
 
   /**
@@ -215,6 +211,15 @@ export abstract class AbstractHttp {
   abstract request(body?: unknown): Promise<HttpResponse>
 
   /**
+   * ### 是否直接抛出错误
+   * @param isThrowError 是否回调错误
+   */
+  throwError(isThrowError = true): this {
+    this.isThrowError = isThrowError
+    return this
+  }
+
+  /**
    * ### 开始加载
    */
   protected startLoading(): void {
@@ -231,28 +236,38 @@ export abstract class AbstractHttp {
    * @param body 请求体
    */
   private async send(body?: unknown): Promise<IJson | IJson[]> {
-    this.startLoading()
-    const response = await this.request(body)
-    this.stopLoading()
     return new Promise((resolve, reject) => {
-      if (response.code === CoreConfig.unAuthorizeCode) {
-        // 需要登录
-        if (this.isCallbackError) {
-          reject(new HttpResponseError(response.message, response.code))
+      this.startLoading()
+      this.request(body).then((response) => {
+        const error = new HttpResponseError(response.message, response.code)
+        if (response.code === CoreConfig.unAuthorizeCode) {
+          // 需要登录
+          if (this.isThrowError) {
+            reject(error)
+            return
+          }
+          this.errorCallback && this.errorCallback(error)
           return
         }
-        AirEvent.emit(CoreEvents.NEED_LOGIN, response)
-        return
-      }
-      if (response.code !== CoreConfig.successCode) {
-        if (this.isCallbackError) {
-          reject(new HttpResponseError(response.message, response.code))
+        if (response.code !== CoreConfig.successCode) {
+          if (this.isThrowError) {
+            reject(error)
+            return
+          }
+          this.errorCallback && this.errorCallback(error)
           return
         }
-        AirEvent.emit(CoreEvents.HTTP_ERROR, response)
-        return
-      }
-      resolve(response.data as AirAny)
+        resolve(response.data as AirAny)
+      }).catch((e) => {
+        const error = new HttpResponseError(e.message)
+        if (this.isThrowError) {
+          reject(error)
+          return
+        }
+        this.errorCallback && this.errorCallback(error)
+      }).finally(() => {
+        this.stopLoading()
+      })
     })
   }
 }

@@ -153,7 +153,7 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
   async delete(id: number, message?: string, title = '删除成功', apiUrl = this.urlForDelete): Promise<void> {
     const instance = this.newEntityInstance(id)
     try {
-      await this.api(apiUrl).callbackError().post(instance)
+      await this.api(apiUrl).throwError().post(instance)
       AirEvent.emit(CoreEvents.DELETE_SUCCESS, title, message, instance)
     }
     catch (err) {
@@ -171,7 +171,7 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
   async disable(id: number, message?: string, title = '禁用成功', apiUrl = this.urlForDisable): Promise<void> {
     const instance = this.newEntityInstance(id)
     try {
-      await this.api(apiUrl).callbackError().addHttpHeader('a', 'b').post(instance)
+      await this.api(apiUrl).throwError().addHttpHeader('a', 'b').post(instance)
       AirEvent.emit(CoreEvents.DISABLE_SUCCESS, title, message, instance)
     }
     catch (err) {
@@ -189,7 +189,7 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
   async enable(id: number, message?: string, title = '启用成功', apiUrl = this.urlForEnable): Promise<void> {
     const instance = this.newEntityInstance(id)
     try {
-      await this.api(apiUrl).callbackError().post(this.newEntityInstance(id))
+      await this.api(apiUrl).throwError().post(this.newEntityInstance(id))
       AirEvent.emit(CoreEvents.ENABLE_SUCCESS, title, message, instance)
     }
     catch (err) {
