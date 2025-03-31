@@ -1,0 +1,50 @@
+{
+  "name": "@airpower/core",
+  "type": "module",
+  "version": "1.2.4",
+  "description": "AirPower-Core",
+  "author": {
+    "name": "Hamm",
+    "email": "admin@hamm.cn",
+    "url": "https://github.com/HammCn"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/AirPowerTeam/AirPower-Core#readme",
+  "repository": "https://github.com/AirPowerTeam/AirPower-Core",
+  "bugs": {
+    "url": "https://github.com/AirPowerTeam/AirPower-Core/issues"
+  },
+  "keywords": [
+    "AirPower",
+    "class-transformer",
+    "typescript",
+    "oop",
+    "class"
+  ],
+  "main": "dist/airpower.umd.js",
+  "module": "dist/airpower.es.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && vite build",
+    "lint": "eslint src --ext .ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^4.11.0",
+    "@types/node": "^22.13.14",
+    "eslint": "^9.23.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "vite-plugin-dts": "^4.5.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
