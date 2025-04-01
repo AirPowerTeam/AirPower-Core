@@ -7,9 +7,15 @@ export default defineConfig({
   build: {
     minify: false,
     lib: {
-      entry: path.resolve(__dirname, 'src/index.ts'),
-      name: 'airpower',
-      fileName: format => `airpower.${format}.js`,
+      entry: {
+        main: path.resolve(__dirname, 'src/index.ts'),
+        shared: path.resolve(__dirname, 'src/shared.ts'),
+      },
+      name: 'airpower-core',
+      formats: ['es'],
+      fileName: (format, entryName) => {
+        return `airpower.${entryName === 'main' ? 'core' : entryName}.js`
+      },
     },
     rollupOptions: {
       external: [],
@@ -18,5 +24,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [dts(), vue()],
+  plugins: [dts({
+    include: ['src'],
+  }), vue()],
 })

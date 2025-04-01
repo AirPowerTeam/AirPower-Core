@@ -1,7 +1,7 @@
 {
   "name": "@airpower/core",
   "type": "module",
-  "version": "0.0.22",
+  "version": "0.0.26",
   "description": "AirPower-Core",
   "author": {
     "name": "Hamm",
@@ -21,20 +21,34 @@
     "oop",
     "class"
   ],
-  "main": "dist/airpower.umd.js",
-  "module": "dist/airpower.es.js",
+  "module": "dist/airpower.core.js",
+  "main": "dist/airpower.core.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
     "docs"
   ],
+  "exports": {
+    "./shared": {
+      "import": "./dist/airpower.shared.js",
+      "types": {
+        "import": "./dist/shared.d.ts"
+      }
+    },
+    ".": {
+      "import": "./dist/airpower.core.js",
+      "types": {
+        "import": "./dist/index.d.ts"
+      }
+    }
+  },
   "scripts": {
     "build": "tsc && vite build",
     "lint": "eslint src --ext .ts",
     "preview": "vite preview"
   },
   "dependencies": {
-    "airpower": "^1.2.20",
+    "airpower": "^1.2.21",
     "vue": "^3.5.13"
   },
   "devDependencies": {
