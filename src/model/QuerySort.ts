@@ -1,4 +1,4 @@
-import type { SortType } from '../type'
+import type { SortType } from '../types'
 import { AirConstant, AirModel } from 'airpower'
 
 /**
