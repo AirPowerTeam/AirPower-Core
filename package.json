@@ -1,7 +1,7 @@
 {
   "name": "@airpower/core",
   "type": "module",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "AirPower-Core",
   "author": {
     "name": "Hamm",
@@ -36,7 +36,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "airpower": "^1.3.2",
+    "airpower": "^1.3.3",
     "vue": "^3.5.13"
   },
   "peerDependencies": {
