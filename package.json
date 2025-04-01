@@ -1,7 +1,7 @@
 {
   "name": "@airpower/core",
   "type": "module",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "AirPower-Core",
   "author": {
     "name": "Hamm",
