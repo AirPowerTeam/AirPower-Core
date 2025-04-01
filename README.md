@@ -13,7 +13,19 @@
   <a href="https://gitee.com/air-power/AirPower4T">Gitee</a> 
 </p>
 
+## 项目说明
 
-<p align="center">
-ATTENTION: Contributor list is just for fun!!!
-</p>
+**AirPower-Core** 是一个基于 **AirPower** 的核心库，本身无法直接运行，你可以查看一些实现库：
+
+- ### AirPower-Web [Github](https://github.com/AirPowerTeam/AirPower-Web) / [Gitee](https://github.com/air-power/AirPower-Web)
+
+  基于 **ant-design-vue** 的 **Web** 端开发库 (开发中)
+
+- ### AirPower-Uniapp [Github](https://github.com/AirPowerTeam/AirPower-Uniapp) / [Gitee](https://github.com/air-power/AirPower-Uniapp)
+
+  基于 **uni-app** 的 **App** 端开发库 (计划中)
+
+- ### AirPower-Wechat [Github](https://github.com/AirPowerTeam/AirPower-Wechat) / [Gitee](https://github.com/air-power/AirPower-Wechat)
+
+  微信小程序开发库 (计划中)
+
