@@ -19,7 +19,7 @@
 
 - ### AirPower-Web [Github](https://github.com/AirPowerTeam/AirPower-Web) / [Gitee](https://github.com/air-power/AirPower-Web)
 
-  基于 **ant-design-vue** 的 **Web** 端开发库 (开发中)
+  基于 **Element Plus** 的 **Web** 端开发库 (开发中)
 
 - ### AirPower-Uniapp [Github](https://github.com/AirPowerTeam/AirPower-Uniapp) / [Gitee](https://github.com/air-power/AirPower-Uniapp)
 
