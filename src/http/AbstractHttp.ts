@@ -1,6 +1,6 @@
 import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
 import { AirClassTransformer, AirConstant } from 'airpower'
-import { Constant, CoreConfig } from '../config'
+import { CoreConfig, CoreConstant } from '../config'
 import { HttpContentType } from './HttpContentType'
 import { HttpMethod } from './HttpMethod'
 import { HttpResponse } from './HttpResponse'
@@ -50,14 +50,14 @@ export abstract class AbstractHttp {
    * @param errorCallback  异常回调
    */
   static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback?: (error: HttpResponse) => void): R {
-    const service = Object.assign(new this()) as R
+    const service = new this()
     if (url.includes(AirConstant.PREFIX_HTTP) || url.includes(AirConstant.PREFIX_HTTPS)) {
       service.url = url
     }
     else {
       service.url = CoreConfig.apiUrl + url
     }
-    service.headers[Constant.CONTENT_TYPE] = HttpContentType.JSON
+    service.headers[CoreConstant.CONTENT_TYPE] = HttpContentType.JSON
     const accessToken = service.getAccessToken()
     if (accessToken) {
       service.headers[CoreConfig.authorizationHeaderKey] = accessToken
@@ -153,7 +153,7 @@ export abstract class AbstractHttp {
    * @param contentType `content-type`
    */
   setContentType(contentType: HttpContentType): this {
-    return this.addHttpHeader(Constant.CONTENT_TYPE, contentType)
+    return this.addHttpHeader(CoreConstant.CONTENT_TYPE, contentType)
   }
 
   /**

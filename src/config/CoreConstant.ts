@@ -3,7 +3,7 @@
  *
  * @author Hamm.cn
  */
-export class Constant {
+export class CoreConstant {
   /**
    * ### `Content-Type`
    */

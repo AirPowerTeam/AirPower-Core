@@ -1,2 +1,2 @@
-export * from './Constant'
 export * from './CoreConfig'
+export * from './CoreConstant.ts'

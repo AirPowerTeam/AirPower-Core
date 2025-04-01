@@ -36,7 +36,7 @@ export abstract class AbstractService extends AirModel {
    * @param loading `可选` Loading
    */
   static create<S extends AbstractService>(this: ClassConstructor<S>, loading?: Ref<boolean>): S {
-    const service = Object.assign(new this()) as S
+    const service = new this()
     if (loading) {
       service.loading = loading
     }
