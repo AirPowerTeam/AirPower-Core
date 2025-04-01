@@ -13,10 +13,7 @@ export default defineConfig({
       fileName: () => `airpower.core.js`,
     },
     rollupOptions: {
-      external: [],
-      output: {
-        globals: {},
-      },
+      external: ['vue'],
     },
   },
   plugins: [dts(), vue()],
