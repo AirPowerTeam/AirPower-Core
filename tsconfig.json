@@ -27,8 +27,7 @@
     "skipLibCheck": true,
     "noUncheckedSideEffectImports": true,
     "types": [
-      "vite/client",
-      "vue"
+      "vite/client"
     ]
   },
   "include": [
