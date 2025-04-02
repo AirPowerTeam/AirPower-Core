@@ -67,11 +67,6 @@ export abstract class AbstractHttp {
   }
 
   /**
-   * ### 获取请求的 `AccessToken`
-   */
-  abstract getAccessToken(): string
-
-  /**
    * ### 设置请求超时时间
    * @param timeout 超时毫秒数
    */
@@ -201,15 +196,6 @@ export abstract class AbstractHttp {
   }
 
   /**
-   * ### 发送请求
-   *
-   * @param body `可选` 请求体
-   * @see post() 直接发送 `POST`
-   * @see get() 直接发送 `GET`
-   */
-  abstract request(body?: unknown): Promise<HttpResponse>
-
-  /**
    * ### 是否直接抛出错误
    * @param isThrowError 是否回调错误
    */
@@ -217,6 +203,20 @@ export abstract class AbstractHttp {
     this.isThrowError = isThrowError
     return this
   }
+
+  /**
+   * ### 发送请求
+   *
+   * @param body `可选` 请求体
+   * @see post() 直接发送 `POST`
+   * @see get() 直接发送 `GET`
+   */
+  protected abstract request(body?: unknown): Promise<HttpResponse>
+
+  /**
+   * ### 获取请求的 `AccessToken`
+   */
+  protected abstract getAccessToken(): string
 
   /**
    * ### 开始加载
