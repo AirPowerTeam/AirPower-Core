@@ -1,5 +1,4 @@
 import path from 'node:path'
-import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
 
@@ -13,8 +12,8 @@ export default defineConfig({
       fileName: () => `airpower.core.js`,
     },
     rollupOptions: {
-      external: ['vue', 'airpower'],
+      external: ['airpower'],
     },
   },
-  plugins: [dts(), vue()],
+  plugins: [dts()],
 })

@@ -8,5 +8,5 @@ export default config({
   typescript: true,
   gitignore: false,
   ignores: ['dist', '.idea', '.vscode'],
-  vue: true,
+  vue: false,
 })
