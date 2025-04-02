@@ -10,7 +10,7 @@
 <p align="center">
 <a href="https://github.com/AirPowerTeam/AirPower-Core">Github</a> /
   <a href="https://gitee.com/air-power/AirPower-Core">Gitee</a>  /
-  <a href="https://www.npmjs.com/package/@airpower/core">NPM</a> 
+  <a href="https://www.npmjs.com/package/@airpower/core">NPM</a>
 </p>
 
 ## 项目说明
@@ -28,4 +28,3 @@
 - ### AirPower-Wechat [Github](https://github.com/AirPowerTeam/AirPower-Wechat) / [Gitee](https://github.com/air-power/AirPower-Wechat)
 
   微信小程序开发库 (计划中)
-

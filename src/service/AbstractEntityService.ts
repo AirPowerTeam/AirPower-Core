@@ -1,4 +1,5 @@
-import type { AirEntity, ClassConstructor, IJson } from 'airpower'
+import type { ClassConstructor, IJson } from 'airpower'
+import type { AirEntity } from '../base'
 import type { QueryRequest } from '../model'
 import { AirClassTransformer } from 'airpower'
 import { QueryPageResponse } from '../model'

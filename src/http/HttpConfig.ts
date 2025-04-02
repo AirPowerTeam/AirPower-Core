@@ -1,8 +1,10 @@
+import { HttpHeader } from './enum/HttpHeader'
+
 /**
- * # 全局配置
+ * # HTTP 配置
  * @author Hamm.cn
  */
-export class CoreConfig {
+export class HttpConfig {
   /**
    * ### 接口根地址
    * 以 `/` 结尾
@@ -12,7 +14,7 @@ export class CoreConfig {
   /**
    * ### `AccessToken` 对应的 `Key`
    */
-  static authorizationHeaderKey = 'Authorization'
+  static authorizationHeaderKey = HttpHeader.AUTHORIZATION
 
   /**
    * ### 全局 `http` 请求返回 成功状态码

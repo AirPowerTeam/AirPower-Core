@@ -1,4 +1,4 @@
-import type { AirEntity } from 'airpower'
+import type { AirEntity } from '../base'
 import { Field } from 'airpower'
 import { Page } from './Page'
 import { QueryRequest } from './QueryRequest'

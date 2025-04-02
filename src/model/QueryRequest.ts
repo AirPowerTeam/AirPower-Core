@@ -1,4 +1,5 @@
-import type { AirEntity, ClassConstructor } from 'airpower'
+import type { ClassConstructor } from 'airpower'
+import type { AirEntity } from '../base'
 import { AirClassTransformer, AirModel, Field } from 'airpower'
 import { QuerySort } from './QuerySort'
 

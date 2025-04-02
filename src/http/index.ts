@@ -1,4 +1,5 @@
 export * from './AbstractHttp'
-export * from './HttpContentType'
-export * from './HttpMethod'
+export * from './enum'
+export * from './HttpConfig'
 export * from './HttpResponse'
+export * from './type'

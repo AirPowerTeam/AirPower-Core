@@ -1,8 +1,9 @@
 import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
 import { AirClassTransformer, AirConstant } from 'airpower'
-import { CoreConfig, CoreConstant } from '../config'
-import { HttpContentType } from './HttpContentType'
-import { HttpMethod } from './HttpMethod'
+import { HttpContentType } from './enum/HttpContentType'
+import { HttpHeader } from './enum/HttpHeader'
+import { HttpMethod } from './enum/HttpMethod'
+import { HttpConfig } from './HttpConfig'
 import { HttpResponse } from './HttpResponse'
 
 /**
@@ -23,7 +24,7 @@ export abstract class AbstractHttp {
   /**
    * ### 请求超时时间
    */
-  private timeout = CoreConfig.timeout
+  private timeout = HttpConfig.timeout
 
   /**
    * ### 是否携带 `Cookies`
@@ -55,12 +56,12 @@ export abstract class AbstractHttp {
       service.url = url
     }
     else {
-      service.url = CoreConfig.apiUrl + url
+      service.url = HttpConfig.apiUrl + url
     }
-    service.headers[CoreConstant.CONTENT_TYPE] = HttpContentType.JSON
+    service.headers[HttpHeader.CONTENT_TYPE] = HttpContentType.JSON
     const accessToken = service.getAccessToken()
     if (accessToken) {
-      service.headers[CoreConfig.authorizationHeaderKey] = accessToken
+      service.headers[HttpConfig.authorizationHeaderKey] = accessToken
     }
     service.errorCallback = errorCallback
     return service
@@ -93,7 +94,7 @@ export abstract class AbstractHttp {
    * ### 设置请求头
    * @param header 请求头
    */
-  setHttpHeader(header: IJson): this {
+  setHttpHeader(header: Record<HttpHeader | string, unknown>): this {
     this.headers = header
     return this
   }
@@ -101,7 +102,7 @@ export abstract class AbstractHttp {
   /**
    * ### 获取请求头
    */
-  getHttpHeaders(): IJson {
+  getHttpHeaders(): Record<HttpHeader | string, unknown> {
     return this.headers
   }
 
@@ -122,7 +123,7 @@ export abstract class AbstractHttp {
    * @param key 请求头 `key`
    * @param value 请求头 `value`
    */
-  addHttpHeader(key: string, value: string): this {
+  addHttpHeader(key: HttpHeader | string, value: string): this {
     this.headers[key] = value
     return this
   }
@@ -148,7 +149,7 @@ export abstract class AbstractHttp {
    * @param contentType `content-type`
    */
   setContentType(contentType: HttpContentType): this {
-    return this.addHttpHeader(CoreConstant.CONTENT_TYPE, contentType)
+    return this.addHttpHeader(HttpHeader.CONTENT_TYPE, contentType)
   }
 
   /**
@@ -238,7 +239,7 @@ export abstract class AbstractHttp {
     return new Promise((resolve, reject) => {
       this.startLoading()
       this.request(body).then((response) => {
-        if (response.code === CoreConfig.unAuthorizeCode) {
+        if (response.code === HttpConfig.unAuthorizeCode) {
           // 需要登录
           if (this.isThrowError || !this.errorCallback) {
             reject(response)
@@ -247,7 +248,7 @@ export abstract class AbstractHttp {
           this.errorCallback(response)
           return
         }
-        if (response.code !== CoreConfig.successCode) {
+        if (response.code !== HttpConfig.successCode) {
           if (this.isThrowError || !this.errorCallback) {
             reject(response)
             return
@@ -259,7 +260,7 @@ export abstract class AbstractHttp {
       }).catch((e) => {
         const error = new HttpResponse()
         error.message = e.message
-        error.code = CoreConfig.defaultErrorCode
+        error.code = HttpConfig.defaultErrorCode
         if (this.isThrowError || !this.errorCallback) {
           reject(error)
           return

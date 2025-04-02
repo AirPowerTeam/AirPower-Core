@@ -1,5 +1,6 @@
-import type { SortType } from '../types'
-import { AirConstant, AirModel } from 'airpower'
+import type { SortType } from './type'
+import { AirModel } from 'airpower'
+import { AirEntity } from '../base'
 
 /**
  * # 查询排序类
@@ -9,7 +10,7 @@ export class QuerySort extends AirModel {
   /**
    * ### 排序字段 默认 `id`
    */
-  field = AirConstant.STRING_ID
+  field = AirEntity.STRING_ID
 
   /**
    * ### 排序方式 默认 `desc`

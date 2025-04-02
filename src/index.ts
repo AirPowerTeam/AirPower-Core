@@ -1,7 +1,5 @@
-export * from './config'
 export * from './enum'
 export * from './http'
 export * from './model'
 export * from './service'
 export * from './shared'
-export * from './types'
