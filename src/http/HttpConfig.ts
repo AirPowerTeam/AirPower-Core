@@ -1,4 +1,4 @@
-import { HttpHeader } from './enum/HttpHeader'
+import { HttpHeader, HttpStatus } from './enum'
 
 /**
  * # HTTP 配置
@@ -19,17 +19,12 @@ export class HttpConfig {
   /**
    * ### 全局 `http` 请求返回 成功状态码
    */
-  static successCode = 200
-
-  /**
-   * ### 全局 `http` 请求返回 错误状态码
-   */
-  static defaultErrorCode = 500
+  static successCode = HttpStatus.OK
 
   /**
    * ### 全局 `http` 请求返回 登录状态码
    */
-  static unAuthorizeCode = 401
+  static unAuthorizeCode = HttpStatus.UNAUTHORIZED
 
   /**
    * ### 超时时间 毫秒

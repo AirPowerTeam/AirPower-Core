@@ -8,7 +8,7 @@ export type HttpHeaderKey = HttpHeader | string
 /**
  * # 请求头记录
  */
-export type HttpHeaderRecord = Record<HttpHeaderKey, string>
+export type HttpHeaderRecord = Record<HttpHeaderKey, unknown>
 
 /**
  * # 状态码类型

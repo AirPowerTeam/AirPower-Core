@@ -1,8 +1,7 @@
 import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
+import type { HttpHeaderRecord } from './type'
 import { AirClassTransformer, AirConstant } from 'airpower'
-import { HttpContentType } from './enum/HttpContentType'
-import { HttpHeader } from './enum/HttpHeader'
-import { HttpMethod } from './enum/HttpMethod'
+import { HttpContentType, HttpHeader, HttpMethod, HttpStatus } from './enum'
 import { HttpConfig } from './HttpConfig'
 import { HttpResponse } from './HttpResponse'
 
@@ -34,7 +33,7 @@ export abstract class AbstractHttp {
   /**
    * ### 请求头
    */
-  private headers: IJson = {}
+  private headers: HttpHeaderRecord = {}
 
   /**
    * ### 错误回调
@@ -260,7 +259,7 @@ export abstract class AbstractHttp {
       }).catch((e) => {
         const error = new HttpResponse()
         error.message = e.message
-        error.code = HttpConfig.defaultErrorCode
+        error.code = HttpStatus.INTERNAL_SERVER_ERROR
         if (this.isThrowError || !this.errorCallback) {
           reject(error)
           return
