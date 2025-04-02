@@ -9,7 +9,7 @@
 
 <p align="center">
 <a href="https://github.com/AirPowerTeam/AirPower-Core">Github</a> /
-  <a href="https://gitee.com/air-power/AirPower4T">Gitee</a>  /
+  <a href="https://gitee.com/air-power/AirPower-Core">Gitee</a>  /
   <a href="https://www.npmjs.com/package/@airpower/core">NPM</a> 
 </p>
 
