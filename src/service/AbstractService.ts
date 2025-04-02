@@ -11,7 +11,7 @@ export abstract class AbstractService extends AirModel {
    * ### `API` 目录地址
    * 一般对应后端的 `分组/控制器/目录` 等
    */
-  abstract baseUrl: string
+  protected abstract baseUrl: string
 
   /**
    * ### 静态创建一个 `API` 服务实例
@@ -33,5 +33,5 @@ export abstract class AbstractService extends AirModel {
    * ### 请你实现
    * @param url 请求的地址
    */
-  abstract createHttp(url: string): AbstractHttp
+  protected abstract createHttp(url: string): AbstractHttp
 }
