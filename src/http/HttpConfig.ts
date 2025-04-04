@@ -2,6 +2,7 @@ import { HttpHeader, HttpStatus } from './enum'
 
 /**
  * # HTTP 配置
+ *
  * @author Hamm.cn
  */
 export class HttpConfig {

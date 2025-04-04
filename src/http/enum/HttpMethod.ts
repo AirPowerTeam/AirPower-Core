@@ -1,5 +1,6 @@
 /**
  * # 请求方法
+ *
  * @author Hamm.cn
  */
 export enum HttpMethod {

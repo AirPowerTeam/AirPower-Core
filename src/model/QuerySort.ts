@@ -4,6 +4,7 @@ import { AirEntity } from '../base'
 
 /**
  * # 查询排序类
+ *
  * @author Hamm.cn
  */
 export class QuerySort extends AirModel {

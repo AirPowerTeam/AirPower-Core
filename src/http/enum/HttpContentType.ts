@@ -1,5 +1,6 @@
 /**
  * # ContentType
+ *
  * @author Hamm.cn
  */
 export enum HttpContentType {

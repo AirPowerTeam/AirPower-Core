@@ -5,6 +5,7 @@ import { QueryRequest } from './QueryRequest'
 
 /**
  * # 查询分页请求类
+ *
  * @author Hamm.cn
  */
 export class QueryPageRequest<E extends AirEntity> extends QueryRequest<E> {

@@ -2,6 +2,7 @@ import { AirModel, Field } from 'airpower'
 
 /**
  * # 分页类
+ *
  * @author Hamm.cn
  */
 export class Page extends AirModel {

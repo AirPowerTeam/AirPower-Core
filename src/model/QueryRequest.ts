@@ -5,6 +5,7 @@ import { QuerySort } from './QuerySort'
 
 /**
  * # 请求类
+ *
  * @author Hamm.cn
  */
 export class QueryRequest<E extends AirEntity = AirEntity> extends AirModel {

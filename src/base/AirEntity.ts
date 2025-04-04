@@ -4,6 +4,7 @@ import { DisableStatusEnum } from '../enum'
 
 /**
  * # 实体类
+ *
  * @author Hamm.cn
  */
 export class AirEntity extends AirModel implements IEntity {

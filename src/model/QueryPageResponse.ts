@@ -4,7 +4,8 @@ import { Page } from './Page'
 import { QuerySort } from './QuerySort'
 
 /**
- * # 查询分页响应雷
+ * # 查询分页响应类
+ *
  * @author Hamm.cn
  */
 export class QueryPageResponse<E extends AirEntity> extends AirModel {

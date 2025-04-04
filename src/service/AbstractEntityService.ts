@@ -7,9 +7,7 @@ import { AbstractService } from './AbstractService'
 
 /**
  * # 实体 `API` 服务超类
- * 包含了常用的增删改查等方法
  *
- * @param E 泛型实体类
  * @author Hamm.cn
  */
 export abstract class AbstractEntityService<E extends AirEntity> extends AbstractService {

@@ -3,18 +3,19 @@ import type { AbstractHttp } from '../http'
 import { AirModel } from 'airpower'
 
 /**
- * # `API` 服务超类
+ * # 服务超类
+ *
  * @author Hamm.cn
  */
 export abstract class AbstractService extends AirModel {
   /**
-   * ### `API` 目录地址
+   * ### 目录地址
    * 一般对应后端的 `分组/控制器/目录` 等
    */
   protected abstract baseUrl: string
 
   /**
-   * ### 静态创建一个 `API` 服务实例
+   * ### 静态创建一个服务实例
    */
   static create<S extends AbstractService>(this: ClassConstructor<S>): S {
     return new this()

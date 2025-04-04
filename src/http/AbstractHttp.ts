@@ -7,6 +7,7 @@ import { HttpResponse } from './HttpResponse'
 
 /**
  * # 网络请求类
+ *
  * @author Hamm.cn
  */
 export abstract class AbstractHttp {
