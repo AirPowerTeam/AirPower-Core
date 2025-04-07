@@ -22,6 +22,9 @@ export class AirEntity extends AirModel implements IEntity {
   })
   id!: number
 
+  /**
+   * ### 是否禁用
+   */
   @Field({
     label: '是否禁用',
     dictionary: DisableStatusEnum,
