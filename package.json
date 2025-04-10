@@ -38,7 +38,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "airpower": "^1.3.10"
+    "airpower": "^1.3.11"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.11.0",
