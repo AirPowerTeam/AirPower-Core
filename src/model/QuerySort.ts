@@ -1,17 +1,17 @@
 import type { SortType } from './type'
-import { AirModel } from 'airpower'
-import { AirEntity } from '../base'
+import { AirPower } from 'airpower'
+import { Entity } from '../base'
 
 /**
  * # 查询排序类
  *
  * @author Hamm.cn
  */
-export class QuerySort extends AirModel {
+export class QuerySort extends AirPower {
   /**
    * ### 排序字段 默认 `id`
    */
-  field = AirEntity.STRING_ID
+  field = Entity.STRING_ID
 
   /**
    * ### 排序方式 默认 `desc`

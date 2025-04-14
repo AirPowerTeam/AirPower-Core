@@ -1,6 +1,6 @@
-import type { AirAny, AirModel, ClassConstructor, IJson } from 'airpower'
+import type { AirPower, ClassConstructor, IJson } from 'airpower'
 import type { HttpHeaderRecord } from './type'
-import { AirClassTransformer, AirConstant } from 'airpower'
+import { ClassTransformer, FileUtil } from 'airpower'
 import { HttpContentType, HttpHeader, HttpMethod, HttpStatus } from './enum'
 import { HttpConfig } from './HttpConfig'
 import { HttpResponse } from './HttpResponse'
@@ -19,7 +19,7 @@ export abstract class AbstractHttp {
   /**
    * ### URL
    */
-  private url = AirConstant.STRING_EMPTY
+  private url = ''
 
   /**
    * ### 请求超时时间
@@ -52,7 +52,7 @@ export abstract class AbstractHttp {
    */
   static create<R extends AbstractHttp>(this: ClassConstructor<R>, url: string, errorCallback?: (error: HttpResponse) => void): R {
     const service = new this()
-    if (url.includes(AirConstant.PREFIX_HTTP) || url.includes(AirConstant.PREFIX_HTTPS)) {
+    if (url.includes(FileUtil.PREFIX_HTTP) || url.includes(FileUtil.PREFIX_HTTPS)) {
       service.url = url
     }
     else {
@@ -156,7 +156,7 @@ export abstract class AbstractHttp {
    * ### 发送 `POST`
    * @param postData 发送的数据模型(数组)
    */
-  post<T extends AirModel>(postData?: T | T[]): Promise<IJson | IJson[]> {
+  post<T extends AirPower>(postData?: T | T[]): Promise<IJson | IJson[]> {
     let json = {}
     if (postData) {
       if (Array.isArray(postData)) {
@@ -175,12 +175,12 @@ export abstract class AbstractHttp {
    * @param postData 请求的数据
    * @param parseClass 返回的模型
    */
-  async postGet<REQ extends AirModel, RES extends AirModel>(
+  async postGet<REQ extends AirPower, RES extends AirPower>(
     postData: REQ | REQ[] | undefined,
     parseClass: ClassConstructor<RES>,
   ): Promise<RES> {
     const result = await this.post(postData)
-    return AirClassTransformer.parse(result, parseClass)
+    return ClassTransformer.parse(result, parseClass)
   }
 
   /**
@@ -188,12 +188,12 @@ export abstract class AbstractHttp {
    * @param postData 请求的数据
    * @param parseClass 返回的模型列表
    */
-  async postGetArray<REQ extends AirModel, RES extends AirModel>(
+  async postGetArray<REQ extends AirPower, RES extends AirPower>(
     postData: REQ | REQ[] | undefined,
     parseClass: ClassConstructor<RES>,
   ): Promise<RES[]> {
     const result = await this.post(postData)
-    return AirClassTransformer.parseArray(result as IJson[], parseClass)
+    return ClassTransformer.parseArray(result as IJson[], parseClass)
   }
 
   /**
@@ -256,7 +256,7 @@ export abstract class AbstractHttp {
           this.errorCallback(response)
           return
         }
-        resolve(response.data as AirAny)
+        resolve(response.data as any)
       }).catch((e) => {
         const error = new HttpResponse()
         error.message = e.message

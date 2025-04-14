@@ -1,5 +1,5 @@
-import type { AirEntity } from '../base'
-import { AirModel, Field } from 'airpower'
+import type { Entity } from '../base'
+import { AirPower, Field } from 'airpower'
 import { Page } from './Page'
 import { QuerySort } from './QuerySort'
 
@@ -8,7 +8,7 @@ import { QuerySort } from './QuerySort'
  *
  * @author Hamm.cn
  */
-export class QueryPageResponse<E extends AirEntity> extends AirModel {
+export class QueryPageResponse<E extends Entity> extends AirPower {
   /**
    * ### 返回的当前页数据列表
    */

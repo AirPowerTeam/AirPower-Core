@@ -1,1 +1,1 @@
-export * from './AirEntity'
+export * from './Entity'

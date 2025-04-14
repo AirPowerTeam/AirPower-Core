@@ -1,13 +1,13 @@
 import type { ClassConstructor } from 'airpower'
 import type { AbstractHttp } from '../http'
-import { AirModel } from 'airpower'
+import { AirPower } from 'airpower'
 
 /**
  * # 服务超类
  *
  * @author Hamm.cn
  */
-export abstract class AbstractService extends AirModel {
+export abstract class AbstractService extends AirPower {
   /**
    * ### 目录地址
    * 一般对应后端的 `分组/控制器/目录` 等

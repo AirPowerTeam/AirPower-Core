@@ -1,11 +1,11 @@
-import { AirModel, Field } from 'airpower'
+import { AirPower, Field } from 'airpower'
 
 /**
  * # 分页类
  *
  * @author Hamm.cn
  */
-export class Page extends AirModel {
+export class Page extends AirPower {
   /**
    * ### 分页页数
    */

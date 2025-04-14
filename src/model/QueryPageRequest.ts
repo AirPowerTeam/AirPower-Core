@@ -1,4 +1,4 @@
-import type { AirEntity } from '../base'
+import type { Entity } from '../base'
 import { Field } from 'airpower'
 import { Page } from './Page'
 import { QueryRequest } from './QueryRequest'
@@ -8,7 +8,7 @@ import { QueryRequest } from './QueryRequest'
  *
  * @author Hamm.cn
  */
-export class QueryPageRequest<E extends AirEntity> extends QueryRequest<E> {
+export class QueryPageRequest<E extends Entity> extends QueryRequest<E> {
   /**
    * ### 分页信息
    */

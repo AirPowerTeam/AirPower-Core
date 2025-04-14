@@ -1,7 +1,7 @@
 import type { ClassConstructor, IJson } from 'airpower'
-import type { AirEntity } from '../base'
+import type { Entity } from '../base'
 import type { QueryRequest } from '../model'
-import { AirClassTransformer } from 'airpower'
+import { ClassTransformer } from 'airpower'
 import { QueryPageResponse } from '../model'
 import { AbstractService } from './AbstractService'
 
@@ -10,7 +10,7 @@ import { AbstractService } from './AbstractService'
  *
  * @author Hamm.cn
  */
-export abstract class AbstractEntityService<E extends AirEntity> extends AbstractService {
+export abstract class AbstractEntityService<E extends Entity> extends AbstractService {
   /**
    * ### 为基类提供当前的实体类
    * 请求时会通过这个类进行数据转换
@@ -69,7 +69,7 @@ export abstract class AbstractEntityService<E extends AirEntity> extends Abstrac
    */
   async getPage(request: QueryRequest<E>, apiUrl = this.urlForGetPage): Promise<QueryPageResponse<E>> {
     const responsePage: QueryPageResponse<E> = await this.api(apiUrl).postGet(request, QueryPageResponse<E>)
-    responsePage.list = AirClassTransformer.parseArray(responsePage.list as IJson[], this.entityClass)
+    responsePage.list = ClassTransformer.parseArray(responsePage.list as IJson[], this.entityClass)
     return responsePage
   }
 

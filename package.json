@@ -1,7 +1,7 @@
 {
   "name": "@airpower/core",
   "type": "module",
-  "version": "0.1.18",
+  "version": "1.0.0",
   "description": "AirPower-Core 是一个基于 AirPower 的核心库，无法直接运行，可查看 README 中的各个实现库。",
   "author": {
     "name": "Hamm",
@@ -38,7 +38,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "airpower": "^1.3.12"
+    "airpower": "^2.0.1"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.11.0",

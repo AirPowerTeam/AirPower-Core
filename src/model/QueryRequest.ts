@@ -1,6 +1,6 @@
 import type { ClassConstructor } from 'airpower'
-import type { AirEntity } from '../base'
-import { AirClassTransformer, AirModel, Field } from 'airpower'
+import type { Entity } from '../base'
+import { AirPower, ClassTransformer, Field } from 'airpower'
 import { QuerySort } from './QuerySort'
 
 /**
@@ -8,7 +8,7 @@ import { QuerySort } from './QuerySort'
  *
  * @author Hamm.cn
  */
-export class QueryRequest<E extends AirEntity = AirEntity> extends AirModel {
+export class QueryRequest<E extends Entity = Entity> extends AirPower {
   /**
    * ### 查询信息
    */
@@ -28,7 +28,7 @@ export class QueryRequest<E extends AirEntity = AirEntity> extends AirModel {
    */
   constructor(filterClass: ClassConstructor<E>) {
     super()
-    this.filter = AirClassTransformer.parse({}, filterClass)
+    this.filter = ClassTransformer.parse({}, filterClass)
   }
 
   /**

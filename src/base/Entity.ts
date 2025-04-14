@@ -1,12 +1,12 @@
 import type { IEntity } from 'airpower'
-import { AirModel, Field } from 'airpower'
+import { AirPower, Field } from 'airpower'
 
 /**
  * # 实体类
  *
  * @author Hamm.cn
  */
-export class AirEntity extends AirModel implements IEntity {
+export class Entity extends AirPower implements IEntity {
   /**
    * ### `id`
    */
@@ -44,13 +44,13 @@ export class AirEntity extends AirModel implements IEntity {
    * ### 只暴露 `ID`
    */
   exposeId(): this {
-    return this.expose(AirEntity.STRING_ID)
+    return this.expose(Entity.STRING_ID)
   }
 
   /**
    * ### 排除 `ID`
    */
   excludeId(): this {
-    return this.exclude(AirEntity.STRING_ID)
+    return this.exclude(Entity.STRING_ID)
   }
 }
