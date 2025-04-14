@@ -1,5 +1,4 @@
 export * from './base'
-export * from './enum'
 export * from './http'
 export * from './model'
 export * from './service'

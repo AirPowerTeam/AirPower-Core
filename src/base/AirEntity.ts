@@ -1,6 +1,5 @@
 import type { IEntity } from 'airpower'
 import { AirModel, Field } from 'airpower'
-import { DisableStatusEnum } from '../enum'
 
 /**
  * # 实体类
@@ -21,15 +20,6 @@ export class AirEntity extends AirModel implements IEntity {
     type: Number,
   })
   id!: number
-
-  /**
-   * ### 是否禁用
-   */
-  @Field({
-    label: '是否禁用',
-    dictionary: DisableStatusEnum,
-  })
-  isDisabled!: boolean
 
   /**
    * ### 实例化一个实体
@@ -62,14 +52,5 @@ export class AirEntity extends AirModel implements IEntity {
    */
   excludeId(): this {
     return this.exclude(AirEntity.STRING_ID)
-  }
-
-  /**
-   * ### 设置禁用状态
-   * @param isDisabled 禁用状态
-   */
-  setDisable(isDisabled = true): this {
-    this.isDisabled = isDisabled
-    return this
   }
 }
