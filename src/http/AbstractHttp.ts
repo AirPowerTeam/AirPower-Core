@@ -235,7 +235,7 @@ export abstract class AbstractHttp {
    * ### 发送请求
    * @param body 请求体
    */
-  private async send(body?: unknown): Promise<IJson | IJson[]> {
+  public async send(body?: unknown): Promise<IJson | IJson[]> {
     return new Promise((resolve, reject) => {
       this.startLoading()
       this.request(body).then((response) => {

@@ -1,7 +1,7 @@
 {
   "name": "@airpower/core",
   "type": "module",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AirPower-Core 是一个基于 AirPower 的核心库，无法直接运行，可查看 README 中的各个实现库。",
   "author": {
     "name": "Hamm",
