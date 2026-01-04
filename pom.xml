@@ -5,12 +5,14 @@
     <groupId>cn.hamm</groupId>
     <artifactId>airpower-core</artifactId>
     <name>airpower-core</name>
-    <version>5.0.0-beta.3</version>
+    <version>5.0.0-beta.4</version>
     <description>
         AirPower-Core.
     </description>
     <properties>
         <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <gpg.keyname>5FE4833A28EDA3991EA4F1D239A8BA7AF33610A8</gpg.keyname>
         <jackson.version>2.20.1</jackson.version>
         <lombok.version>1.18.42</lombok.version>
@@ -22,9 +24,11 @@
         <plugin.maven.javadoc.version>3.12.0</plugin.maven.javadoc.version>
         <plugin.maven.compiler.version>3.10.1</plugin.maven.compiler.version>
         <plugin.maven.gpg.version>3.2.8</plugin.maven.gpg.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.23</logback.version>
+        <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
     <dependencies>
         <dependency>
