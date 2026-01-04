@@ -6,8 +6,8 @@
     <artifactId>airpower-core</artifactId>
     <name>airpower-core</name>
     <version>5.0.0-beta.2</version>
-    <description>AirPower is a fast backend development tool based on SpringBoot3 and JPA. It's the core of
-        AirPower.
+    <description>
+        AirPower-Core.
     </description>
     <properties>
         <java.version>17</java.version>
