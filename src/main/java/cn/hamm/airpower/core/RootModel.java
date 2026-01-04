@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -42,35 +43,91 @@ public class RootModel<M extends RootModel<M>> {
     }
 
     /**
-     * 忽略只读字段
+     * 排除只读字段
      */
-    public final void ignoreReadOnlyFields() {
+    public final void excludeReadOnly() {
         ReflectUtil.getFieldList(getClass()).stream()
                 .filter(field -> Objects.nonNull(ReflectUtil.getAnnotation(ReadOnly.class, field)))
                 .forEach(field -> ReflectUtil.clearFieldValue(this, field));
     }
 
     /**
-     * 处理字段值
+     * 脱敏
      */
-    public final void fieldValueResolver(BiConsumer<M, Field> consumer) {
-        Class<M> clazz = (Class<M>) getClass();
-        List<Field> allFields = ReflectUtil.getFieldList(clazz);
-        allFields.forEach(field -> consumer.accept((M) this, field));
+    public final void desensitize() {
+        excludeNotMetaAndDesensitize(new ArrayList<>(), true);
     }
 
     /**
-     * 排除非元数据的字段
+     * 排除非元数据字段
+     */
+    public final void excludeNotMeta() {
+        List<Class<? extends RootModel<?>>> whiteList = List.of((Class<? extends RootModel<?>>) this.getClass());
+        excludeNotMeta(whiteList);
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param whiteList 类白名单
+     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
+     */
+    public final void excludeNotMeta(@NotNull List<Class<? extends RootModel<?>>> whiteList) {
+        excludeNotMetaAndDesensitize(whiteList, false);
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param whiteList     类白名单
+     * @param isDesensitize 是否需要脱敏
+     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
+     */
+    public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
+        filterModelFieldValue((model, field) -> {
+            Object value = ReflectUtil.getFieldValue(model, field);
+            if (Objects.isNull(value)) {
+                return;
+            }
+            if (value instanceof Collection<?> valueList) {
+                // 是对象集合
+                valueList.forEach(item -> {
+                    if (RootModel.isModel(item.getClass())) {
+                        @SuppressWarnings("unchecked")
+                        M itemModel = (M) item;
+                        itemModel.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
+                    }
+                });
+                return;
+            }
+            if (RootModel.isModel(value.getClass())) {
+                // 如果是模型，则递归脱敏
+                @SuppressWarnings("unchecked")
+                M payload = ((M) value);
+                payload.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
+                return;
+            }
+            if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
+                excludeFieldValueNotMeta(model, field);
+            }
+            if (isDesensitize) {
+                desensitizeFieldValue(field, value);
+            }
+        });
+    }
+
+    /**
+     * 排除非元数据字段
      *
      * @param field 字段
      */
-    public final void excludeFieldNotMeta(M instance, @NotNull Field field) {
+    private void excludeFieldValueNotMeta(M instance, @NotNull Field field) {
         Object value = ReflectUtil.getFieldValue(instance, field);
         if (Objects.isNull(value)) {
             return;
         }
         if (isModel(value.getClass())) {
-            ((RootModel<?>) value).excludeFieldNotMeta();
+            ((RootModel<?>) value).excludeNotMeta();
             return;
         }
         Meta meta = ReflectUtil.getAnnotation(Meta.class, field);
@@ -89,22 +146,12 @@ public class RootModel<M extends RootModel<M>> {
     }
 
     /**
-     * 忽略非元数据的字段
-     *
-     * @return 当前实例
-     */
-    public final M excludeFieldNotMeta() {
-        fieldValueResolver((model, field) -> excludeFieldNotMeta((M) this, field));
-        return (M) this;
-    }
-
-    /**
-     * 脱敏
+     * 脱敏字段的值
      *
      * @param field 字段
      * @param value 值
      */
-    public final void desensitize(Field field, @NotNull Object value) {
+    private void desensitizeFieldValue(Field field, @NotNull Object value) {
         Desensitize desensitize = ReflectUtil.getAnnotation(Desensitize.class, field);
         if (Objects.isNull(desensitize)) {
             return;
@@ -129,43 +176,14 @@ public class RootModel<M extends RootModel<M>> {
         ReflectUtil.setFieldValue(this, field, null);
     }
 
-
     /**
-     * 模型字段值排除或脱敏
+     * 过滤模型的字段数据
      *
-     * @param exposeModelsFieldNotMeta 暴露所有字段的类列表
-     * @param isDesensitize            是否需要脱敏
+     * @param consumer 过滤方法
      */
-    public final void exclude(@NotNull List<Class<? extends RootModel<?>>> exposeModelsFieldNotMeta, boolean isDesensitize) {
-        this.fieldValueResolver((instance, field) -> {
-            Object value = ReflectUtil.getFieldValue(instance, field);
-            if (Objects.isNull(value)) {
-                return;
-            }
-            if (value instanceof Collection<?> valueList) {
-                // 是对象集合
-                valueList.forEach(item -> {
-                    if (RootModel.isModel(item.getClass())) {
-                        @SuppressWarnings("unchecked")
-                        M itemModel = (M) item;
-                        itemModel.exclude(exposeModelsFieldNotMeta, isDesensitize);
-                    }
-                });
-                return;
-            }
-            if (RootModel.isModel(value.getClass())) {
-                // 如果是模型，则递归脱敏
-                @SuppressWarnings("unchecked")
-                M payload = ((M) value);
-                payload.exclude(exposeModelsFieldNotMeta, isDesensitize);
-                return;
-            }
-            if (!exposeModelsFieldNotMeta.contains(this.getClass())) {
-                this.excludeFieldNotMeta(instance, field);
-            }
-            if (isDesensitize) {
-                this.desensitize(field, value);
-            }
-        });
+    private void filterModelFieldValue(BiConsumer<M, Field> consumer) {
+        Class<M> clazz = (Class<M>) getClass();
+        List<Field> allFields = ReflectUtil.getFieldList(clazz);
+        allFields.forEach(field -> consumer.accept((M) this, field));
     }
 }
