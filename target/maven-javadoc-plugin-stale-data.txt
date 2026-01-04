@@ -1,0 +1,62 @@
+-J-Duser.language=
+-J-Duser.country=
+@options
+@packages
+-classpath
+'/Users/hamm/.m2/repository/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar:/Users/hamm/.m2/repository/org/jetbrains/annotations/26.0.2/annotations-26.0.2.jar:/Users/hamm/.m2/repository/jakarta/validation/jakarta.validation-api/3.1.1/jakarta.validation-api-3.1.1.jar:/Users/hamm/.m2/repository/jakarta/servlet/jakarta.servlet-api/6.1.0/jakarta.servlet-api-6.1.0.jar:/Users/hamm/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.20.1/jackson-databind-2.20.1.jar:/Users/hamm/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.20/jackson-annotations-2.20.jar:/Users/hamm/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.20.1/jackson-core-2.20.1.jar:/Users/hamm/.m2/repository/org/slf4j/slf4j-api/2.0.17/slf4j-api-2.0.17.jar'
+-encoding
+'UTF-8'
+-protected
+-sourcepath
+'/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/src/main/java:/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/generated-sources/annotations'
+-author
+-bottom
+'Copyright &#169; 2026. All rights reserved.'
+-charset
+'UTF-8'
+-d
+'/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs'
+-docencoding
+'UTF-8'
+-Xdoclint:none
+-doctitle
+'airpower-core 5.0.0-beta.1 API'
+-use
+-version
+-windowtitle
+'airpower-core 5.0.0-beta.1 API'
+cn.hamm.airpower.core
+cn.hamm.airpower.core.enums
+cn.hamm.airpower.core.annotation
+cn.hamm.airpower.core.constant
+cn.hamm.airpower.core.exception
+cn.hamm.airpower.core.interfaces
+/Users/hamm/.m2/repository/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar = 1758166497000
+/Users/hamm/.m2/repository/org/jetbrains/annotations/26.0.2/annotations-26.0.2.jar = 1737557088000
+/Users/hamm/.m2/repository/jakarta/validation/jakarta.validation-api/3.1.1/jakarta.validation-api-3.1.1.jar = 1738456862000
+/Users/hamm/.m2/repository/jakarta/servlet/jakarta.servlet-api/6.1.0/jakarta.servlet-api-6.1.0.jar = 1718113527000
+/Users/hamm/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.20.1/jackson-databind-2.20.1.jar = 1761875811000
+/Users/hamm/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.20/jackson-annotations-2.20.jar = 1756428616000
+/Users/hamm/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.20.1/jackson-core-2.20.1.jar = 1761877114000
+/Users/hamm/.m2/repository/org/slf4j/slf4j-api/2.0.17/slf4j-api-2.0.17.jar = 1740512875000
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/src/main/java = 1767530444678
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/generated-sources/annotations = 1767547772703
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/constant-values.html = 1767547774517
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/tag-search-index.js = 1767547774560
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/overview-tree.html = 1767547774549
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/module-search-index.js = 1767547774560
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/index.html = 1767547774550
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/package-search-index.js = 1767547774560
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/jquery-ui.overrides.css = 1767547774573
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/serialized-form.html = 1767547774519
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/index-all.html = 1767547774570
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/allpackages-index.html = 1767547774560
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/member-search-index.js = 1767547774560
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/script.js = 1767547774572
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/stylesheet.css = 1767547774572
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/overview-summary.html = 1767547774571
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/help-doc.html = 1767547774572
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/element-list = 1767547774505
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/allclasses-index.html = 1767547774558
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/type-search-index.js = 1767547774560
+/Users/hamm/Git/AirPower-Team/AirPower4J/airpower-core/target/reports/apidocs/search.js = 1767547774573
