@@ -5,7 +5,7 @@
 
 <p align="center">
   <img src="https://svg.hamm.cn?key=Lang&value=Java17&bg=green"/>
-  <img src="https://img.shields.io/maven-metadata/v.svg?label=Maven%20Central&metadataUrl=https%3A%2F%2Frepo1.maven.org%2Fmaven2%2Fcn%2Fhamm%2Fairpower%2Fmaven-metadata.xml"/>
+  <img src="https://img.shields.io/maven-metadata/v.svg?label=Maven%20Central&metadataUrl=https%3A%2F%2Frepo1.maven.org%2Fmaven2%2Fcn%2Fhamm%2Fairpower-core%2Fmaven-metadata.xml"/>
 </p>
 
 <p align="center">
