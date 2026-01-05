@@ -85,7 +85,7 @@ public class AccessTokenUtil {
      */
     @Contract("_ -> fail")
     private static void throwException(String message) {
-        throw new ServiceException(message, Json.UNAUTHORIZED_CODE);
+        throw new ServiceException(Json.UNAUTHORIZED_CODE, message);
     }
 
     /**
@@ -186,7 +186,7 @@ public class AccessTokenUtil {
      */
     public final VerifiedToken verify(@NotNull String accessToken, String secret) {
         if (!StringUtil.hasText(secret)) {
-            throw new ServiceException(SET_ENV_TOKEN_SECRET_FIRST, Json.UNAUTHORIZED_CODE);
+            throwException(SET_ENV_TOKEN_SECRET_FIRST);
         }
         String source = "";
         try {
