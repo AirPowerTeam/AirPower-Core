@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +38,11 @@ public class Json {
      * 错误代码
      */
     public static final int SERVICE_ERROR = 500;
+
+    /**
+     * 未授权代码
+     */
+    public static final int UNAUTHORIZED_CODE = 401;
 
     /**
      * {@code ObjectMapper}
