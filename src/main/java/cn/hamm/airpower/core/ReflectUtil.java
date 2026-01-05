@@ -129,6 +129,7 @@ public class ReflectUtil {
      * @param clazz 类
      * @return 判断结果
      */
+    @Contract(pure = true)
     public static boolean isTheRootClass(@NotNull Class<?> clazz) {
         return clazz.equals(Object.class);
     }

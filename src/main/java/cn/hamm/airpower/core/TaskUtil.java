@@ -21,6 +21,7 @@ public class TaskUtil {
     /**
      * 线程池
      */
+    @SuppressWarnings("AlibabaThreadShouldSetName")
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
             5,
             20,

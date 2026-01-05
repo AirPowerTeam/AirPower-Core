@@ -8,6 +8,7 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -133,7 +134,7 @@ public class CollectionUtil {
      * @param <M>       元素类型
      * @return 字段列表
      */
-    public static <M extends RootModel<M>> @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
+    public static <M extends RootModel<M>> @Unmodifiable @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
         List<CsvField> fieldList = new ArrayList<>();
         ReflectUtil.getFieldList(itemClass).forEach(field -> {
             Export export = null;
