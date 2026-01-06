@@ -10,7 +10,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public class StringUtil {
     /**
-     * <h1>字符串是否包含有效长度</h1>
+     * 字符串是否为空
      *
      * @param str 字符串
      * @return 状态
@@ -21,7 +21,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串是否包含有效长度</h1>
+     * 字符串是否为空
      *
      * @param str 字符串
      * @return 状态
@@ -32,7 +32,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串是否包含有效字符</h1>
+     * 字符串是否包含有效字符
      *
      * @param str 字符串
      * @return 状态
@@ -54,7 +54,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串是否包含有效字符</h1>
+     * 字符串是否包含有效字符
      *
      * @param str 字符串
      * @return 状态
@@ -65,7 +65,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串是否包含空格</h1>
+     * 字符串是否包含空格
      *
      * @param str 字符串
      * @return 字符串
@@ -85,7 +85,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>去除字符串中的空格</h1>
+     * 去除字符串中的空格
      *
      * @param str 字符串
      * @return 字符串
@@ -95,7 +95,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>去除字符串中的空格</h1>
+     * 去除字符串中的空格
      *
      * @param str 字符串
      * @return 字符串
@@ -119,7 +119,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串首字母大写</h1>
+     * 字符串首字母大写
      *
      * @param str 源字符串
      * @return 目标字符串
@@ -129,7 +129,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串首字母小写</h1>
+     * 字符串首字母小写
      *
      * @param str 源字符串
      * @return 目标字符串
@@ -139,7 +139,7 @@ public class StringUtil {
     }
 
     /**
-     * <h1>字符串首字母大小写转换</h1>
+     * 字符串首字母大小写转换
      *
      * @param str        源字符串
      * @param capitalize 是否大写
