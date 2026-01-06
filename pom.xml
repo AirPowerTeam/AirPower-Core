@@ -145,15 +145,15 @@
     <licenses>
         <license>
             <name>The MIT License</name>
-            <url>https://raw.githubusercontent.com/AirPowerTeam/AirPower4J/main/LICENSE</url>
+            <url>https://raw.githubusercontent.com/AirPowerTeam/AirPower-Core/main/LICENSE</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
-    <url>https://github.com/AirPowerTeam/AirPower4J</url>
+    <url>https://github.com/AirPowerTeam/AirPower-Core</url>
     <scm>
-        <connection>scm:git:git://github.com/AirPowerTeam/AirPower4J.git</connection>
-        <developerConnection>scm:git:git://github.com/AirPowerTeam/AirPower4J.git</developerConnection>
-        <url>https://github.com/AirPowerTeam/AirPower4J</url>
+        <connection>scm:git:git://github.com/AirPowerTeam/AirPower-Core.git</connection>
+        <developerConnection>scm:git:git://github.com/AirPowerTeam/AirPower-Core.git</developerConnection>
+        <url>https://github.com/AirPowerTeam/AirPower-Core</url>
         <tag>HEAD</tag>
     </scm>
     <developers>
