@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.exception.ServiceException;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -22,6 +23,7 @@ import static javax.crypto.Cipher.ENCRYPT_MODE;
  *
  * @author Hamm.cn
  */
+@Slf4j
 public class AesUtil {
     /**
      * 密钥长度
@@ -84,7 +86,8 @@ public class AesUtil {
             byte[] keyBytes = aesKey.getEncoded();
             return Base64.getEncoder().encodeToString(keyBytes);
         } catch (NoSuchAlgorithmException e) {
-            throw new ServiceException(e);
+            log.error(e.getMessage(), e);
+            throw new ServiceException("系统不支持的算法");
         }
     }
 
@@ -102,7 +105,8 @@ public class AesUtil {
             byte[] keyBytes = aesKey.getEncoded();
             return Base64.getEncoder().encodeToString(keyBytes);
         } catch (NoSuchAlgorithmException e) {
-            throw new ServiceException(e);
+            log.error(e.getMessage(), e);
+            throw new ServiceException("系统不支持的算法");
         }
     }
 
@@ -153,7 +157,8 @@ public class AesUtil {
             return Base64.getEncoder().encodeToString(getCipher(ENCRYPT_MODE)
                     .doFinal(source.getBytes(UTF_8)));
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            log.error(e.getMessage(), e);
+            throw new ServiceException("AES 加密数据失败");
         }
     }
 
@@ -169,7 +174,8 @@ public class AesUtil {
             return new String(getCipher(DECRYPT_MODE)
                     .doFinal(Base64.getDecoder().decode(content)), UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            log.error(e.getMessage(), e);
+            throw new ServiceException("AES 解密数据失败");
         }
     }
 
@@ -187,7 +193,8 @@ public class AesUtil {
             cipher.init(mode, secretKeySpec, ivParameterSpec);
             return cipher;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            log.error(e.getMessage(), e);
+            throw new ServiceException("获取 AES 加解密的 Cipher 失败");
         }
     }
 }

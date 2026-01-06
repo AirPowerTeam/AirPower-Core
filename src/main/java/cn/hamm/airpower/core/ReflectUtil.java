@@ -295,8 +295,9 @@ public class ReflectUtil {
             Method replaceMethod = lambda.getClass().getDeclaredMethod("writeReplace");
             replaceMethod.setAccessible(true);
             return (SerializedLambda) replaceMethod.invoke(lambda);
-        } catch (Exception exception) {
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("反射获取Lamba方法名失败，" + e.getMessage());
         }
     }
 

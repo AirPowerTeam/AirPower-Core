@@ -88,13 +88,4 @@ public class ServiceException extends RuntimeException implements IException<Ser
         super(exception.getMessage());
         this.code = exception.getCode();
     }
-
-    /**
-     * 直接抛出一个异常
-     *
-     * @param exception 异常
-     */
-    public ServiceException(@NotNull Exception exception) {
-        super(exception.getMessage());
-    }
 }

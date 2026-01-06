@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -226,7 +227,7 @@ public class NumberUtil {
      */
     private static @NotNull BigDecimal divide(BigDecimal first, BigDecimal second, int scale, RoundingMode roundingMode) {
         if (Objects.equals(BigDecimal.valueOf(0), second)) {
-            throw new RuntimeException("除数不能为0");
+            throw new ServiceException("除数不能为0");
         }
         return first.divide(second, scale, roundingMode);
     }

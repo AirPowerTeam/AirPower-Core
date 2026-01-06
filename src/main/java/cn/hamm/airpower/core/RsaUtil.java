@@ -153,9 +153,9 @@ public class RsaUtil {
         try {
             int blockSize = CRYPT_KEY_SIZE / 8 - 11;
             return encrypt(sourceContent, getPublicKey(publicKey), blockSize);
-        } catch (Exception exception) {
-            log.error(exception.getMessage(), exception);
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("RSA 公钥加密失败，" + e.getMessage());
         }
     }
 
@@ -169,9 +169,9 @@ public class RsaUtil {
         try {
             int blockSize = CRYPT_KEY_SIZE / 8;
             return decrypt(encryptedContent, getPrivateKey(privateKey), blockSize);
-        } catch (Exception exception) {
-            log.error(exception.getMessage(), exception);
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("RSA 私钥解密失败，" + e.getMessage());
         }
     }
 
@@ -185,9 +185,9 @@ public class RsaUtil {
         try {
             int blockSize = CRYPT_KEY_SIZE / 8 - 11;
             return encrypt(sourceContent, getPrivateKey(privateKey), blockSize);
-        } catch (Exception exception) {
-            log.error(exception.getMessage(), exception);
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("RSA 公钥加密失败，" + e.getMessage());
         }
     }
 
@@ -201,9 +201,9 @@ public class RsaUtil {
         try {
             int blockSize = CRYPT_KEY_SIZE / 8;
             return decrypt(encryptedContent, getPublicKey(publicKey), blockSize);
-        } catch (Exception exception) {
-            log.error(exception.getMessage(), exception);
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("RSA 公钥解密失败，" + e.getMessage());
         }
     }
 

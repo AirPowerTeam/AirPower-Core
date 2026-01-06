@@ -136,8 +136,9 @@ public class HttpUtil {
             log.info("响应码: {}", response.statusCode());
             log.info("响应体: {}", response.body());
             return response;
-        } catch (Exception exception) {
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("发起请求失败，" + e.getMessage());
         }
     }
 

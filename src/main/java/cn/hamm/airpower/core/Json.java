@@ -196,8 +196,9 @@ public class Json {
     public static <T> T parse(String json, Class<T> clazz) {
         try {
             return getObjectMapper().readValue(json, clazz);
-        } catch (JsonProcessingException exception) {
-            throw new ServiceException(exception);
+        } catch (JsonProcessingException e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
 
@@ -212,8 +213,9 @@ public class Json {
     public static <T> T parse(String json, TypeReference<T> typeReference) {
         try {
             return getObjectMapper().readValue(json, typeReference);
-        } catch (JsonProcessingException exception) {
-            throw new ServiceException(exception);
+        } catch (JsonProcessingException e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
 
@@ -228,8 +230,9 @@ public class Json {
     public static <T> T[] parseList(String json, Class<? extends T[]> clazz) {
         try {
             return getObjectMapper().readValue(json, clazz);
-        } catch (JsonProcessingException exception) {
-            throw new ServiceException(exception);
+        } catch (JsonProcessingException e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
 
@@ -244,8 +247,9 @@ public class Json {
             TypeReference<Map<String, Object>> typeRef = new TypeReference<>() {
             };
             return getObjectMapper().readValue(json, typeRef);
-        } catch (Exception exception) {
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
 
@@ -260,8 +264,9 @@ public class Json {
             TypeReference<List<Map<String, Object>>> typeRef = new TypeReference<>() {
             };
             return getObjectMapper().readValue(json, typeRef);
-        } catch (Exception exception) {
-            throw new ServiceException(exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
 
@@ -274,8 +279,9 @@ public class Json {
     public static String toString(Object object) {
         try {
             return getObjectMapper().writeValueAsString(object);
-        } catch (JsonProcessingException exception) {
-            throw new ServiceException(exception);
+        } catch (JsonProcessingException e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("JSON 序列化失败，" + e.getMessage());
         }
     }
 
