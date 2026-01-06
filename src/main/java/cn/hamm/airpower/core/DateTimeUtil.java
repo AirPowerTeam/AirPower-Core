@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -192,7 +191,7 @@ public class DateTimeUtil {
      * @return 时间戳对应的日期
      */
     @Contract(value = "_ -> new", pure = true)
-    public static @NotNull Date parse(String dateTime) throws ParseException {
+    public static @NotNull Date parse(String dateTime) {
         return parse(dateTime, FULL_DATETIME.getValue());
     }
 
@@ -203,7 +202,7 @@ public class DateTimeUtil {
      * @param formatter 时间格式
      * @return 时间戳对应的日期
      */
-    public static @NotNull Date parse(String dateTime, String formatter) throws ParseException {
+    public static @NotNull Date parse(String dateTime, String formatter) {
         java.time.format.DateTimeFormatter dateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern(formatter);
         LocalDateTime localDateTime = LocalDateTime.parse(dateTime, dateTimeFormatter);
         return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
