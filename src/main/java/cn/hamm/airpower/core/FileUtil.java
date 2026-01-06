@@ -97,7 +97,7 @@ public class FileUtil {
                 Files.createDirectories(path);
             } catch (IOException e) {
                 log.error(e.getMessage(), e);
-                throw new ServiceException("自动创建文件夹失败，请确认权限是否正常");
+                throw new ServiceException("自动创建文件夹失败，" + e.getMessage());
             }
         }
     }
@@ -145,7 +145,7 @@ public class FileUtil {
             Files.write(path, bytes, options);
         } catch (IOException e) {
             log.error(e.getMessage(), e);
-            throw new ServiceException("文件保存失败，请确认权限是否正常");
+            throw new ServiceException("文件保存失败，" + e.getMessage());
         }
     }
 

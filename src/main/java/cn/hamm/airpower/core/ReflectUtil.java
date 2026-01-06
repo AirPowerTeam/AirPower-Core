@@ -108,8 +108,9 @@ public class ReflectUtil {
     public static <T extends RootModel<T>> @NotNull T newInstance(Class<T> clazz) {
         try {
             return clazz.getConstructor().newInstance();
-        } catch (java.lang.Exception exception) {
-            throw new ServiceException(exception.getMessage());
+        } catch (java.lang.Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("创建新实例失败，" + e.getMessage());
         }
     }
 
