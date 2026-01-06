@@ -72,7 +72,7 @@ public @interface Phone {
          */
         @Override
         public final boolean isValid(String value, ConstraintValidatorContext context) {
-            if (!StringUtil.hasLength(value)) {
+            if (StringUtil.isEmpty(value)) {
                 return true;
             }
             if (!mobile && !tel) {

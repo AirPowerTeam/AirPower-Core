@@ -15,9 +15,9 @@ public class StringUtil {
      * @param str 字符串
      * @return 状态
      */
-    @Contract("null -> false")
-    public static boolean hasLength(@Nullable CharSequence str) {
-        return str != null && !str.isEmpty();
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable CharSequence str) {
+        return str == null || str.isEmpty();
     }
 
     /**
@@ -26,9 +26,9 @@ public class StringUtil {
      * @param str 字符串
      * @return 状态
      */
-    @Contract("null -> false")
-    public static boolean hasLength(@Nullable String str) {
-        return str != null && !str.isEmpty();
+    @Contract("null -> true")
+    public static boolean isEmpty(@Nullable String str) {
+        return str == null || str.isEmpty();
     }
 
     /**
@@ -71,7 +71,7 @@ public class StringUtil {
      * @return 字符串
      */
     public static boolean containsWhitespace(@Nullable CharSequence str) {
-        if (hasLength(str)) {
+        if (!isEmpty(str)) {
             int strLen = str.length();
 
             for (int i = 0; i < strLen; ++i) {
@@ -101,7 +101,7 @@ public class StringUtil {
      * @return 字符串
      */
     public static CharSequence trimAllWhitespace(CharSequence str) {
-        if (!hasLength(str)) {
+        if (isEmpty(str)) {
             return str;
         } else {
             int len = str.length();
@@ -146,7 +146,7 @@ public class StringUtil {
      * @return 目标字符串
      */
     private static String changeFirstCharacterCase(String str, boolean capitalize) {
-        if (!hasLength(str)) {
+        if (isEmpty(str)) {
             return str;
         } else {
             char baseChar = str.charAt(0);
