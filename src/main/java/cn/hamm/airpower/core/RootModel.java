@@ -84,13 +84,17 @@ public class RootModel<M extends RootModel<M>> {
      * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
      */
     public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
-        filterModelFieldValue((model, field) -> {
-            Object value = ReflectUtil.getFieldValue(model, field);
+        filterModelFieldValue((instance, field) -> {
+            Object value = ReflectUtil.getFieldValue(instance, field);
             if (Objects.isNull(value)) {
                 return;
             }
             if (value instanceof Collection<?> valueList) {
                 // 是对象集合
+                if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
+                    ReflectUtil.clearFieldValue(instance, field);
+                    return;
+                }
                 valueList.forEach(item -> {
                     if (RootModel.isModel(item.getClass())) {
                         @SuppressWarnings("unchecked")
@@ -108,7 +112,7 @@ public class RootModel<M extends RootModel<M>> {
                 return;
             }
             if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
-                excludeFieldValueNotMeta(model, field);
+                excludeFieldValueNotMeta(instance, field);
             }
             if (isDesensitize) {
                 desensitizeFieldValue(field, value);
