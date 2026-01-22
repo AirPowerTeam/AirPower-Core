@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-<a href="https://github.com/AirPowerTeam/AirPower4J">GitHub</a> / <a href="https://gitee.com/air-power/AirPower4J">Gitee</a> / <a href="https://central.sonatype.com/namespace/cn.hamm">Maven</a>
+<a href="https://github.com/AirPowerTeam/AirPower-Core">GitHub</a> / <a href="https://gitee.com/air-power/AirPower-Core">Gitee</a> / <a href="https://central.sonatype.com/namespace/cn.hamm">Maven</a>
 </p>
 
 ## 📖 一、这是个什么项目
