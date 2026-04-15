@@ -195,8 +195,8 @@ public class CollectionUtil {
                 }
                 default -> value;
             };
-        } catch (Exception exception) {
-            log.error(exception.getMessage(), exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
             return value;
         }
     }

@@ -89,8 +89,8 @@ public class DictionaryUtil {
             Arrays.stream(lambdas).forEach(lambda -> {
                 try {
                     item.put(StringUtil.uncapitalize(ReflectUtil.getLambdaFunctionName(lambda)), lambda.apply(enumItem));
-                } catch (Exception exception) {
-                    log.error(exception.getMessage(), exception);
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
                 }
             });
             mapList.add(item);
