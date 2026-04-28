@@ -54,7 +54,7 @@ public class TreeUtil {
     private static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeList(@NotNull List<E> list, long parentId) {
         return list.stream()
                 .filter(item -> Objects.equals(parentId, item.getParentId()))
-                .peek(item -> item.setChildren(
+                .map(item -> item.setChildren(
                         buildTreeList(list, item.getId())
                 ))
                 .toList();

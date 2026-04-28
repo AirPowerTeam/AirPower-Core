@@ -72,8 +72,8 @@ public class ReflectUtil {
         try {
             field.setAccessible(true);
             return field.get(object);
-        } catch (IllegalAccessException exception) {
-            log.error(REFLECT_EXCEPTION, exception);
+        } catch (IllegalAccessException e) {
+            log.error(REFLECT_EXCEPTION, e);
             return null;
         } finally {
             field.setAccessible(false);
@@ -91,8 +91,8 @@ public class ReflectUtil {
         try {
             field.setAccessible(true);
             field.set(object, value);
-        } catch (IllegalAccessException exception) {
-            log.error(REFLECT_EXCEPTION, exception);
+        } catch (IllegalAccessException e) {
+            log.error(REFLECT_EXCEPTION, e);
         } finally {
             field.setAccessible(false);
         }

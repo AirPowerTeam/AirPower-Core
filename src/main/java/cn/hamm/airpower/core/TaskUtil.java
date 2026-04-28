@@ -40,8 +40,8 @@ public class TaskUtil {
         getRunnableList(runnable, moreRunnable).forEach(run -> {
             try {
                 run.run();
-            } catch (Exception exception) {
-                log.error(exception.getMessage(), exception);
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
             }
         });
     }
@@ -56,8 +56,8 @@ public class TaskUtil {
         getRunnableList(runnable, moreRunnable).forEach((run) -> EXECUTOR.submit(() -> {
             try {
                 run.run();
-            } catch (Exception exception) {
-                log.error("异步执行任务失败, {}", exception.getMessage(), exception);
+            } catch (Exception e) {
+                log.error("异步执行任务失败, {}", e.getMessage(), e);
             }
         }));
     }

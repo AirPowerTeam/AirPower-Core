@@ -106,8 +106,8 @@ public class CollectionUtil {
             fieldList.forEach(field -> {
                 Object value = getCsvColumnValue(entity, field);
                 columnList.add(value.toString()
-                        .replaceAll(CSV_COLUMN_DELIMITER, " ")
-                        .replaceAll(CSV_ROW_DELIMITER, " "));
+                        .replace(CSV_COLUMN_DELIMITER, " ")
+                        .replace(CSV_ROW_DELIMITER, " "));
             });
             rowList.add(String.join(CSV_COLUMN_DELIMITER, columnList));
         });
@@ -195,8 +195,8 @@ public class CollectionUtil {
                 }
                 default -> value;
             };
-        } catch (Exception exception) {
-            log.error(exception.getMessage(), exception);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
             return value;
         }
     }

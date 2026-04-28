@@ -133,8 +133,7 @@ public class HttpUtil {
     public final @NotNull HttpResponse<String> send() {
         try {
             HttpResponse<String> response = getHttpClient().send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
-            log.info("响应码: {}", response.statusCode());
-            log.info("响应体: {}", response.body());
+            log.info("响应 {} {}", response.statusCode(), response.body());
             return response;
         } catch (Exception e) {
             log.error(e.getMessage(), e);

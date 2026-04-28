@@ -9,13 +9,14 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.crypto.Cipher;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 /**
- * <h1>RSA 加解密工具类</h1>
+ * <h1>RSA 工具类</h1>
  *
  * @author Hamm.cn
  */
@@ -23,14 +24,21 @@ import java.util.Base64;
 @Accessors(chain = true)
 public class RsaUtil {
     /**
-     * 加密方式
+     * RSA
      */
-    private static final String CRYPT_METHOD = "RSA";
+    private static final String RSA = "RSA";
 
     /**
      * 加密算法 KEY 长度
      */
-    private final int CRYPT_KEY_SIZE = 2048;
+    @Setter
+    private int keySize = 2048;
+
+    @Setter
+    private String cryptAlgorithm = RSA;
+
+    @Setter
+    private String signAlgorithm = "SHA256withRSA";
 
     /**
      * 公钥
@@ -68,20 +76,20 @@ public class RsaUtil {
      * @return 公钥
      * @throws Exception 异常
      */
-    public static PublicKey getPublicKey(String publicKeyString) throws Exception {
-        KeyFactory keyFactory = KeyFactory.getInstance(CRYPT_METHOD);
+    public PublicKey getPublicKey(String publicKeyString) throws Exception {
+        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
         X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyString));
         return keyFactory.generatePublic(x509EncodedKeySpec);
     }
 
     /**
-     * 生成 RSA 密钥对
+     * 生成 RSA 密钥对 {@code 2048}
      *
      * @return {@code KeyPair}
      */
-    public static KeyPair generateKeyPair() throws NoSuchAlgorithmException {
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(CRYPT_METHOD);
-        keyPairGenerator.initialize(2048);
+    public KeyPair generateKeyPair() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(cryptAlgorithm);
+        keyPairGenerator.initialize(keySize);
         return keyPairGenerator.generateKeyPair();
     }
 
@@ -91,11 +99,22 @@ public class RsaUtil {
      * @param publicKey 公钥
      * @return PEM
      */
-    public static @NotNull String convertPublicKeyToPem(@NotNull PublicKey publicKey) {
+    public @NotNull String convertPublicKeyToPem(@NotNull PublicKey publicKey) {
         String base64Encoded = Base64.getEncoder().encodeToString(publicKey.getEncoded());
         return "-----BEGIN PUBLIC KEY-----\n" +
                 wrapBase64Text(base64Encoded) +
                 "-----END PUBLIC KEY-----";
+    }
+
+
+    /**
+     * 从密钥对获取 PEM 格式公钥
+     *
+     * @param keyPair 密钥对
+     * @return PEM 公钥
+     */
+    public @NotNull String getPemPublicKey(@NotNull KeyPair keyPair) {
+        return convertPublicKeyToPem(keyPair.getPublic());
     }
 
     /**
@@ -104,11 +123,22 @@ public class RsaUtil {
      * @param privateKey 私钥
      * @return PEM
      */
-    public static @NotNull String convertPrivateKeyToPem(@NotNull PrivateKey privateKey) {
+    public @NotNull String convertPrivateKeyToPem(@NotNull PrivateKey privateKey) {
         String base64Encoded = Base64.getEncoder().encodeToString(privateKey.getEncoded());
         return "-----BEGIN RSA PRIVATE KEY-----\n" +
                 wrapBase64Text(base64Encoded) +
                 "-----END RSA PRIVATE KEY-----";
+    }
+
+
+    /**
+     * 从密钥对获取 PEM 格式私钥
+     *
+     * @param keyPair 密钥对
+     * @return PEM 私钥
+     */
+    public @NotNull String getPemPrivateKey(@NotNull KeyPair keyPair) {
+        return convertPrivateKeyToPem(keyPair.getPrivate());
     }
 
     /**
@@ -117,7 +147,7 @@ public class RsaUtil {
      * @param base64Text 原始 {@code Base64}
      * @return 换行后的
      */
-    public static @NotNull String wrapBase64Text(@NotNull String base64Text) {
+    public @NotNull String wrapBase64Text(@NotNull String base64Text) {
         final int wrapLength = 64;
         StringBuilder wrappedText = new StringBuilder();
         int start = 0;
@@ -136,8 +166,8 @@ public class RsaUtil {
      * @return 私钥
      * @throws Exception 异常
      */
-    public static PrivateKey getPrivateKey(String privateKeyString) throws Exception {
-        KeyFactory keyFactory = KeyFactory.getInstance(CRYPT_METHOD);
+    public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
+        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
         PKCS8EncodedKeySpec private8KeySpec =
                 new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKeyString));
         return keyFactory.generatePrivate(private8KeySpec);
@@ -151,7 +181,7 @@ public class RsaUtil {
      */
     public final String publicKeyEncrypt(String sourceContent) {
         try {
-            int blockSize = CRYPT_KEY_SIZE / 8 - 11;
+            int blockSize = keySize / 8 - 11;
             return encrypt(sourceContent, getPublicKey(publicKey), blockSize);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -167,7 +197,7 @@ public class RsaUtil {
      */
     public final @NotNull String privateKeyDecrypt(String encryptedContent) {
         try {
-            int blockSize = CRYPT_KEY_SIZE / 8;
+            int blockSize = keySize / 8;
             return decrypt(encryptedContent, getPrivateKey(privateKey), blockSize);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -183,11 +213,42 @@ public class RsaUtil {
      */
     public final String privateKeyEncrypt(String sourceContent) {
         try {
-            int blockSize = CRYPT_KEY_SIZE / 8 - 11;
+            int blockSize = keySize / 8 - 11;
             return encrypt(sourceContent, getPrivateKey(privateKey), blockSize);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             throw new ServiceException("RSA 公钥加密失败，" + e.getMessage());
+        }
+    }
+
+    /**
+     * 私钥签名
+     *
+     * @param sourceContent 原文
+     * @return 签名
+     */
+    public final String privateKeySignature(String sourceContent) {
+        try {
+            return sign(sourceContent, getPrivateKey(privateKey));
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("RSA 公钥签名失败，" + e.getMessage());
+        }
+    }
+
+    /**
+     * 公钥验签
+     *
+     * @param sourceContent 原文
+     * @param signature     签名
+     * @return 是否成功
+     */
+    public final boolean publicKeyVerifySignature(String sourceContent, String signature) {
+        try {
+            return verify(sourceContent, signature, getPublicKey(publicKey));
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new ServiceException("RSA 公钥验签失败，" + e.getMessage());
         }
     }
 
@@ -199,7 +260,7 @@ public class RsaUtil {
      */
     public final @NotNull String publicKeyDecrypt(String encryptedContent) {
         try {
-            int blockSize = CRYPT_KEY_SIZE / 8;
+            int blockSize = keySize / 8;
             return decrypt(encryptedContent, getPublicKey(publicKey), blockSize);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -217,7 +278,7 @@ public class RsaUtil {
      */
     @Contract("_, _, _ -> new")
     private @NotNull String decrypt(String encryptedContent, Key key, int blockSize) throws Exception {
-        Cipher deCipher = Cipher.getInstance(CRYPT_METHOD);
+        Cipher deCipher = Cipher.getInstance(cryptAlgorithm);
         deCipher.init(Cipher.DECRYPT_MODE, key);
         byte[] resultBytes = rsaDoFinal(deCipher, Base64.getDecoder().decode(encryptedContent), blockSize);
         return new String(resultBytes);
@@ -232,10 +293,40 @@ public class RsaUtil {
      * @return 密文
      */
     private String encrypt(@NotNull String sourceContent, Key key, int blockSize) throws Exception {
-        Cipher cipher = Cipher.getInstance(CRYPT_METHOD);
+        Cipher cipher = Cipher.getInstance(cryptAlgorithm);
         cipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] resultBytes = rsaDoFinal(cipher, sourceContent.getBytes(), blockSize);
         return Base64.getEncoder().encodeToString(resultBytes);
+    }
+
+    /**
+     * 使用私钥对数据进行签名
+     *
+     * @param sourceContent 明确问
+     * @param privateKey    签名用的私钥
+     * @return 签名结果字节数组
+     */
+    private String sign(@NotNull String sourceContent, PrivateKey privateKey) throws Exception {
+        Signature signature = Signature.getInstance(signAlgorithm);
+        signature.initSign(privateKey);
+        signature.update(sourceContent.getBytes(StandardCharsets.UTF_8));
+        byte[] resultBytes = signature.sign();
+        return Base64.getEncoder().encodeToString(resultBytes);
+    }
+
+    /**
+     * 使用公钥验证签名
+     *
+     * @param sourceContent   原始数据
+     * @param sourceSignature 签名字符串
+     * @param publicKey       验证用的公钥
+     * @return 验证是否通过
+     */
+    private boolean verify(@NotNull String sourceContent, @NotNull String sourceSignature, PublicKey publicKey) throws Exception {
+        Signature signature = Signature.getInstance(signAlgorithm);
+        signature.initVerify(publicKey);
+        signature.update(sourceContent.getBytes(StandardCharsets.UTF_8));
+        return signature.verify(Base64.getDecoder().decode(sourceSignature));
     }
 
     /**

@@ -232,8 +232,8 @@ public class AccessTokenUtil {
                 hexString.append(String.format("%02x", b & 0xff));
             }
             return hexString.toString();
-        } catch (Exception exception) {
-            log.error(HMAC_SHA_256_ERROR, exception);
+        } catch (Exception e) {
+            log.error(HMAC_SHA_256_ERROR, e);
             throw new ServiceException(HMAC_SHA_256_ERROR);
         }
     }
