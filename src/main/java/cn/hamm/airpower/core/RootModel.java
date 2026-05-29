@@ -91,10 +91,6 @@ public class RootModel<M extends RootModel<M>> {
             }
             if (value instanceof Collection<?> valueList) {
                 // 是对象集合
-                if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
-                    ReflectUtil.clearFieldValue(instance, field);
-                    return;
-                }
                 valueList.forEach(item -> {
                     if (RootModel.isModel(item.getClass())) {
                         @SuppressWarnings("unchecked")
