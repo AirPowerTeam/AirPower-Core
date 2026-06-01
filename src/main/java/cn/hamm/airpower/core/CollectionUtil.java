@@ -14,6 +14,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Function;
 
@@ -193,7 +194,18 @@ public class CollectionUtil {
                         yield dict.getLabel();
                     }
                 }
-                default -> value;
+                case NUMBER -> {
+                    if (value instanceof Double doubleValue) {
+                        yield BigDecimal.valueOf(doubleValue).toPlainString();
+                    }
+                    if (value instanceof Float floatValue) {
+                        yield BigDecimal.valueOf(floatValue).toPlainString();
+                    }
+                    if (value instanceof Long longValue) {
+                        yield BigDecimal.valueOf(longValue).toPlainString();
+                    }
+                    yield value;
+                }
             };
         } catch (Exception e) {
             log.error(e.getMessage(), e);
