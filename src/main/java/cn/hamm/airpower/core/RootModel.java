@@ -89,6 +89,10 @@ public class RootModel<M extends RootModel<M>> {
             if (Objects.isNull(value)) {
                 return;
             }
+            if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
+                excludeFieldValueNotMeta(instance, field);
+                return;
+            }
             if (value instanceof Collection<?> valueList) {
                 // 是对象集合
                 valueList.forEach(item -> {
@@ -106,9 +110,6 @@ public class RootModel<M extends RootModel<M>> {
                 M payload = ((M) value);
                 payload.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
                 return;
-            }
-            if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
-                excludeFieldValueNotMeta(instance, field);
             }
             if (isDesensitize) {
                 desensitizeFieldValue(field, value);
