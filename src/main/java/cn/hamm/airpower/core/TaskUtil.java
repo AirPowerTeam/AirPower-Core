@@ -27,7 +27,7 @@ public class TaskUtil {
             20,
             3600L,
             SECONDS,
-            new LinkedBlockingQueue<>()
+            new LinkedBlockingQueue<>(1000)
     );
 
     /**

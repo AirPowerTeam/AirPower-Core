@@ -28,6 +28,8 @@ import static cn.hamm.airpower.core.enums.HttpMethod.GET;
 @Data
 @Accessors(chain = true, makeFinal = true)
 public class HttpUtil {
+    private static HttpClient httpClient;
+
     /**
      * 请求头
      */
@@ -57,11 +59,6 @@ public class HttpUtil {
      * 请求体类型
      */
     private String contentType = HttpConstant.ContentType.APPLICATION_JSON_UTF8;
-
-    /**
-     * 连接超时时间
-     */
-    private int connectTimeout = 5;
 
     /**
      * 禁止外部实例化
@@ -180,11 +177,12 @@ public class HttpUtil {
      * @return HttpClient
      */
     private HttpClient getHttpClient() {
-        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
-        if (connectTimeout > 0) {
-            httpClientBuilder.connectTimeout(Duration.ofSeconds(connectTimeout));
+        if (Objects.isNull(httpClient)) {
+            HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+            httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
+            httpClient = httpClientBuilder.build();
         }
-        return httpClientBuilder.build();
+        return httpClient;
     }
 
     /**
