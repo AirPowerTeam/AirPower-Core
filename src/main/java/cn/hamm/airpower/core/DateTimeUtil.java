@@ -76,11 +76,6 @@ public class DateTimeUtil {
     };
 
     /**
-     * 默认时区
-     */
-    private static final String ASIA_CHONGQING = "Asia/Chongqing";
-
-    /**
      * DateTimeFormatter 缓存
      */
     private static final ConcurrentHashMap<String, java.time.format.DateTimeFormatter> FORMATTER_CACHE = new ConcurrentHashMap<>();
@@ -162,7 +157,7 @@ public class DateTimeUtil {
      * @return 格式化后的时间
      */
     public static @NotNull String format(long milliSecond, String formatter) {
-        return format(milliSecond, formatter, ASIA_CHONGQING);
+        return format(milliSecond, formatter, ZoneId.systemDefault());
     }
 
     /**
@@ -173,9 +168,9 @@ public class DateTimeUtil {
      * @param zone        时区
      * @return 格式化后的时间
      */
-    public static @NotNull String format(long milliSecond, String formatter, String zone) {
+    public static @NotNull String format(long milliSecond, String formatter, ZoneId zone) {
         Instant instant = Instant.ofEpochMilli(milliSecond);
-        ZonedDateTime beijingTime = instant.atZone(ZoneId.of(zone));
+        ZonedDateTime beijingTime = instant.atZone(zone);
         return beijingTime.format(getFormatter(formatter));
     }
 
