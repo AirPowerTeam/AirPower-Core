@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
+import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -129,22 +130,23 @@ public class CollectionUtil {
     }
 
     /**
+     * 导出字段缓存
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * 获取导出字段列表
      *
      * @param itemClass 类
      * @param <M>       元素类型
      * @return 字段列表
      */
-    /**
-     * 导出字段缓存
-     */
-    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
-
     public static <M extends RootModel<M>> @Unmodifiable @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
+        //noinspection unchecked
         return EXPORT_FIELD_CACHE.computeIfAbsent(itemClass, clazz -> buildExportFieldList((Class<M>) clazz));
     }
 
-    private static <M extends RootModel<M>> List<Field> buildExportFieldList(Class<M> itemClass) {
+    private static <M extends RootModel<M>> @UnmodifiableView @NotNull List<Field> buildExportFieldList(Class<M> itemClass) {
         List<CsvField> fieldList = new ArrayList<>();
         for (Field field : ReflectUtil.getFieldList(itemClass)) {
             Export export = null;
@@ -165,7 +167,7 @@ public class CollectionUtil {
         }
         // sort 排序 从小到大
         fieldList.sort(Comparator.comparing(CsvField::getSort).reversed());
-        return Collections.unmodifiableList(fieldList.stream().map(CsvField::getField).toList());
+        return fieldList.stream().map(CsvField::getField).toList();
     }
 
     /**

@@ -3,10 +3,7 @@ package cn.hamm.airpower.core;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.interfaces.IEntity;
 import cn.hamm.airpower.core.interfaces.ITree;
-import org.jetbrains.annotations.Contract;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.Unmodifiable;
+import org.jetbrains.annotations.*;
 
 import java.util.*;
 import java.util.function.Function;
@@ -66,7 +63,7 @@ public class TreeUtil {
      * @param <E>       泛型
      * @return 树结构数组
      */
-    private static <E extends IEntity<E> & ITree<E>> @NotNull List<E> buildTreeWithMap(@NotNull Map<Long, List<E>> parentMap, long parentId) {
+    private static <E extends IEntity<E> & ITree<E>> @UnmodifiableView @NotNull List<E> buildTreeWithMap(@NotNull Map<Long, List<E>> parentMap, long parentId) {
         List<E> children = parentMap.getOrDefault(parentId, Collections.emptyList());
         List<E> result = new ArrayList<>(children.size());
         for (E child : children) {

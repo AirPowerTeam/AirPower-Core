@@ -4,8 +4,6 @@ import cn.hamm.airpower.core.enums.DesensitizeType;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.stream.IntStream;
-
 /**
  * <h1>字符串脱敏处理工具类</h1>
  *

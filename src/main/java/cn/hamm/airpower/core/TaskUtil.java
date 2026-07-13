@@ -41,7 +41,7 @@ public class TaskUtil {
                 private final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
 
                 @Override
-                public Thread newThread(Runnable r) {
+                public Thread newThread(@NotNull Runnable r) {
                     Thread thread = new Thread(r, "airpower-task-" + counter.incrementAndGet());
                     thread.setDaemon(true);
                     return thread;
