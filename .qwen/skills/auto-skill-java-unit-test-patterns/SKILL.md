@@ -91,6 +91,28 @@ class XxxUtilTest {
   - 错误签名测试：使用有效 Base64 编码但内容错误的签名（如用不同内容生成的签名），而不是任意字符串，否则会在 Base64 解码后抛出 `ServiceException: Bad signature length`
 - 异常测试：未设置密钥时应抛出 `ServiceException`
 
+### 树结构工具类（如 TreeUtil）
+- 测试：空列表、单节点、简单层级、深层嵌套、多根节点、无序输入
+- 边界：null 父节点（视为根节点）、节点无父节点（孤立节点）、循环引用
+- 注意：
+  - 返回的列表是 `Collections.unmodifiableList()`，不可修改
+  - 输入顺序不影响输出结果（使用 Map 预构建）
+  - 所有节点都应该被包含在树中（可通过递归计数验证）
+  - `findByParentId` 的 function 参数返回 null 时应返回空列表
+  - `ensureNoChildrenBeforeDelete` 在 function 返回 null 时不抛异常
+  - `getChildrenIdList` 递归获取所有嵌套子节点 ID，使用 Set 去重
+
+### 验证工具类（如 ValidateUtil）
+- 测试：有效值、无效值、边界值
+- 边界：null、空字符串、特殊字符、中文、Unicode、超长字符串
+- 注意：
+  - 所有正则验证方法在传入 null 时会抛出 `NullPointerException`（因为 `Pattern.matcher(null)` 会 NPE）
+  - `isChina2Identity` 对15位身份证抛出 `ServiceException`（"暂不支持一代身份证校验"）
+  - `isNormalCode` 只匹配**单个字符**（正则 `^...$` 且没有量词），多字符会返回 false
+  - `validRegex` 方法直接调用 `pattern.matcher(value).matches()`，传入 null 会 NPE
+  - `valid` 方法（Jakarta Validation）需要 Hibernate Validator 等 provider 在 classpath 中
+  - 身份证校验位计算：前17位加权求和，模11取余，查表得到校验位
+  - 正则常量定义在 `PatternConstant` 中，测试前需了解具体正则表达式含义
 ### JSON 处理类（如 Json）
 - 测试：序列化、反序列化、解析为 Map/List/对象
 - 边界：null、空字符串、非法 JSON、空数组
