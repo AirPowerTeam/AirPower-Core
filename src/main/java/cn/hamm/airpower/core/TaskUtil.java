@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -38,7 +39,7 @@ public class TaskUtil {
             SECONDS,
             new LinkedBlockingQueue<>(1000),
             new ThreadFactory() {
-                private final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
+                private final AtomicInteger counter = new AtomicInteger(0);
 
                 @Override
                 public Thread newThread(@NotNull Runnable r) {

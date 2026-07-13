@@ -17,6 +17,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
@@ -132,7 +133,7 @@ public class CollectionUtil {
     /**
      * 导出字段缓存
      */
-    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 获取导出字段列表
