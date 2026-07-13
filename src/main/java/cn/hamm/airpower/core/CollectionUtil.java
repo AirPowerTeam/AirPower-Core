@@ -135,9 +135,18 @@ public class CollectionUtil {
      * @param <M>       元素类型
      * @return 字段列表
      */
+    /**
+     * 导出字段缓存
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static <M extends RootModel<M>> @Unmodifiable @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
+        return EXPORT_FIELD_CACHE.computeIfAbsent(itemClass, clazz -> buildExportFieldList((Class<M>) clazz));
+    }
+
+    private static <M extends RootModel<M>> List<Field> buildExportFieldList(Class<M> itemClass) {
         List<CsvField> fieldList = new ArrayList<>();
-        ReflectUtil.getFieldList(itemClass).forEach(field -> {
+        for (Field field : ReflectUtil.getFieldList(itemClass)) {
             Export export = null;
             // 判断 Getter 是否被标记
             String fieldGetter = ReflectUtil.getFieldGetter(field);
@@ -149,17 +158,14 @@ public class CollectionUtil {
                 }
             } catch (NoSuchMethodException ignored) {
             }
-            if (Objects.isNull(export)) {
-                return;
-            }
-            if (export.remove()) {
-                return;
+            if (Objects.isNull(export) || export.remove()) {
+                continue;
             }
             fieldList.add(new CsvField().setField(field).setSort(export.sort()));
-        });
+        }
         // sort 排序 从小到大
         fieldList.sort(Comparator.comparing(CsvField::getSort).reversed());
-        return fieldList.stream().map(CsvField::getField).toList();
+        return Collections.unmodifiableList(fieldList.stream().map(CsvField::getField).toList());
     }
 
     /**

@@ -185,6 +185,8 @@ public class RootModel<M extends RootModel<M>> {
     private void filterModelFieldValue(BiConsumer<M, Field> consumer) {
         Class<M> clazz = (Class<M>) getClass();
         List<Field> allFields = ReflectUtil.getFieldList(clazz);
-        allFields.forEach(field -> consumer.accept((M) this, field));
+        for (Field field : allFields) {
+            consumer.accept((M) this, field);
+        }
     }
 }

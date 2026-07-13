@@ -14,12 +14,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * <h1>反射工具类</h1>
@@ -244,22 +240,22 @@ public class ReflectUtil {
      * @return 字段数组
      */
     private static @NotNull List<Field> getCacheFieldList(Class<?> clazz) {
-        List<Field> fieldList = new LinkedList<>();
+        List<Field> fieldList = new ArrayList<>();
         if (Objects.isNull(clazz)) {
             return fieldList;
         }
-        Field[] fields = getDeclaredFields(clazz);
-        // 过滤静态属性 或 过滤transient 关键字修饰的属性
-        fieldList = Arrays.stream(fields)
-                .filter(field -> !Modifier.isStatic(field.getModifiers()) && !Modifier.isTransient(field.getModifiers()))
-                .collect(Collectors.toCollection(LinkedList::new));
-        if (isTheRootClass(clazz)) {
-            return fieldList;
+        // 收集当前类和所有父类的字段，避免递归中的多次列表创建和合并
+        Class<?> currentClass = clazz;
+        while (!isTheRootClass(currentClass)) {
+            Field[] fields = getDeclaredFields(currentClass);
+            for (Field field : fields) {
+                if (!Modifier.isStatic(field.getModifiers()) && !Modifier.isTransient(field.getModifiers())) {
+                    fieldList.add(field);
+                }
+            }
+            currentClass = currentClass.getSuperclass();
         }
-        // 处理父类字段
-        Class<?> superClass = clazz.getSuperclass();
-        fieldList.addAll(getCacheFieldList(superClass));
-        return fieldList;
+        return Collections.unmodifiableList(fieldList);
     }
 
     /**

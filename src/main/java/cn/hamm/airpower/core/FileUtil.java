@@ -210,10 +210,10 @@ public class FileUtil {
                 zos.putNextEntry(fileEntry);
 
                 // 写入文件内容
-                try (FileInputStream fis = new FileInputStream(path.toFile())) {
-                    byte[] buffer = new byte[1024];
+                try (java.io.BufferedInputStream bis = new java.io.BufferedInputStream(new FileInputStream(path.toFile()), 8192)) {
+                    byte[] buffer = new byte[8192];
                     int length;
-                    while ((length = fis.read(buffer)) > 0) {
+                    while ((length = bis.read(buffer)) > 0) {
                         zos.write(buffer, 0, length);
                     }
                 }

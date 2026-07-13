@@ -53,6 +53,11 @@ public class AesUtil {
     private String padding = "PKCS5Padding";
 
     /**
+     * Cipher 缓存（按加密模式缓存）
+     */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Cipher> cipherCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * 禁止外部实例化
      */
     @Contract(pure = true)
@@ -108,14 +113,16 @@ public class AesUtil {
      * @return {@code Cipher}
      */
     private @NotNull Cipher getCipher(int type) {
-        try {
-            SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(UTF_8), algorithm);
-            IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes(UTF_8));
-            Cipher cipher = Cipher.getInstance(algorithm + "/" + mode + "/" + padding);
-            cipher.init(type, secretKeySpec, ivParameterSpec);
-            return cipher;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return cipherCache.computeIfAbsent(type, t -> {
+            try {
+                SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(UTF_8), algorithm);
+                IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes(UTF_8));
+                Cipher cipher = Cipher.getInstance(algorithm + "/" + mode + "/" + padding);
+                cipher.init(t, secretKeySpec, ivParameterSpec);
+                return cipher;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }

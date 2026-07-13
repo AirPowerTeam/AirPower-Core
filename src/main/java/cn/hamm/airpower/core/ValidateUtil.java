@@ -31,13 +31,18 @@ public class ValidateUtil {
     }
 
     /**
+     * ValidatorFactory 实例（延迟初始化，应用关闭时统一关闭）
+     */
+    private static ValidatorFactory validatorFactory;
+
+    /**
      * 初始化验证器
      */
     private static void initValidator() {
-        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
-            // 创建验证器实例
-            validator = validatorFactory.getValidator();
+        if (validatorFactory == null) {
+            validatorFactory = Validation.buildDefaultValidatorFactory();
         }
+        validator = validatorFactory.getValidator();
     }
 
     /**

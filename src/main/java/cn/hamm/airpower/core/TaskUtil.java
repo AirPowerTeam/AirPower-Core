@@ -6,8 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -19,15 +18,36 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 @Slf4j
 public class TaskUtil {
     /**
+     * 核心线程数（根据 CPU 核心数动态计算）
+     */
+    private static final int CORE_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors());
+
+    /**
+     * 最大线程数
+     */
+    private static final int MAX_POOL_SIZE = CORE_POOL_SIZE * 2;
+
+    /**
      * 线程池
      */
     @SuppressWarnings("AlibabaThreadShouldSetName")
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
-            5,
-            20,
-            3600L,
+            CORE_POOL_SIZE,
+            MAX_POOL_SIZE,
+            60L,
             SECONDS,
-            new LinkedBlockingQueue<>(1000)
+            new LinkedBlockingQueue<>(1000),
+            new ThreadFactory() {
+                private final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(0);
+
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread thread = new Thread(r, "airpower-task-" + counter.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy()
     );
 
     /**

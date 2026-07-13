@@ -47,14 +47,13 @@ public class DesensitizeUtil {
         if (head < 0 || tail < 0 || head + tail >= text.length()) {
             return text;
         }
-        StringBuilder stringBuilder = new StringBuilder();
-        IntStream.range(0, text.length()).forEach(i -> {
-            if (i >= head && i <= text.length() - tail - 1) {
-                stringBuilder.append(symbol);
-            } else {
-                stringBuilder.append(text.charAt(i));
-            }
-        });
+        StringBuilder stringBuilder = new StringBuilder(text.length());
+        stringBuilder.append(text, 0, head);
+        int repeatCount = text.length() - head - tail;
+        if (repeatCount > 0) {
+            stringBuilder.append(symbol.repeat(repeatCount));
+        }
+        stringBuilder.append(text, text.length() - tail, text.length());
         return stringBuilder.toString();
     }
 

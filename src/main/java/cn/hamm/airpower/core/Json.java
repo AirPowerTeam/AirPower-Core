@@ -292,14 +292,19 @@ public class Json {
      */
     private static @NotNull ObjectMapper getObjectMapper() {
         if (Objects.isNull(objectMapper)) {
-            objectMapper = new ObjectMapper();
-            // 忽略未声明的属性
-            objectMapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
-            // 忽略值为 null 的属性
-            objectMapper.configOverride(Map.class)
-                    .setInclude(JsonInclude.Value.construct(JsonInclude.Include.NON_EMPTY, null));
-            // 忽略没有属性的类
-            objectMapper.configure(FAIL_ON_EMPTY_BEANS, false);
+            synchronized (Json.class) {
+                if (Objects.isNull(objectMapper)) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    // 忽略未声明的属性
+                    mapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
+                    // 忽略值为 null 的属性
+                    mapper.configOverride(Map.class)
+                            .setInclude(JsonInclude.Value.construct(JsonInclude.Include.NON_EMPTY, null));
+                    // 忽略没有属性的类
+                    mapper.configure(FAIL_ON_EMPTY_BEANS, false);
+                    objectMapper = mapper;
+                }
+            }
         }
         return objectMapper;
     }

@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static cn.hamm.airpower.core.enums.DateTimeFormatter.FULL_DATETIME;
 
@@ -78,6 +79,11 @@ public class DateTimeUtil {
      * 默认时区
      */
     private static final String ASIA_CHONGQING = "Asia/Chongqing";
+
+    /**
+     * DateTimeFormatter 缓存
+     */
+    private static final ConcurrentHashMap<String, java.time.format.DateTimeFormatter> FORMATTER_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 时间步长标签
@@ -170,7 +176,17 @@ public class DateTimeUtil {
     public static @NotNull String format(long milliSecond, String formatter, String zone) {
         Instant instant = Instant.ofEpochMilli(milliSecond);
         ZonedDateTime beijingTime = instant.atZone(ZoneId.of(zone));
-        return beijingTime.format(java.time.format.DateTimeFormatter.ofPattern(formatter));
+        return beijingTime.format(getFormatter(formatter));
+    }
+
+    /**
+     * 获取缓存的 DateTimeFormatter
+     *
+     * @param pattern 格式化模式
+     * @return DateTimeFormatter 实例
+     */
+    private static java.time.format.DateTimeFormatter getFormatter(String pattern) {
+        return FORMATTER_CACHE.computeIfAbsent(pattern, java.time.format.DateTimeFormatter::ofPattern);
     }
 
     /**
@@ -203,8 +219,7 @@ public class DateTimeUtil {
      * @return 时间戳对应的日期
      */
     public static @NotNull Date parse(String dateTime, String formatter) {
-        java.time.format.DateTimeFormatter dateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern(formatter);
-        LocalDateTime localDateTime = LocalDateTime.parse(dateTime, dateTimeFormatter);
+        LocalDateTime localDateTime = LocalDateTime.parse(dateTime, getFormatter(formatter));
         return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
     }
 

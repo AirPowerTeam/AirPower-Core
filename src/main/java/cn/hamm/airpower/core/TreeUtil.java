@@ -8,10 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 
 /**
@@ -40,24 +37,42 @@ public class TreeUtil {
      * @return 树结构数组
      */
     public static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeList(List<E> list) {
-        return buildTreeList(list, ROOT_ID);
+        return buildTreeListOptimized(list, ROOT_ID);
     }
 
     /**
-     * 生成树结构
+     * 生成树结构（优化版 - O(n) 复杂度）
      *
      * @param list     原始数据列表
      * @param parentId 父级 ID
      * @param <E>      泛型
-     * @return 数结构数组
+     * @return 树结构数组
+     * @apiNote 使用 Map 预构建 parentId -> children 映射，将时间复杂度从 O(n²) 优化到 O(n)
      */
-    private static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeList(@NotNull List<E> list, long parentId) {
-        return list.stream()
-                .filter(item -> Objects.equals(parentId, item.getParentId()))
-                .map(item -> item.setChildren(
-                        buildTreeList(list, item.getId())
-                ))
-                .toList();
+    private static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeListOptimized(@NotNull List<E> list, long parentId) {
+        Map<Long, List<E>> parentMap = new HashMap<>();
+        for (E item : list) {
+            Long pid = item.getParentId() != null ? item.getParentId() : ROOT_ID;
+            parentMap.computeIfAbsent(pid, k -> new ArrayList<>()).add(item);
+        }
+        return buildTreeWithMap(parentMap, parentId);
+    }
+
+    /**
+     * 使用 Map 构建树结构
+     *
+     * @param parentMap parentId -> children 映射
+     * @param parentId  父级 ID
+     * @param <E>       泛型
+     * @return 树结构数组
+     */
+    private static <E extends IEntity<E> & ITree<E>> @NotNull List<E> buildTreeWithMap(@NotNull Map<Long, List<E>> parentMap, long parentId) {
+        List<E> children = parentMap.getOrDefault(parentId, Collections.emptyList());
+        List<E> result = new ArrayList<>(children.size());
+        for (E child : children) {
+            result.add(child.setChildren(buildTreeWithMap(parentMap, child.getId())));
+        }
+        return Collections.unmodifiableList(result);
     }
 
     /**

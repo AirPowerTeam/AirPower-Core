@@ -56,7 +56,10 @@ public class RandomUtil {
      */
     public static byte @NotNull [] randomBytes(int length) {
         byte[] bytes = new byte[length];
-        IntStream.range(0, length).forEach(i -> bytes[i] = (byte) (Math.random() * 256 - 128));
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int i = 0; i < length; i++) {
+            bytes[i] = (byte) random.nextInt(256);
+        }
         return bytes;
     }
 

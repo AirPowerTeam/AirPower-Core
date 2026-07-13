@@ -53,6 +53,21 @@ public class RsaUtil {
     private String privateKey;
 
     /**
+     * 缓存的公钥
+     */
+    private PublicKey cachedPublicKey;
+
+    /**
+     * 缓存的私钥
+     */
+    private PrivateKey cachedPrivateKey;
+
+    /**
+     * 缓存的 KeyFactory
+     */
+    private KeyFactory cachedKeyFactory;
+
+    /**
      * 禁止外部实例化
      */
     @Contract(pure = true)
@@ -77,9 +92,27 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public PublicKey getPublicKey(String publicKeyString) throws Exception {
-        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        if (cachedPublicKey != null) {
+            return cachedPublicKey;
+        }
+        KeyFactory keyFactory = getKeyFactory();
         X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyString));
-        return keyFactory.generatePublic(x509EncodedKeySpec);
+        cachedPublicKey = keyFactory.generatePublic(x509EncodedKeySpec);
+        return cachedPublicKey;
+    }
+
+    /**
+     * 获取 KeyFactory（带缓存）
+     *
+     * @return KeyFactory
+     * @throws NoSuchAlgorithmException 异常
+     */
+    private KeyFactory getKeyFactory() throws NoSuchAlgorithmException {
+        if (cachedKeyFactory != null) {
+            return cachedKeyFactory;
+        }
+        cachedKeyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        return cachedKeyFactory;
     }
 
     /**
@@ -167,10 +200,14 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
-        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        if (cachedPrivateKey != null) {
+            return cachedPrivateKey;
+        }
+        KeyFactory keyFactory = getKeyFactory();
         PKCS8EncodedKeySpec private8KeySpec =
                 new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKeyString));
-        return keyFactory.generatePrivate(private8KeySpec);
+        cachedPrivateKey = keyFactory.generatePrivate(private8KeySpec);
+        return cachedPrivateKey;
     }
 
     /**
