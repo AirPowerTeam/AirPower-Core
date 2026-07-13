@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.enums.DateTimeFormatter;
+import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -214,8 +215,12 @@ public class DateTimeUtil {
      * @return 时间戳对应的日期
      */
     public static @NotNull Date parse(String dateTime, String formatter) {
-        LocalDateTime localDateTime = LocalDateTime.parse(dateTime, getFormatter(formatter));
-        return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+        try {
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, getFormatter(formatter));
+            return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+        } catch (Exception e) {
+            throw new ServiceException("时间日期格式错误，请检查输入格式");
+        }
     }
 
     /**
