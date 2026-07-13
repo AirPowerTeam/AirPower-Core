@@ -2,7 +2,7 @@
 name: java-unit-test-patterns
 description: 为 Java 工具类编写全面单元测试的策略和模式，包括边界条件、异常处理和实际网络/文件 I/O 测试
 source: auto-skill
-extracted_at: '2026-07-13T08:57:43.540Z'
+extracted_at: '2026-07-13T09:22:27.325Z'
 ---
 
 # Java 单元测试编写策略
@@ -56,10 +56,40 @@ class XxxUtilTest {
 - 测试：按 key 查找、按自定义属性查找、获取列表
 - 边界：空枚举、不存在值、null 值
 
-### 加密/安全类（如 AesUtil）
-- 测试：加密、解密、密钥生成
+### 任务执行类（如 TaskUtil）
+- 测试：同步执行、异步执行、异常处理
+- 边界：null 任务、空任务、多任务、大量任务
+- 注意：
+  - `run()` 和 `runAsync()` 内部都捕获了异常，不会向外抛出
+  - 传入 `null` 时内部会抛出 `NullPointerException`，但被 try-catch 捕获并记录日志，所以外部不会收到异常
+  - 同步执行按顺序完成，异步执行通过线程池并行
+  - 异常测试应使用 `assertDoesNotThrow()` 而非 `assertThrows()`
+  - 并行验证测试不要依赖精确的时间计算（受系统调度影响），而是验证所有任务最终都能完成
+  - 异步测试需要 `Thread.sleep()` 等待任务完成，时间要足够长（建议 200ms+）
+  - 大量任务测试（如100个）验证线程池能正常处理
+
+### Trace/日志类（如 TraceUtil）
+- 测试：设置、获取、重置、MDC 集成
+- 边界：null、空字符串、空白字符串、特殊字符、Unicode、长字符串
+- 注意：
+  - 使用 `@BeforeEach` 和 `@AfterEach` 清除 MDC 状态，避免测试间互相影响
+  - `setTraceId(null)` 和 `setTraceId("")` 都会自动生成 UUID
+  - 验证 UUID 格式使用 `assertDoesNotThrow(() -> UUID.fromString(traceId))`
+  - 连续重置应生成不同的 UUID
+  - 值直接存储在 MDC 中，可以通过 `MDC.get(key)` 验证
+
+### 加密/安全类（如 AesUtil, RsaUtil）
 - 边界：null 输入、空字符串、错误密钥
 - 注意：同一实例多次加密结果可能相同（Cipher 缓存）
+- RSA 特有：
+  - 测试公钥加密/私钥解密、私钥加密/公钥解密
+  - 测试签名和验签（正确签名、错误签名、错误内容）
+  - 测试长文本（超过一个 block 大小）
+  - 测试 PEM 格式转换（包含换行符）
+  - 密钥缓存测试（两次获取同一实例应返回相同对象）
+  - 异常信息优化：建议在 `getPublicKey()`/`getPrivateKey()` 中检查 null，抛出明确的 `ServiceException`（如"RSA 公钥未设置，请先调用 setPublicKey() 方法设置公钥"），而不是让 `Base64.decode(null)` 抛出模糊的 `NullPointerException`
+  - 错误签名测试：使用有效 Base64 编码但内容错误的签名（如用不同内容生成的签名），而不是任意字符串，否则会在 Base64 解码后抛出 `ServiceException: Bad signature length`
+- 异常测试：未设置密钥时应抛出 `ServiceException`
 
 ### JSON 处理类（如 Json）
 - 测试：序列化、反序列化、解析为 Map/List/对象
@@ -67,6 +97,35 @@ class XxxUtilTest {
 - 注意：Jackson 等库对 null 输入可能抛出 `IllegalArgumentException` 而非 `ServiceException`
 - 内部测试类：创建简单的 POJO（带 getter/setter）用于反序列化测试
 - 常量验证：验证 SUCCESS_CODE、ERROR_CODE 等常量值
+
+### 反射工具类（如 ReflectUtil）
+- 测试：字段访问、方法调用、注解获取、Lambda 解析
+- 边界：null 对象、null Class、私有字段、继承链
+- 注意：
+  - `getFieldValue(null, field)` 会抛出 `NullPointerException`（Java 反射行为）
+  - `getFieldList(null)` 可能抛出 `NullPointerException` 或自定义异常（取决于源码实现）
+  - 内部类定义在测试方法中可能导致 `NoClassDefFoundError`，建议定义为顶层内部类
+- Lambda 测试：`getLambdaFunctionName` 对 `getXxx` 返回 `Xxx`，对 `isXxx` 返回 `isXxx`（因为没有 `get` 前缀可替换）
+
+### 随机生成类（如 RandomUtil）
+- 测试：随机字节数组、随机字符串、随机数字、随机整数
+- 边界：长度=0、负数长度、极大长度、单字符样本
+- 注意：
+  - `randomBytes(-1)` 会抛出 `NegativeArraySizeException`（`new byte[-1]` 的行为）
+  - `randomString(0)` 被源码修正为长度1（`Math.max(length, 1)`）
+  - `randomInt(0)` 会抛出 `IllegalArgumentException`（`ThreadLocalRandom.nextInt(0)` 的行为）
+- 随机性验证：两次生成结果不应相等（极大概率）
+- 范围验证：使用 `@RepeatedTest` 多次验证随机数在指定范围内
+
+### 数据模型类（如 RootModel）
+- 测试：字段过滤、脱敏、递归处理、集合处理
+- 边界：null 字段、空字符串、空集合、null 子对象
+- 注意：
+  - 内部类必须定义为顶层内部类（`public static class`），不能定义在测试方法内部，否则会导致 `NoClassDefFoundError`
+  - 白名单逻辑：`excludeNotMeta()` 默认白名单包含当前类，非Meta字段**不会**被清空
+  - 只有白名单**非空且不包含当前类**时，才会触发排除逻辑
+  - 脱敏对空字符串和短字符串有保护（长度不足时不脱敏）
+  - `assertDoesNotThrow(() -> model.method())` 使用 lambda 而非方法引用，避免方法重载歧义
 
 ## 常见边界条件清单
 
@@ -107,3 +166,4 @@ class XxxUtilTest {
 4. **资源清理**：文件/网络资源使用 try-with-resources 或 `@AfterEach`
 5. **日志噪音**：网络测试日志输出多，使用 `-q` 参数减少输出
 6. **JSON 字符串转义**：Java 字符串中的 `"` 需要转义为 `\"`，避免编译错误
+7. **数组 vs 字符串 length**：`byte[].length` 是属性（无括号），`String.length()` 是方法（有括号），不要混淆
