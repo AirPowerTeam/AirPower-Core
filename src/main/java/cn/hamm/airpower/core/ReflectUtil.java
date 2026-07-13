@@ -230,6 +230,9 @@ public class ReflectUtil {
      * @return 字段数组
      */
     public static @NotNull List<Field> getFieldList(Class<?> clazz) {
+        if (Objects.isNull(clazz)) {
+            throw new ServiceException("无法获取 null 的字段列表");
+        }
         return FIELD_LIST_MAP.computeIfAbsent(clazz, ReflectUtil::getCacheFieldList);
     }
 
