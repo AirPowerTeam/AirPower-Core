@@ -1,15 +1,18 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
+import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static javax.crypto.Cipher.DECRYPT_MODE;
@@ -82,6 +85,9 @@ public class AesUtil {
      * @return 加密后的内容
      */
     public final String encrypt(String source) {
+        if (Objects.isNull(source)) {
+            throw new ServiceException("加密内容不能为null");
+        }
         try {
             return Base64.getEncoder().encodeToString(getCipher(ENCRYPT_MODE)
                     .doFinal(source.getBytes(UTF_8)));
@@ -98,6 +104,9 @@ public class AesUtil {
      */
     @Contract("_ -> new")
     public final @NotNull String decrypt(String content) {
+        if (Objects.isNull(content)) {
+            throw new ServiceException("解密内容不能为null");
+        }
         try {
             return new String(getCipher(DECRYPT_MODE)
                     .doFinal(Base64.getDecoder().decode(content)), UTF_8);
