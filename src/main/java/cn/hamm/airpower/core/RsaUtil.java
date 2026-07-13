@@ -92,6 +92,9 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public PublicKey getPublicKey(String publicKeyString) throws Exception {
+        if (java.util.Objects.isNull(publicKeyString)) {
+            throw new ServiceException("RSA 公钥未设置，请先调用 setPublicKey() 方法设置公钥");
+        }
         if (cachedPublicKey != null) {
             return cachedPublicKey;
         }
@@ -200,6 +203,9 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
+        if (java.util.Objects.isNull(privateKeyString)) {
+            throw new ServiceException("RSA 私钥未设置，请先调用 setPrivateKey() 方法设置私钥");
+        }
         if (cachedPrivateKey != null) {
             return cachedPrivateKey;
         }
@@ -254,7 +260,7 @@ public class RsaUtil {
             return encrypt(sourceContent, getPrivateKey(privateKey), blockSize);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
-            throw new ServiceException("RSA 公钥加密失败，" + e.getMessage());
+            throw new ServiceException("RSA 私钥加密失败，" + e.getMessage());
         }
     }
 
@@ -269,7 +275,7 @@ public class RsaUtil {
             return sign(sourceContent, getPrivateKey(privateKey));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
-            throw new ServiceException("RSA 公钥签名失败，" + e.getMessage());
+            throw new ServiceException("RSA 私钥签名失败，" + e.getMessage());
         }
     }
 
