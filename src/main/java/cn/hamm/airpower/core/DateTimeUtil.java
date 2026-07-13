@@ -241,12 +241,11 @@ public class DateTimeUtil {
      * @return 友好格式化后的时间
      */
     public static @NotNull String friendlyFormatSecond(long second) {
+        if (second < 0) {
+            throw new ServiceException("时间戳不能为负数");
+        }
         long currentSecond = System.currentTimeMillis() / MILLISECONDS_PER_SECOND;
         long diff = Math.abs(currentSecond - second);
-        if (second < 0) {
-            log.error("时间戳错误：{}", second);
-            return "-";
-        }
         if (second < currentSecond && diff < SECOND_PER_MINUTE) {
             // 过去时间，且小于60s
             return "刚刚";
