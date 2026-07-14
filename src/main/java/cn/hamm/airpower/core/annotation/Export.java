@@ -1,6 +1,5 @@
 package cn.hamm.airpower.core.annotation;
 
-
 import java.lang.annotation.Documented;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
