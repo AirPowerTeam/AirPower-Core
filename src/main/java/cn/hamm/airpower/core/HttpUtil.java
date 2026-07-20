@@ -129,11 +129,8 @@ public class HttpUtil {
      */
     public final @NotNull HttpResponse<String> send() {
         try {
-            HttpResponse<String> response = getHttpClient().send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
-            log.info("响应 {} {}", response.statusCode(), response.body());
-            return response;
+            return getHttpClient().send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("发起请求失败，" + e.getMessage());
         }
     }
@@ -148,9 +145,6 @@ public class HttpUtil {
                 .uri(URI.create(url));
         headers.forEach((key, value) -> requestBuilder.header(key, value.toString()));
         HttpRequest.BodyPublisher bodyPublisher = HttpRequest.BodyPublishers.ofString(body);
-        log.info("请求地址: {} {}", method.name(), url);
-        log.info("请求头: {}", headers);
-        log.info("请求体: {}", body);
         switch (method) {
             case GET -> requestBuilder.GET();
             case POST -> requestBuilder.POST(bodyPublisher);

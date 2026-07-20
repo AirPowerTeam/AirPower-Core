@@ -41,6 +41,10 @@ public class CollectionUtil {
      * CSV 缩进符号
      */
     private static final String INDENT = "\t";
+    /**
+     * 导出字段缓存
+     */
+    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 禁止外部实例化
@@ -131,11 +135,6 @@ public class CollectionUtil {
     }
 
     /**
-     * 导出字段缓存
-     */
-    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
-
-    /**
      * 获取导出字段列表
      *
      * @param itemClass 类
@@ -217,7 +216,6 @@ public class CollectionUtil {
                 }
             };
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
             return value;
         }
     }

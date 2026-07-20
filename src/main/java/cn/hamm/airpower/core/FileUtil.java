@@ -96,7 +96,6 @@ public class FileUtil {
             try {
                 Files.createDirectories(path);
             } catch (IOException e) {
-                log.error(e.getMessage(), e);
                 throw new ServiceException("自动创建文件夹失败，" + e.getMessage());
             }
         }
@@ -144,7 +143,6 @@ public class FileUtil {
             }
             Files.write(path, bytes, options);
         } catch (IOException e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("文件保存失败，" + e.getMessage());
         }
     }
@@ -240,7 +238,7 @@ public class FileUtil {
                     .map(Path::toFile)
                     .forEach(File::delete);
         } catch (IOException e) {
-            log.error(e.getMessage(), e);
+            log.error("删除文件夹失败, {}", e.getMessage());
         }
     }
 }

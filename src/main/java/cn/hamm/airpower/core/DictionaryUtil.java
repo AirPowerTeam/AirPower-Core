@@ -90,7 +90,7 @@ public class DictionaryUtil {
                 try {
                     item.put(StringUtil.uncapitalize(ReflectUtil.getLambdaFunctionName(lambda)), lambda.apply(enumItem));
                 } catch (Exception e) {
-                    log.error(e.getMessage(), e);
+                    log.error("获取字典可选项失败, {}", e.getMessage());
                 }
             });
             mapList.add(item);

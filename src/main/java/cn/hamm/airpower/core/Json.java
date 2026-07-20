@@ -197,7 +197,6 @@ public class Json {
         try {
             return getObjectMapper().readValue(json, clazz);
         } catch (JsonProcessingException e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -214,7 +213,6 @@ public class Json {
         try {
             return getObjectMapper().readValue(json, typeReference);
         } catch (JsonProcessingException e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -231,7 +229,6 @@ public class Json {
         try {
             return getObjectMapper().readValue(json, clazz);
         } catch (JsonProcessingException e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -248,7 +245,6 @@ public class Json {
             };
             return getObjectMapper().readValue(json, typeRef);
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -265,7 +261,6 @@ public class Json {
             };
             return getObjectMapper().readValue(json, typeRef);
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -280,7 +275,6 @@ public class Json {
         try {
             return getObjectMapper().writeValueAsString(object);
         } catch (JsonProcessingException e) {
-            log.error(e.getMessage(), e);
             throw new ServiceException("JSON 序列化失败，" + e.getMessage());
         }
     }

@@ -233,7 +233,6 @@ public class AccessTokenUtil {
             }
             return hexString.toString();
         } catch (Exception e) {
-            log.error(HMAC_SHA_256_ERROR, e);
             throw new ServiceException(HMAC_SHA_256_ERROR);
         }
     }

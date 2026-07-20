@@ -6,7 +6,9 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -62,7 +64,7 @@ public class TaskUtil {
             try {
                 run.run();
             } catch (Exception e) {
-                log.error(e.getMessage(), e);
+                log.error("执行任务失败, {}", e.getMessage());
             }
         });
     }
@@ -78,7 +80,7 @@ public class TaskUtil {
             try {
                 run.run();
             } catch (Exception e) {
-                log.error("异步执行任务失败, {}", e.getMessage(), e);
+                log.error("异步执行任务失败, {}", e.getMessage());
             }
         }));
     }
