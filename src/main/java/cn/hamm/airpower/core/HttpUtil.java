@@ -31,6 +31,11 @@ import static cn.hamm.airpower.core.enums.HttpMethod.GET;
 @Accessors(chain = true, makeFinal = true)
 public class HttpUtil {
     /**
+     * 默认超时秒
+     */
+    private static final int DEFAULT_TIMEOUT_SECOND = 5;
+
+    /**
      * HTTP 客户端
      */
     private HttpClient httpClient;
@@ -74,9 +79,11 @@ public class HttpUtil {
     /**
      * 创建一个 HttpUtil 对象
      *
+     * @param proxyConfig   代理配置
+     * @param timeoutSecond 超时时间（秒）
      * @return HttpUtil
      */
-    public static @NotNull HttpUtil create(@Nullable ProxyConfig proxyConfig) {
+    public static @NotNull HttpUtil create(@Nullable ProxyConfig proxyConfig, int timeoutSecond) {
         HttpUtil httpUtil = new HttpUtil();
         HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
         // 添加 proxy 代理
@@ -93,9 +100,29 @@ public class HttpUtil {
                 }
             });
         }
-        httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
+        httpClientBuilder.connectTimeout(Duration.ofSeconds(timeoutSecond));
         httpUtil.httpClient = httpClientBuilder.build();
         return httpUtil;
+    }
+
+    /**
+     * 创建一个 HttpUtil 对象
+     *
+     * @param timeoutSecond 超时时间（秒）
+     * @return HttpUtil
+     */
+    public static @NotNull HttpUtil create(int timeoutSecond) {
+        return create(null, timeoutSecond);
+    }
+
+    /**
+     * 创建一个 HttpUtil 对象
+     *
+     * @param proxyConfig 代理配置
+     * @return HttpUtil
+     */
+    public static @NotNull HttpUtil create(@Nullable ProxyConfig proxyConfig) {
+        return create(proxyConfig, DEFAULT_TIMEOUT_SECOND);
     }
 
     /**
