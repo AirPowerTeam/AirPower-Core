@@ -6,7 +6,6 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -26,6 +25,11 @@ import static javax.crypto.Cipher.ENCRYPT_MODE;
 @Accessors(chain = true)
 public class AesUtil {
     /**
+     * Cipher 缓存（按加密模式缓存）
+     */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Cipher> cipherCache = new java.util.concurrent.ConcurrentHashMap<>();
+    
+    /**
      * 加密算法
      */
     @Setter(AccessLevel.NONE)
@@ -34,14 +38,13 @@ public class AesUtil {
     /**
      * 密钥
      */
-    @Setter
-    private String key;
+    private byte[] key;
 
     /**
      * 偏移向量
      */
     @Setter
-    private String iv = "0000000000000000";
+    private byte[] iv = "0000000000000000".getBytes(UTF_8);
 
     /**
      * 工作模式
@@ -54,11 +57,6 @@ public class AesUtil {
      */
     @Setter
     private String padding = "PKCS5Padding";
-
-    /**
-     * Cipher 缓存（按加密模式缓存）
-     */
-    private final java.util.concurrent.ConcurrentHashMap<Integer, Cipher> cipherCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 禁止外部实例化
@@ -76,6 +74,27 @@ public class AesUtil {
     @Contract(" -> new")
     public static @NotNull AesUtil create() {
         return new AesUtil();
+    }
+
+    /**
+     * 设置密钥
+     *
+     * @param base64Key Base64 编码的密钥
+     * @return this
+     */
+    public AesUtil setKey(String base64Key) {
+        return setKey(Base64.getDecoder().decode(base64Key));
+    }
+
+    /**
+     * 设置密钥
+     *
+     * @param key 密钥
+     * @return this
+     */
+    public AesUtil setKey(byte[] key) {
+        this.key = key;
+        return this;
     }
 
     /**
@@ -124,8 +143,8 @@ public class AesUtil {
     private @NotNull Cipher getCipher(int type) {
         return cipherCache.computeIfAbsent(type, t -> {
             try {
-                SecretKeySpec secretKeySpec = new SecretKeySpec(key.getBytes(UTF_8), algorithm);
-                IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes(UTF_8));
+                SecretKeySpec secretKeySpec = new SecretKeySpec(key, algorithm);
+                IvParameterSpec ivParameterSpec = new IvParameterSpec(iv);
                 Cipher cipher = Cipher.getInstance(algorithm + "/" + mode + "/" + padding);
                 cipher.init(t, secretKeySpec, ivParameterSpec);
                 return cipher;

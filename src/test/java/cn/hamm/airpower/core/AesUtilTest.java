@@ -3,6 +3,8 @@ package cn.hamm.airpower.core;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -12,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class AesUtilTest {
 
-    private static final String TEST_KEY = "0123456789abcdef";
-    private static final String TEST_IV = "abcdef0123456789";
+    private static final byte[] TEST_KEY = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] TEST_IV = "abcdef0123456789".getBytes(StandardCharsets.UTF_8);
     private static final String PLAIN_TEXT = "Hello, World!";
     private static final String CHINESE_TEXT = "中文测试内容🎉";
     private static final String EMPTY_TEXT = "";
@@ -94,8 +96,8 @@ class AesUtilTest {
 
     @Test
     void testEncryptAndDecryptWithDifferentKeys() {
-        String key1 = "0123456789abcdef";
-        String key2 = "fedcba9876543210";
+        byte[] key1 = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
+        byte[] key2 = "fedcba9876543210".getBytes(StandardCharsets.UTF_8);
 
         String encrypted = AesUtil.create()
                 .setKey(key1)
@@ -113,8 +115,8 @@ class AesUtilTest {
 
     @Test
     void testEncryptAndDecryptWithDifferentIv() {
-        String iv1 = "abcdef0123456789";
-        String iv2 = "fedcba0987654321";
+        byte[] iv1 = "abcdef0123456789".getBytes(StandardCharsets.UTF_8);
+        byte[] iv2 = "fedcba0987654321".getBytes(StandardCharsets.UTF_8);
 
         String encrypted = AesUtil.create()
                 .setKey(TEST_KEY)
@@ -325,7 +327,7 @@ class AesUtilTest {
     @Test
     void testMultipleInstancesIndependent() {
         AesUtil aes1 = AesUtil.create().setKey(TEST_KEY).setIv(TEST_IV);
-        AesUtil aes2 = AesUtil.create().setKey("fedcba9876543210").setIv(TEST_IV);
+        AesUtil aes2 = AesUtil.create().setKey("fedcba9876543210".getBytes(StandardCharsets.UTF_8)).setIv(TEST_IV);
 
         String encrypted1 = aes1.encrypt(PLAIN_TEXT);
         String encrypted2 = aes2.encrypt(PLAIN_TEXT);
