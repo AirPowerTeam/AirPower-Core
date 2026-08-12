@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class HttpUtilTest {
 
-    private static final String TEST_URL = "https://ip.hamm.cn";
+    private static final String TEST_URL = "https://miai.hamm.cn";
     private static final String TEST_BODY = "{\"test\":\"data\"}";
 
     // ==================== create 方法测试 ====================
