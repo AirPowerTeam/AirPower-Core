@@ -29,8 +29,6 @@ import static cn.hamm.airpower.core.enums.HttpMethod.GET;
 @Data
 @Accessors(chain = true, makeFinal = true)
 public class HttpUtil {
-    private static volatile HttpClient httpClient;
-
     /**
      * 请求头
      */
@@ -173,30 +171,23 @@ public class HttpUtil {
      * @return HttpClient
      */
     private HttpClient getHttpClient() {
-        if (Objects.isNull(httpClient)) {
-            synchronized (HttpUtil.class) {
-                if (Objects.isNull(httpClient)) {
-                    HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
-                    // 添加 proxy 代理
-                    if (Objects.nonNull(proxyConfig)) {
-                        httpClientBuilder.proxy(new ProxySelector() {
-                            @Override
-                            public List<Proxy> select(URI uri) {
-                                return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
-                            }
-
-                            @Override
-                            public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-
-                            }
-                        });
-                    }
-                    httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
-                    httpClient = httpClientBuilder.build();
+        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+        // 添加 proxy 代理
+        if (Objects.nonNull(proxyConfig)) {
+            httpClientBuilder.proxy(new ProxySelector() {
+                @Override
+                public List<Proxy> select(URI uri) {
+                    return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
                 }
-            }
+
+                @Override
+                public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+
+                }
+            });
         }
-        return httpClient;
+        httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
+        return httpClientBuilder.build();
     }
 
     /**
