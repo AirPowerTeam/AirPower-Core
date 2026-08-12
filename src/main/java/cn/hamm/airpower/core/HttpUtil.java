@@ -10,7 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.net.URI;
+import java.io.IOException;
+import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -59,6 +60,7 @@ public class HttpUtil {
      * 请求体类型
      */
     private String contentType = HttpConstant.ContentType.APPLICATION_JSON_UTF8;
+    private ProxyConfig proxyConfig;
 
     /**
      * 禁止外部实例化
@@ -175,6 +177,20 @@ public class HttpUtil {
             synchronized (HttpUtil.class) {
                 if (Objects.isNull(httpClient)) {
                     HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+                    // 添加 proxy 代理
+                    if (Objects.nonNull(proxyConfig)) {
+                        httpClientBuilder.proxy(new ProxySelector() {
+                            @Override
+                            public List<Proxy> select(URI uri) {
+                                return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
+                            }
+
+                            @Override
+                            public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+
+                            }
+                        });
+                    }
                     httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
                     httpClient = httpClientBuilder.build();
                 }
@@ -194,5 +210,35 @@ public class HttpUtil {
     public final HttpUtil addHeader(String key, Object value) {
         headers.put(key, value);
         return this;
+    }
+
+    /**
+     * 设置代理
+     *
+     * @param proxyConfig 代理配置
+     * @return HttpUtil
+     */
+    public HttpUtil setProxy(ProxyConfig proxyConfig) {
+        this.proxyConfig = proxyConfig;
+        return this;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class ProxyConfig {
+        /**
+         * 代理地址
+         */
+        private String host = "127.0.0.1";
+
+        /**
+         * 代理端口
+         */
+        private int port = 1080;
+
+        /**
+         * 代理类型
+         */
+        private Proxy.Type type = Proxy.Type.SOCKS;
     }
 }
