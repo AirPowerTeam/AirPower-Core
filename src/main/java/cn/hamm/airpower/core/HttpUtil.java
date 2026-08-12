@@ -9,6 +9,7 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.*;
@@ -29,6 +30,11 @@ import static cn.hamm.airpower.core.enums.HttpMethod.GET;
 @Data
 @Accessors(chain = true, makeFinal = true)
 public class HttpUtil {
+    /**
+     * HTTP 客户端
+     */
+    private HttpClient httpClient;
+
     /**
      * 请求头
      */
@@ -58,7 +64,6 @@ public class HttpUtil {
      * 请求体类型
      */
     private String contentType = HttpConstant.ContentType.APPLICATION_JSON_UTF8;
-    private ProxyConfig proxyConfig;
 
     /**
      * 禁止外部实例化
@@ -71,9 +76,35 @@ public class HttpUtil {
      *
      * @return HttpUtil
      */
-    @Contract(" -> new")
+    public static @NotNull HttpUtil create(@Nullable ProxyConfig proxyConfig) {
+        HttpUtil httpUtil = new HttpUtil();
+        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+        // 添加 proxy 代理
+        if (Objects.nonNull(proxyConfig)) {
+            httpClientBuilder.proxy(new ProxySelector() {
+                @Override
+                public List<Proxy> select(URI uri) {
+                    return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
+                }
+
+                @Override
+                public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+
+                }
+            });
+        }
+        httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
+        httpUtil.httpClient = httpClientBuilder.build();
+        return httpUtil;
+    }
+
+    /**
+     * 创建一个 HttpUtil 对象
+     *
+     * @return HttpUtil
+     */
     public static @NotNull HttpUtil create() {
-        return new HttpUtil();
+        return create(null);
     }
 
     /**
@@ -129,7 +160,7 @@ public class HttpUtil {
      */
     public final @NotNull HttpResponse<String> send() {
         try {
-            return getHttpClient().send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
+            return httpClient.send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
             throw new ServiceException("发起请求失败，" + e.getMessage());
         }
@@ -166,31 +197,6 @@ public class HttpUtil {
     }
 
     /**
-     * 获取 HttpClient
-     *
-     * @return HttpClient
-     */
-    private HttpClient getHttpClient() {
-        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
-        // 添加 proxy 代理
-        if (Objects.nonNull(proxyConfig)) {
-            httpClientBuilder.proxy(new ProxySelector() {
-                @Override
-                public List<Proxy> select(URI uri) {
-                    return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
-                }
-
-                @Override
-                public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-
-                }
-            });
-        }
-        httpClientBuilder.connectTimeout(Duration.ofSeconds(5));
-        return httpClientBuilder.build();
-    }
-
-    /**
      * 添加 Header
      *
      * @param key   Header 键
@@ -200,17 +206,6 @@ public class HttpUtil {
     @Contract("_, _ -> this")
     public final HttpUtil addHeader(String key, Object value) {
         headers.put(key, value);
-        return this;
-    }
-
-    /**
-     * 设置代理
-     *
-     * @param proxyConfig 代理配置
-     * @return HttpUtil
-     */
-    public HttpUtil setProxy(ProxyConfig proxyConfig) {
-        this.proxyConfig = proxyConfig;
         return this;
     }
 
