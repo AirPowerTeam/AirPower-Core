@@ -54,28 +54,12 @@ public class TaskUtil {
     );
 
     /**
-     * 执行任务 {@code 不会抛出异常}
-     *
-     * @param runnable     任务
-     * @param moreRunnable 更多任务
-     */
-    public static void run(Runnable runnable, Runnable... moreRunnable) {
-        getRunnableList(runnable, moreRunnable).forEach(run -> {
-            try {
-                run.run();
-            } catch (Exception e) {
-                log.error("执行任务失败, {}", e.getMessage());
-            }
-        });
-    }
-
-    /**
      * 异步执行任务 {@code 不会抛出异常}
      *
      * @param runnable     任务
      * @param moreRunnable 更多任务
      */
-    public static void runAsync(Runnable runnable, Runnable... moreRunnable) {
+    public static void run(Runnable runnable, Runnable... moreRunnable) {
         getRunnableList(runnable, moreRunnable).forEach((run) -> EXECUTOR.submit(() -> {
             try {
                 run.run();
