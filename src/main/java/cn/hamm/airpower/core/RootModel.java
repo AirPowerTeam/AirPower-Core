@@ -62,8 +62,7 @@ public class RootModel<M extends RootModel<M>> {
      * 排除非元数据字段
      */
     public final void excludeNotMeta() {
-        List<Class<? extends RootModel<?>>> whiteList = List.of((Class<? extends RootModel<?>>) this.getClass());
-        excludeNotMeta(whiteList);
+        excludeNotMeta(List.of());
     }
 
     /**
