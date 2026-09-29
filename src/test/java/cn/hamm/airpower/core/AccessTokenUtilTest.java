@@ -605,12 +605,14 @@ class AccessTokenUtilTest {
         }
 
         @Test
-        @DisplayName("getPayloadId 在 ID 不是数字时抛出 NumberFormatException（源码未包装）")
+        @DisplayName("getPayloadId 在 ID 不是数字时抛 401 ServiceException")
         void testNonNumericId() {
             AccessTokenUtil.VerifiedToken token = new AccessTokenUtil.VerifiedToken()
                     .setPayloads(Map.of(Constant.ID, "not-a-number"));
-            assertThrows(NumberFormatException.class, token::getPayloadId,
-                    "ID 非数字时应抛出 NumberFormatException（未包装为 ServiceException）");
+            // 负载被篡改时按无效令牌处理，否则上层按"未授权"统一拦截会漏掉这种畸形令牌
+            ServiceException exception = assertThrows(ServiceException.class, token::getPayloadId,
+                    "ID 非数字应按无效令牌处理，而不是泄漏 NumberFormatException");
+            assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "应携带 401 未授权码");
         }
 
         @Test
@@ -681,6 +683,77 @@ class AccessTokenUtilTest {
                     () -> assertEquals(INVALID_MESSAGE, exception.getMessage(),
                             "负载解析失败应统一提示令牌无效，而不是暴露 JSON 解析的原始信息，实际为："
                                     + exception.getMessage()));
+        }
+    }
+
+    /**
+     * <h2>溢出与畸形负载</h2>
+     *
+     * <p>回归 P1-20 / P1-21：{@code getPayloadId} 此前会泄漏 {@code NumberFormatException}；
+     * {@code setExpireSecond} 的乘法溢出会报"毫秒数"错误，把排查方向带偏。</p>
+     */
+    @Nested
+    @DisplayName("溢出与畸形负载")
+    class OverflowAndMalformedTest {
+
+        @Test
+        @DisplayName("getPayloadId 遇到非数字负载抛 401 而不是 NumberFormatException")
+        void getPayloadIdRejectsNonNumeric() {
+            AccessTokenUtil.VerifiedToken token = new AccessTokenUtil.VerifiedToken()
+                    .setPayloads(Map.of(Constant.ID, "abc"));
+            ServiceException exception = assertThrows(ServiceException.class, token::getPayloadId,
+                    "畸形负载应按无效令牌处理，不能泄漏 JDK 的 NumberFormatException");
+            assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "应携带 401 未授权码");
+        }
+
+        @Test
+        @DisplayName("getPayloadId 缺少 ID 负载时同样抛 401")
+        void getPayloadIdRejectsMissing() {
+            AccessTokenUtil.VerifiedToken token = new AccessTokenUtil.VerifiedToken()
+                    .setPayloads(Map.of("other", "x"));
+            assertThrows(ServiceException.class, token::getPayloadId,
+                    "缺少 ID 负载应按无效令牌处理");
+        }
+
+        @Test
+        @DisplayName("getPayloadId 对数字字符串正常返回")
+        void getPayloadIdAcceptsNumericString() {
+            AccessTokenUtil.VerifiedToken token = new AccessTokenUtil.VerifiedToken()
+                    .setPayloads(Map.of(Constant.ID, "12345"));
+            assertEquals(12345L, token.getPayloadId(), "数字字符串应被正常解析");
+        }
+
+        @Test
+        @DisplayName("setExpireSecond 溢出时报的是秒而不是毫秒")
+        void setExpireSecondRejectsOverflow() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> AccessTokenUtil.create().setExpireSecond(Long.MAX_VALUE),
+                    "秒数过大导致乘法溢出，应明确报秒数");
+            // 修复前 second * 1000 溢成负数，报的是"过期毫秒数必须大于0"，
+            // 调用方传的是秒却被告知毫秒有问题
+            assertTrue(exception.getMessage().contains("秒"),
+                    "错误信息应提到秒数：" + exception.getMessage());
+            assertFalse(exception.getMessage().contains("毫秒"),
+                    "错误信息不应误导为毫秒数问题：" + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("setExpireSecond 负数仍按秒报错")
+        void setExpireSecondRejectsNonPositive() {
+            assertEquals("过期秒数必须大于0",
+                    assertThrows(ServiceException.class,
+                            () -> AccessTokenUtil.create().setExpireSecond(0L),
+                            "秒数为 0 应报错").getMessage(),
+                    "非正秒数的提示应保持不变");
+        }
+
+        @Test
+        @DisplayName("临界值秒数不会被误判为溢出")
+        void setExpireSecondAcceptsLargeButValidValue() {
+            // 约 292 年，在 long 范围内，不应触发溢出分支
+            long validSecond = Long.MAX_VALUE / DateTimeUtil.MILLISECONDS_PER_SECOND;
+            assertDoesNotThrow(() -> AccessTokenUtil.create().setExpireSecond(validSecond),
+                    "范围内的秒数 " + validSecond + " 不应被误判为溢出");
         }
     }
 }

@@ -8,10 +8,11 @@
 
 - **基线**：`7.0.0`（`dev` @ `23d52c8`）
 - **分支**：`fix/global-defect-scan`
-- **规模**：修复 41 个缺陷（P0 × 3、P1 × 16、P2 × 22），测试用例 1115 个
+- **规模**：修复 **47 个缺陷**（P0 × 3、P1 × 22、P2 × 22），测试用例 1132 个
 - **验证**：`mvn clean test` 与 `mvn test`（IDEA 插桩产物）均全绿；
-  9 种 Locale（zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT / he_IL / en_IN）× 对应时区零失败；
-  `clean test` 连跑 3 遍零抖动；`mvn package`（含 javadoc）通过
+  8 种 Locale（zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT / he_IL）× 对应时区零失败；
+  `clean test` 连跑 3 遍零抖动；`HttpUtilTest` 压测 20 遍、并发用例压测 15 遍零抖动；
+  `mvn package`（含 javadoc）通过
 
 ### 修复清单
 
@@ -102,6 +103,35 @@
 契约——"未做判空"本身才是要锁住的行为。改为断言 `RuntimeException` 并注释说明差异，
 不影响缺陷检测能力：一旦有人补上判空，断言依然会失败。
 
+### 第二轮复查：新发现 6 个缺陷并修复
+
+以"注入缺陷 → 用例变红 → 恢复 → 用例变绿"的方式复查上一轮 41 条修复时，
+发现 **6 条上一轮遗漏**的缺陷（详见 [ISSUE.md](./ISSUE.md) 第二节之二·补）：
+
+| 编号 | 文件 | 问题 | 修复 |
+|------|------|------|------|
+| P1-17 | `NumberUtil` | `divide` 的负 `scale` 静默返回 `0.0`（`round` 已拒绝，两族不一致） | 补负 `scale` 与 `roundingMode` 判空 |
+| P1-18 | `FileUtil` | `saveFile` 泄漏 JDK 的 `IllegalArgumentException`（同方法的其它失败却包成了 `ServiceException`） | 捕获后统一包装 |
+| P1-19 | `FileUtil` | `zip` 只校验 `exists` 不校验 `isDirectory`，泄漏 `NotDirectoryException`；压缩包写入源目录内部会破坏目录树 | 补两项入口校验 |
+| P1-20 | `AccessTokenUtil` | `getPayloadId` 泄漏 `NumberFormatException`，上层按 401 拦截会漏掉畸形令牌 | 按无效令牌处理 |
+| P1-21 | `AccessTokenUtil` | `setExpireSecond` 乘法溢出错报"毫秒数"，把排查方向带偏 | 改用 `Math.multiplyExact` |
+| P1-22 | `RootModel` | `excludeReadOnly` **不递归**嵌套模型，而 `excludeNotMeta` / `desensitize` 都递归——嵌套模型里的创建时间会被前端拿到并用于覆盖服务端数据 | 补递归 + 自引用保护 |
+| P2-26 | `Json` | 上一轮**只改了注释没改行为**：`configOverride(Map.class).setInclude(NON_EMPTY)` 完全无效 | 改用 `setSerializationInclusion(NON_NULL)`，并把错误的注释改回真实语义 |
+
+用例数从 1115 增至 **1132**，其中新增 17 个用例全部经过"注入缺陷 → 变红 → 恢复 → 变绿"验证。
+
+> **P2-26 的教训**：上一轮把注释从"忽略值为 null 的属性"改成"Map 中值为 null / 空串 /
+> 空集合的键不参与序列化"，看起来是修正了描述，实际上**把一句错注释改成了另一句错注释**——
+> 因为那行配置从来没生效过。实测 `{nullV:null, emptyStr:"", emptyList:[], emptyMap:{}}`
+> 五个键一个都没被过滤。**改注释前必须先确认代码的实际行为。**
+
+### 验证
+
+- `mvn clean test` 与 `mvn test`（IDEA 插桩产物）均 1132 全绿
+- 8 种 Locale（zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT / he_IL）× 对应时区全绿
+- `clean test` 连跑 3 遍零抖动；`HttpUtilTest` 压测 20 遍、并发用例压测 15 遍零抖动
+- `mvn package`（含 javadoc）通过
+
 ---
 
 ### 扫描中新发现并修复的缺陷
@@ -130,6 +160,7 @@
 | `6e3fb48` | HostUtil 异常降级、`findByParentId` 防御性拷贝 |
 | `620107b` | 为 P0-2 / P1-4 / P1-9 / P1-10 / P1-14 与国际化缺陷补回归用例 |
 | `652ada1` | 让 null 入参用例不再依赖编译期插桩 |
+| `（本轮）` | 第二轮复查新发现并修复 6 个缺陷（P1-17 ~ P1-22、P2-26 修正） |
 
 ---
 
@@ -221,6 +252,41 @@
 25. **以下操作固定使用 `Locale.ROOT`**：忽略大小写比较（`IException`）、
     `ReflectUtil.getFieldGetter`、`RandomUtil` 字符集、`FileUtil.getExtension`。
     这修复了 tr_TR 环境下 `getId` 拼成 `getİd` 导致注解查找全部失效的严重问题。
+
+### 序列化（第二轮新增，影响面较大）
+
+26. **⚠️ `Json` 改为全局忽略 null 字段**。此前那句
+    `configOverride(Map.class).setInclude(NON_EMPTY)` 从未生效，**响应体里一直是带
+    `data:null` 的**；现在真的会过滤掉。影响：
+    - `Json.create()` 序列化结果从 `{"code":200,"message":"","data":null}` 变为 `{"code":200,"message":""}`
+    - POJO 中值为 null 的字段不再出现在 JSON 文本中
+    - `Map` 中值为 null 的键不再输出
+    - **空串、空集合、空 Map 仍然保留**（用的是 `NON_NULL` 不是 `NON_EMPTY`，
+      因为 API 响应里的 `data:[]` 需要保留）
+    若上层有"必须看到某个 null 字段"的逻辑，需改用显式默认值或检查 `containsKey`。
+
+27. **`RootModel.excludeReadOnly()` 现在递归嵌套模型**。此前只清空自身字段，
+    嵌套模型（订单 → 明细）里的 `@ReadOnly` 字段（创建时间等）会返回给前端，
+    客户端可据此覆盖服务端数据。升级后这些字段会被一并清空，
+    若上层有依赖嵌套只读字段回显的场景需确认。
+
+### 其它（第二轮新增）
+
+28. **`NumberUtil.divide` 的负 `scale` 现在抛异常**，此前静默返回 `0.0`
+    这类完全错误的结果。
+
+29. **`FileUtil.saveFile` 传入非法 `OpenOption` 时改抛 `ServiceException`**，
+    此前是 JDK 的 `IllegalArgumentException`。
+
+30. **`FileUtil.zip` 新增两项入口校验**：源路径必须是文件夹；
+    压缩文件不能输出到源文件夹内部（否则会破坏正在遍历的目录树）。
+    此前这两种情况分别漏出 `NotDirectoryException` 和静默损坏数据。
+
+31. **`AccessTokenUtil.getPayloadId` 遇非数字负载改抛 401 `ServiceException`**，
+    此前是 `NumberFormatException`，上层按未授权统一拦截时会被漏掉。
+
+32. **`AccessTokenUtil.setExpireSecond` 溢出的报错改为"过期秒数过大"**，
+    此前报"过期毫秒数必须大于0"，会让排查方向偏向毫秒。
 
 ---
 

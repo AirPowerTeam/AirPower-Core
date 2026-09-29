@@ -293,9 +293,11 @@ public class Json {
                     ObjectMapper mapper = new ObjectMapper();
                     // 忽略未声明的属性
                     mapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
-                    // Map 中值为 null / 空串 / 空集合的键不参与序列化
-                    mapper.configOverride(Map.class)
-                            .setInclude(JsonInclude.Value.construct(JsonInclude.Include.NON_EMPTY, null));
+                    // 全局忽略值为 null 的属性。
+                    // 注意：原先的 configOverride(Map.class).setInclude(NON_EMPTY) 完全不生效——
+                    // 该配置只决定 POJO 属性在未标注 @JsonInclude 时的默认行为，
+                    // 对直接序列化的 Map 对象不起作用，实测 null/空串/空集合都会被原样输出
+                    mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
                     // 忽略没有属性的类
                     mapper.configure(FAIL_ON_EMPTY_BEANS, false);
                     objectMapper = mapper;

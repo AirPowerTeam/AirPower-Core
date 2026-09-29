@@ -49,7 +49,7 @@ class JsonTest {
          */
         private List<UserModel> friends;
         /**
-         * 扩展属性，类型声明为 {@code Map}，用于验证 {@code NON_EMPTY} 覆盖
+         * 扩展属性，类型声明为 {@code Map}，用于验证全局 {@code NON_NULL} 规则
          */
         private Map<String, Object> attrs = new HashMap<>();
     }
@@ -295,10 +295,11 @@ class JsonTest {
     class ToStringTest {
 
         @Test
-        @DisplayName("默认 Json 序列化结果固定为 code/message/data 三个字段")
+        @DisplayName("默认 Json 序列化结果固定为 code/message，且 data 为 null 时不输出")
         void defaultJsonFieldOrder() {
-            assertEquals("{\"code\":200,\"message\":\"\",\"data\":null}",
-                    Json.toString(Json.create()), "默认 Json 的 JSON 文本应为 code/message/data 且 data 为 null 时仍然输出");
+            // 全局改为 NON_NULL 后，data 为 null 不再出现在 JSON 文本中
+            assertEquals("{\"code\":200,\"message\":\"\"}",
+                    Json.toString(Json.create()), "默认 Json 的 JSON 文本应为 code/message，data 为 null 时被过滤");
         }
 
         @Test
@@ -310,7 +311,7 @@ class JsonTest {
         }
 
         @Test
-        @DisplayName("序列化 POJO 时输出全部非空字段，忽略未知配置")
+        @DisplayName("序列化 POJO 时输出非空字段，null 字段被全局 NON_NULL 规则过滤")
         void serializePojo() {
             UserModel user = new UserModel();
             user.setName("hamm");
@@ -318,14 +319,17 @@ class JsonTest {
             String json = Json.toString(user);
             assertTrue(json.contains("\"name\":\"hamm\""), "POJO 序列化后应包含姓名字段");
             assertTrue(json.contains("\"age\":18"), "POJO 序列化后应包含年龄字段");
-            assertTrue(json.contains("\"friends\":null"), "未赋值的引用类型字段应序列化为 null");
+            assertFalse(json.contains("\"friends\""), "未赋值的引用类型字段应被 NON_NULL 规则过滤");
         }
 
         @Test
-        @DisplayName("Map 属性为空时被 NON_EMPTY 配置忽略，非空时保留")
+        @DisplayName("空 Map 属性照常输出，只有 null 会被过滤")
         void emptyMapPropertyIsOmitted() {
-            assertFalse(Json.toString(new UserModel()).contains("attrs"),
-                    "空的 Map 属性命中 NON_EMPTY 配置，序列化后不应输出");
+            // 修复前的 configOverride(Map.class).setInclude(NON_EMPTY) 对直接序列化的 Map
+            // 完全不生效。现在统一为 ObjectMapper.setSerializationInclusion(NON_NULL)：
+            // 只过滤 null，空集合/空 Map 照常输出（API 响应里 data:[] 需要保留）
+            assertTrue(Json.toString(new UserModel()).contains("\"attrs\":{}"),
+                    "空 Map 不是 null，应照常序列化：" + Json.toString(new UserModel()));
             UserModel user = new UserModel();
             user.getAttrs().put("k", "v");
             assertTrue(Json.toString(user).contains("\"attrs\":{\"k\":\"v\"}"),
@@ -333,14 +337,23 @@ class JsonTest {
         }
 
         @Test
-        @DisplayName("Map 内部的 null 与空串值不会被过滤")
+        @DisplayName("null 的 Map 属性会被全局 NON_NULL 规则过滤")
+        void nullMapPropertyIsOmitted() {
+            UserModel user = new UserModel();
+            user.setAttrs(null);
+            assertFalse(Json.toString(user).contains("\"attrs\""),
+                    "值为 null 的属性应被过滤：" + Json.toString(user));
+        }
+
+        @Test
+        @DisplayName("顶层 Map 内部的 null 值同样被 NON_NULL 规则过滤")
         void mapContentIsNotFiltered() {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("a", null);
             map.put("b", "");
             map.put("c", 1);
-            assertEquals("{\"a\":null,\"b\":\"\",\"c\":1}", Json.toString(map),
-                    "顶层 Map 内部的 null 与空串值应被保留（NON_EMPTY 只作用于 Map 类型的属性本身）");
+            assertEquals("{\"b\":\"\",\"c\":1}", Json.toString(map),
+                    "全局 NON_NULL 规则同样作用于 Map 内部的 null 值；空串不受影响");
         }
 
         @Test

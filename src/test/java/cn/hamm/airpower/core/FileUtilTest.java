@@ -541,4 +541,75 @@ class FileUtilTest {
             }
         }
     }
+
+    /**
+     * <h2>异常类型一致性</h2>
+     *
+     * <p>回归 P1-18 / P1-19：{@code saveFile} 与 {@code zip} 此前会把 JDK 原生异常
+     * （{@code IllegalArgumentException} / {@code NotDirectoryException}）直接抛给调用方，
+     * 而同方法的其它失败路径却包成了 {@code ServiceException}，错误风格不统一。</p>
+     */
+    @Nested
+    @DisplayName("异常类型一致性")
+    class ExceptionConsistencyTest {
+
+        @Test
+        @DisplayName("saveFile 传入非法的 OpenOption 时抛 ServiceException 而非 JDK 原生异常")
+        void saveFileWithIllegalOptionsThrowsServiceException() throws IOException {
+            Path dir = Files.createTempDirectory("airpower-save-");
+            try {
+                // 只给 READ 选项：Files.write 会抛 IllegalArgumentException
+                ServiceException exception = assertThrows(ServiceException.class,
+                        () -> FileUtil.saveFile(dir.toString(), "a.txt", "内容",
+                                StandardOpenOption.READ),
+                        "非法 OpenOption 应包装为业务异常，与目录创建失败的风格保持一致");
+                assertTrue(exception.getMessage().startsWith("文件保存失败"),
+                        "异常消息应说明是文件保存失败：" + exception.getMessage());
+            } finally {
+                FileUtil.deleteDirectory(dir.toString());
+            }
+        }
+
+        @Test
+        @DisplayName("zip 的源路径是普通文件时报错说明是文件而非文件夹")
+        void zipWithFileSourceIsRejected() throws IOException {
+            Path file = Files.createTempFile("airpower-zip-", ".txt");
+            try {
+                IOException exception = assertThrows(IOException.class,
+                        () -> FileUtil.zip(file.toString(), file.toString() + ".zip"),
+                        "源路径是文件时应在入口处报错，而不是漏出 NotDirectoryException");
+                assertTrue(exception.getMessage().contains("不是文件夹"),
+                        "异常信息应说明源路径不是文件夹：" + exception.getMessage());
+            } finally {
+                Files.deleteIfExists(file);
+                Files.deleteIfExists(Path.of(file + ".zip"));
+            }
+        }
+
+        @Test
+        @DisplayName("zip 的压缩文件落在源目录内部时报错")
+        void zipIntoSourceDirectoryIsRejected() throws IOException {
+            Path dir = Files.createTempDirectory("airpower-zipin-");
+            try {
+                Path inner = dir.resolve("out.zip");
+                IOException exception = assertThrows(IOException.class,
+                        () -> FileUtil.zip(dir.toString(), inner.toString()),
+                        "压缩包写入源目录内部会破坏正在遍历的目录树，应在入口处拒绝");
+                assertTrue(exception.getMessage().contains("不能输出到源文件夹内部"),
+                        "异常信息应说明输出位置不合法：" + exception.getMessage());
+            } finally {
+                FileUtil.deleteDirectory(dir.toString());
+            }
+        }
+
+        @Test
+        @DisplayName("zip 源目录不存在时仍按原有文案报错")
+        void zipWithMissingSource() {
+            IOException exception = assertThrows(IOException.class,
+                    () -> FileUtil.zip("/definitely/not/exists/dir", "/tmp/out.zip"),
+                    "源目录不存在应报 IOException");
+            assertTrue(exception.getMessage().contains("源文件夹不存在"),
+                    "异常信息应说明源文件夹不存在：" + exception.getMessage());
+        }
+    }
 }

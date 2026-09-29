@@ -46,11 +46,48 @@ public class RootModel<M extends RootModel<M>> {
 
     /**
      * 排除只读字段
+     *
+     * @apiNote 递归处理嵌套模型与模型集合，与 {@link #excludeNotMeta()} / {@link #desensitize()}
+     * 保持一致；否则嵌套模型里的只读字段（如创建时间）仍会返回给前端，
+     * 客户端可据此覆盖服务端数据
      */
     public final void excludeReadOnly() {
-        ReflectUtil.getFieldList(getClass()).stream()
-                .filter(field -> Objects.nonNull(ReflectUtil.getAnnotation(ReadOnly.class, field)))
-                .forEach(field -> ReflectUtil.clearFieldValue(this, field));
+        excludeReadOnlyAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 排除只读字段
+     *
+     * @param model   当前模型
+     * @param visited 已访问的模型，按对象身份去重
+     * @apiNote {@code visited} 防止自引用模型导致栈溢出
+     */
+    private static void excludeReadOnlyAll(@NotNull RootModel<?> model, @NotNull Set<RootModel<?>> visited) {
+        if (!visited.add(model)) {
+            return;
+        }
+        model.filterModelFieldValue((instance, field) -> {
+            if (Objects.nonNull(ReflectUtil.getAnnotation(ReadOnly.class, field))) {
+                ReflectUtil.clearFieldValue(instance, field);
+                return;
+            }
+            Object value = ReflectUtil.getFieldValue(instance, field);
+            if (Objects.isNull(value)) {
+                return;
+            }
+            if (value instanceof Collection<?> valueList) {
+                valueList.forEach(item -> {
+                    if (Objects.isNull(item) || !RootModel.isModel(item.getClass())) {
+                        return;
+                    }
+                    excludeReadOnlyAll((RootModel<?>) item, visited);
+                });
+                return;
+            }
+            if (RootModel.isModel(value.getClass())) {
+                excludeReadOnlyAll((RootModel<?>) value, visited);
+            }
+        });
     }
 
     /**

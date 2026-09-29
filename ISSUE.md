@@ -3,8 +3,9 @@
 - **分支**：`fix/global-defect-scan`
 - **基线**：`dev` @ `23d52c8`（版本 7.0.0）
 - **扫描范围**：`src/main/java` 全部 42 个文件 / 约 5800 行
-- **扫描方式**：逐文件人工审读 + 30 组可执行探针（`ScratchProbe*Test`，验证后已删除）+ 全量单测基线
-- **结论**：共发现 **41 个缺陷**，其中 P0 × 3、P1 × 16、P2 × 22
+- **扫描方式**：逐文件人工审读 + 40 组可执行探针（`ScratchProbe*Test`，验证后已删除）+ 全量单测基线
+- **结论**：共发现 **47 个缺陷**，其中 P0 × 3、P1 × 22、P2 × 22
+  （首轮 41 个 + 复查阶段新发现 6 个，见第二节之二·补）
 
 > 本文档只记录"确认存在的问题"。每条都标注了复现方式与影响面，修复记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
@@ -220,6 +221,90 @@ A 的 `field.get` 就抛 `IllegalAccessException`，被包装成 `ServiceExcepti
 
 ---
 
+## 二·补、修复复查中新发现的缺陷（第二轮扫描）
+
+> 上述 41 条已全部确认修复到位。第二轮以"注入缺陷 → 用例变红"的方式复查时，
+> 又发现 6 条**上一轮遗漏**的缺陷，其中 P2-26 属于**改了注释但没改行为**。
+
+### P2-26（修正） `Json` 的 `NON_EMPTY` 配置完全无效，注释改成什么样都是错的
+
+**位置**：`Json.java:294-295`
+
+上一轮只把注释从"忽略值为 null 的属性"改成"Map 中值为 null / 空串 / 空集合的键不参与
+序列化"，**但配置本身从未生效**。`configOverride(Map.class)` 只影响 POJO 属性上
+`@JsonInclude` 未指定时的默认行为，对**直接序列化的 `Map` 对象**不起作用。
+
+**复现**（探针 PROBE-A）：`{nullV:null, emptyStr:"", emptyList:[], emptyMap:{}, normal:"v"}`
+序列化结果是 `{"normal":"v","emptyList":[],"emptyStr":"","emptyMap":{},"nullV":null}`——
+**5 个键一个都没被过滤**。POJO 场景同样如此（探针 PROBE-B：`nullField:null` 照常输出）。
+
+上一轮的注释修正因此是**错的**，比原来的错注释更容易误导。本轮改为在 `ObjectMapper`
+上直接设置序列化包含策略——这是真正生效且语义明确的写法。
+
+### P1-17（新增） `NumberUtil.divide` 的负 `scale` 静默返回 `0.0`
+
+**位置**：`NumberUtil.java:244-249`
+
+`round` 已经会拒绝负 `scale`，但 `divide` 没有。`BigDecimal.divide(second, -2, ...)`
+在 Java 中合法，返回值被截到百位以上，`10/3` 算出 **`0.0`**——调用方拿到一个
+完全错误的结果且毫无提示。
+
+**复现**（探针 PROBE-I）：`NumberUtil.divide(10, 3, -2)` = `0.0`（应为 3 或明确报错）。
+两个 `divide` 家族对负 `scale` 的态度必须一致。
+
+### P1-18（新增） `FileUtil.saveFile` 泄漏 JDK 的 `IllegalArgumentException`
+
+**位置**：`FileUtil.java:139-151`
+
+`Files.write` 传入非法的 `OpenOption` 组合（如只给 `READ`）时抛
+`IllegalArgumentException`，未被捕获，直接暴露给调用方。
+而同方法的目录创建失败却包成了 `ServiceException`——**同一方法内两种错误风格**。
+
+**复现**（探针 PROBE-C）：`saveFile(dir, "a.txt", "x", StandardOpenOption.READ)`
+→ `IllegalArgumentException: READ not allowed`。
+
+### P1-19（新增） `FileUtil.zip` 源路径不是目录时泄漏 `NotDirectoryException`
+
+**位置**：`FileUtil.java:172-181`
+
+只校验了 `Files.exists`，没校验 `Files.isDirectory`。传一个普通文件作源时，
+`Files.newDirectoryStream` 抛 `NotDirectoryException`（JDK 原生异常，信息里只有路径）。
+另外 `zipFilePath` 与 `sourceDirPath` 相同时会用压缩包覆盖源目录。
+
+### P1-20（新增） `AccessTokenUtil.getPayloadId` 泄漏 `NumberFormatException`
+
+**位置**：`AccessTokenUtil.java:322-328`
+
+负载里的 `id` 不是数字时直接抛 `NumberFormatException`，而不是本类一贯的
+401 `ServiceException`。上层按"未授权"统一处理时会漏掉这种畸形令牌。
+
+**复现**（探针 PROBE-E / PROBE-2）：负载 `id="not-a-number"` → `NumberFormatException`。
+
+### P1-21（新增） `AccessTokenUtil.setExpireSecond` 溢出后报错信息误导
+
+**位置**：`AccessTokenUtil.java:190-195`
+
+`second * MILLISECONDS_PER_SECOND` 溢出成负数，再传给 `setExpireMillisecond`，
+于是报"过期毫秒数必须大于0"——**调用方传的是秒，错误提示却说毫秒**，
+排查时会被带偏。
+
+**复现**（探针 PROBE-F）：`setExpireSecond(Long.MAX_VALUE)` → "过期毫秒数必须大于0"。
+
+### P1-22（新增） `RootModel.excludeReadOnly` 不递归嵌套模型，与同族方法不一致
+
+**位置**：`RootModel.java:47-51`
+
+`excludeNotMeta` 与 `desensitize` 都会递归处理嵌套模型和模型集合，
+`excludeReadOnly` **只处理自身字段**。
+
+**复现**（探针 PROBE-9）：`parent.excludeReadOnly()` 后
+`parent.createTime = null`，但 `parent.child.createTime = 123` 仍在。
+
+后果：嵌套模型（订单 → 明细）里的 `@ReadOnly` 字段（如创建时间）**会被前端拿到**，
+客户端可用它覆盖服务端数据。
+
+---
+
 ## 三、P2 — 一般（健壮性 / 可维护性 / 规范）
 
 | # | 位置 | 问题 |
@@ -249,13 +334,30 @@ A 的 `field.get` 就抛 `IllegalAccessException`，被包装成 `ServiceExcepti
 | P2-23 | `TaskUtil.java:71` | 异步任务失败只打印 `e.getMessage()`，**丢弃堆栈**，线上问题无法定位 |
 | P2-24 | `RandomUtil.java:119` | `randomString(-5)` 静默返回 1 个字符（`Math.max(length,1)`），调用方的错误参数被吞掉（探针 PROBE-W） |
 | P2-25 | `Json.java:49, 286-303` | `objectMapper` **非 volatile** 却用双重检查锁 —— 经典的失效 DCL，JMM 下可能读到半初始化对象（探针 PROBE-B） |
-| P2-26 | `Json.java:294-295` | 注释写"忽略值为 null 的属性"，实际设置的是 `NON_EMPTY`（连空串、空集合一起丢），注释与实现不符 |
+| P2-26 | `Json.java:294-295` | `configOverride(Map.class).setInclude(NON_EMPTY)` **完全无效**，对直接序列化的 Map 与 POJO 都不起作用（探针 PROBE-A/B）。详见第二节之二·补 |
 | P2-27 | `HttpConstant.java:22, 34, 51, 67, 83, 91` | 常量内部类未声明 `final`，可被继承实例化 |
 | P2-28 | `RsaUtil.java:125, 150, 173` | `convertPublicKeyToPem` / `convertPrivateKeyToPem` / `wrapBase64Text` 是纯函数却写成实例方法 |
 | P2-29 | `NumberUtil.java:282-284` | `round()` 把负 `scale` 静默改成 0（探针 PROBE-X：`round(2.5,-3,HALF_UP)` = `3`） |
 | P2-30 | `NumberUtil.java:227` | `calculate()` 里的 `Objects.nonNull(values)` 是死判断——入参已被 `requireNonNullElse` 兜底，永不为 null |
 | P2-31 | `TaskUtil.java:54` | `CallerRunsPolicy` + 方法注释"异步执行任务"，队列满时任务实际在**调用方线程同步执行**，与文档矛盾 |
 | P2-32 | `ServiceException.java:25` | `data` 字段未标 `transient`，异常跨进程传输时若 `data` 不可序列化会二次失败 |
+
+---
+
+## 三·补、修复批次规划更新
+
+原计划 8 个批次已完成。第二轮复查后新增 6 条，合并进已有批次：
+
+| 批次 | 内容 | 对应编号 |
+|------|------|----------|
+| 第一批 | 反射层并发与静默失败 | P0-2、P0-3、P1-3、P1-4 |
+| 第二批 | 脱敏递归（数据安全） | P0-1、**P1-22** |
+| 第三批 | 数值与树结构正确性 | P1-1、P1-2、P1-5、P1-6、P1-7、**P1-17** |
+| 第四批 | 工具类异常与参数校验 | P1-8、P1-9、P1-10、P2-7 ~ P2-9、P2-11、P2-24、**P1-18 ~ P1-21** |
+| 第五批 | HTTP 与加密链路 | P1-11 ~ P1-16、P2-1 ~ P2-3 |
+| 第六批 | 校验正则与国际化 | P2-4 ~ P2-6 |
+| 第七批 | 序列化与并发 | P2-10、**P2-26**、P2-25 |
+| 第八批 | 文件、集合、注释与规范 | P2-12 ~ P2-23、P2-27 ~ P2-32 |
 
 ---
 

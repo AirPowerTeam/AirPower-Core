@@ -165,7 +165,9 @@ public class FileUtil {
                 Files.createFile(path);
             }
             Files.write(path, bytes, options);
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
+            // IllegalArgumentException 来自非法的 OpenOption 组合（如只给 READ），
+            // 与 IOException 一样属于调用错误，统一包装避免泄漏 JDK 原生异常
             throw new ServiceException("文件保存失败，" + e.getMessage());
         }
     }
@@ -193,6 +195,16 @@ public class FileUtil {
         Path sourceDir = Paths.get(sourceDirPath);
         if (!Files.exists(sourceDir)) {
             throw new IOException("源文件夹不存在: " + sourceDirPath);
+        }
+        if (!Files.isDirectory(sourceDir)) {
+            // 少这一句，传普通文件时会由 newDirectoryStream 抛 NotDirectoryException，
+            // 异常信息里只有路径，调用方无从判断是自己传错了参数
+            throw new IOException("源路径不是文件夹: " + sourceDirPath);
+        }
+        Path target = Paths.get(zipFilePath);
+        if (sourceDir.equals(target) || (target.startsWith(sourceDir) && !target.equals(sourceDir))) {
+            // 压缩包落在源目录内部：写入时会破坏正在遍历的目录树
+            throw new IOException("压缩文件不能输出到源文件夹内部: " + zipFilePath);
         }
         try (FileOutputStream fos = new FileOutputStream(zipFilePath);
              ZipOutputStream zos = new ZipOutputStream(fos)) {

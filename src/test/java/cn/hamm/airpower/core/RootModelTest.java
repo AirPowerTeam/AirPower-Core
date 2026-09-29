@@ -145,14 +145,31 @@ class RootModelTest {
         }
 
         @Test
-        @DisplayName("当前行为：不会递归处理嵌套模型的只读字段")
-        void testExcludeReadOnlyNotRecurse() {
+        @DisplayName("会递归清空嵌套模型与模型集合中的只读字段")
+        void testExcludeReadOnlyRecurse() {
             DemoModel child = new DemoModel().setName("子").setCreateTime(123L);
+            DemoModel listItem = new DemoModel().setCreateTime(456L);
             model.setChild(child);
+            model.setChildren(new ArrayList<>(List.of(listItem)));
 
             model.excludeReadOnly();
 
-            assertEquals(123L, child.getCreateTime(), "excludeReadOnly 未递归，当前实现下子模型的只读字段不会被清空");
+            // 递归后嵌套模型的只读字段也会被清空，否则创建时间会返回给前端，
+            // 客户端可据此覆盖服务端数据
+            assertNull(child.getCreateTime(), "嵌套模型的只读字段也应被清空");
+            assertNull(listItem.getCreateTime(), "模型集合元素的只读字段也应被清空");
+            assertEquals("子", child.getName(), "非只读字段不受影响");
+        }
+
+        @Test
+        @DisplayName("边界值：自引用模型不会栈溢出")
+        void testExcludeReadOnlySelfReference() {
+            DemoModel self = new DemoModel().setCreateTime(789L);
+            self.setChild(self);
+
+            assertDoesNotThrow(self::excludeReadOnly, "自引用模型应由已访问集合拦下");
+
+            assertNull(self.getCreateTime(), "自引用模型自身的只读字段仍应被清空");
         }
 
         @Test

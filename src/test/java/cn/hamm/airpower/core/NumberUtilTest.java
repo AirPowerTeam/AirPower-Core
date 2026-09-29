@@ -488,4 +488,54 @@ public class NumberUtilTest {
             assertThrows(ServiceException.class, () -> NumberUtil.ceil(1.1, -1), "负 scale 是传参错误");
         }
     }
+
+    /**
+     * <h2>除法的负 scale</h2>
+     *
+     * <p>回归 P1-17：{@code round} 会拒绝负 scale，但 {@code divide} 没有。
+     * {@code BigDecimal.divide(second, -2, ...)} 在 Java 中合法，会把结果截到十位以上，
+     * {@code divide(10, 3, -2)} 静默得到 {@code 0.0}——调用方拿到完全错误的结果且毫无提示。</p>
+     */
+    @Nested
+    @DisplayName("divide 的负 scale")
+    class DivideNegativeScale {
+
+        @Test
+        @DisplayName("double 重载传负 scale 抛 ServiceException，不再静默返回 0.0")
+        void doubleOverloadRejectsNegativeScale() {
+            assertThrows(ServiceException.class, () -> NumberUtil.divide(10, 3, -2),
+                    "负 scale 是传参错误，不能静默算出 0.0");
+        }
+
+        @Test
+        @DisplayName("long 重载传负 scale 同样抛 ServiceException")
+        void longOverloadRejectsNegativeScale() {
+            assertThrows(ServiceException.class, () -> NumberUtil.divide(10L, 3L, -2),
+                    "负 scale 是传参错误，两个重载的态度必须一致");
+        }
+
+        @Test
+        @DisplayName("四参重载传负 scale 同样抛 ServiceException")
+        void fourArgsRejectsNegativeScale() {
+            assertThrows(ServiceException.class,
+                    () -> NumberUtil.divide(10, 3, -1, RoundingMode.HALF_UP),
+                    "四参重载同样应拒绝负 scale");
+        }
+
+        @Test
+        @DisplayName("roundingMode 为 null 抛 ServiceException")
+        void nullRoundingModeThrows() {
+            assertThrows(ServiceException.class,
+                    () -> NumberUtil.divide(10d, 3d, 2, (RoundingMode) null),
+                    "舍弃方式不能为 null");
+        }
+
+        @Test
+        @DisplayName("scale 为 0 仍然正常，与 round 行为一致")
+        void zeroScaleStillWorks() {
+            // 10 / 3 HALF_UP 到 0 位 = 3
+            assertEquals(3.0d, NumberUtil.divide(10d, 3d, 0),
+                    "scale 为 0 是合法用法，不应被负 scale 的校验误伤");
+        }
+    }
 }

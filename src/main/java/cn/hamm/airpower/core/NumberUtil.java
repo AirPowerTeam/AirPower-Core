@@ -260,6 +260,13 @@ public class NumberUtil {
         if (Objects.isNull(second) || second.compareTo(BigDecimal.ZERO) == 0) {
             throw new ServiceException("除数不能为0");
         }
+        if (scale < 0) {
+            // BigDecimal.divide 接受负 scale，会把结果截到十位以上，10/3 得到 0.0 这种无意义结果
+            throw new ServiceException("保留位数不能小于0，" + scale);
+        }
+        if (Objects.isNull(roundingMode)) {
+            throw new ServiceException("舍弃方式不能为null");
+        }
         return first.divide(second, scale, roundingMode);
     }
 

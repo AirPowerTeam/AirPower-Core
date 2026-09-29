@@ -191,7 +191,15 @@ public class AccessTokenUtil {
         if (second <= 0) {
             throw new ServiceException("过期秒数必须大于0");
         }
-        return setExpireMillisecond(second * DateTimeUtil.MILLISECONDS_PER_SECOND);
+        // 直接相乘溢出会变成负数，再传给毫秒重载会报"过期毫秒数必须大于0"，
+        // 调用方传的是秒却被告知毫秒有问题，排查方向会被带偏
+        final long millisecond;
+        try {
+            millisecond = Math.multiplyExact(second, DateTimeUtil.MILLISECONDS_PER_SECOND);
+        } catch (ArithmeticException e) {
+            throw new ServiceException("过期秒数过大，超出可表示范围：" + second);
+        }
+        return setExpireMillisecond(millisecond);
     }
 
     /**
@@ -339,7 +347,14 @@ public class AccessTokenUtil {
             if (Objects.isNull(userId)) {
                 throwException(ACCESS_TOKEN_INVALID);
             }
-            return Long.parseLong(userId.toString());
+            try {
+                return Long.parseLong(userId.toString());
+            } catch (NumberFormatException e) {
+                // 负载被篡改或格式错误时按无效令牌处理，
+                // 否则上层按"未授权"统一拦截时会漏掉这种畸形令牌
+                throwException(ACCESS_TOKEN_INVALID);
+                return 0L;
+            }
         }
     }
 }
