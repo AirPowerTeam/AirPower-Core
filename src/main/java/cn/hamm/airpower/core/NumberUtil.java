@@ -70,10 +70,10 @@ public class NumberUtil {
      * @return 和
      */
     public static long add(long first, long second, long... values) {
-        return calculate(BigInteger::add, BigInteger.valueOf(first), BigInteger.valueOf(second),
+        return toLongExact(calculate(BigInteger::add, BigInteger.valueOf(first), BigInteger.valueOf(second),
                 Arrays.stream(Objects.requireNonNullElse(values, EMPTY_LONG))
                         .mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
-        ).longValue();
+        ), "加法");
     }
 
     /**
@@ -100,10 +100,10 @@ public class NumberUtil {
      * @return 差
      */
     public static long subtract(long first, long second, long... values) {
-        return calculate(BigInteger::subtract, BigInteger.valueOf(first), BigInteger.valueOf(second),
+        return toLongExact(calculate(BigInteger::subtract, BigInteger.valueOf(first), BigInteger.valueOf(second),
                 Arrays.stream(Objects.requireNonNullElse(values, EMPTY_LONG))
                         .mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
-        ).longValue();
+        ), "减法");
     }
 
     /**
@@ -130,10 +130,10 @@ public class NumberUtil {
      * @return 乘积
      */
     public static long multiply(long first, long second, long... values) {
-        return calculate(BigInteger::multiply, BigInteger.valueOf(first), BigInteger.valueOf(second),
+        return toLongExact(calculate(BigInteger::multiply, BigInteger.valueOf(first), BigInteger.valueOf(second),
                 Arrays.stream(Objects.requireNonNullElse(values, EMPTY_LONG))
                         .mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
-        ).longValue();
+        ), "乘法");
     }
 
     /**
@@ -224,12 +224,27 @@ public class NumberUtil {
      */
     private static <T extends Number> T calculate(@NotNull BiFunction<T, T, T> function, T first, T second, T[] values) {
         T result = function.apply(first, second);
-        if (Objects.nonNull(values)) {
-            for (T value : values) {
-                result = function.apply(result, value);
-            }
+        // 入参已由调用方用 requireNonNullElse 兜底，此处恒不为 null
+        for (T value : values) {
+            result = function.apply(result, value);
         }
         return result;
+    }
+
+    /**
+     * 将 {@link BigInteger} 收窄为 {@code long}，越界时报错
+     *
+     * @param value  计算结果
+     * @param action 操作名称，用于错误提示
+     * @return 收窄后的值
+     * @apiNote 直接调用 {@code longValue()} 会静默截断（{@code multiply(MAX, 4)} 会得到
+     * {@code -4}），金额等场景必须显式拦截溢出
+     */
+    private static long toLongExact(@NotNull BigInteger value, @NotNull String action) {
+        if (value.bitLength() > Long.SIZE - 1) {
+            throw new ServiceException(action + "结果超出 long 范围，" + value);
+        }
+        return value.longValue();
     }
 
     /**
@@ -249,25 +264,29 @@ public class NumberUtil {
     }
 
     /**
-     * 向下省略
+     * 向下取整（向负无穷方向）
      *
      * @param value 数字
      * @param scale 位数
-     * @return 省略后的数字
+     * @return 取整后的数字
+     * @apiNote 使用 {@link RoundingMode#FLOOR}。原实现用 {@code DOWN}（向零截断），
+     * 负数结果全错：{@code floor(-1.5, 0)} 会得到 {@code -1}，正确值是 {@code -2}
      */
     public static @NotNull BigDecimal floor(double value, int scale) {
-        return round(value, scale, DOWN);
+        return round(value, scale, FLOOR);
     }
 
     /**
-     * 向上省略
+     * 向上取整（向正无穷方向）
      *
      * @param value 数字
      * @param scale 位数
-     * @return 省略后的数字
+     * @return 取整后的数字
+     * @apiNote 使用 {@link RoundingMode#CEILING}。原实现用 {@code UP}（远离零），
+     * 负数结果全错：{@code ceil(-1.5, 0)} 会得到 {@code -2}，正确值是 {@code -1}
      */
     public static @NotNull BigDecimal ceil(double value, int scale) {
-        return round(value, scale, UP);
+        return round(value, scale, CEILING);
     }
 
     /**
@@ -280,7 +299,11 @@ public class NumberUtil {
      */
     public static @NotNull BigDecimal round(double number, int scale, @NotNull RoundingMode roundingMode) {
         if (scale < 0) {
-            scale = 0;
+            // 负 scale 会被静默改成 0，调用方难以及时发现传参错误
+            throw new ServiceException("保留位数不能小于0，" + scale);
+        }
+        if (Objects.isNull(roundingMode)) {
+            throw new ServiceException("舍弃方式不能为null");
         }
         return BigDecimal.valueOf(number).setScale(scale, roundingMode);
     }

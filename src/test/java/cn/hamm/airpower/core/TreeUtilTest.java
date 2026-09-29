@@ -216,10 +216,57 @@ class TreeUtilTest {
         }
 
         @Test
-        @DisplayName("异常:入参为 null 时,应抛出 NullPointerException")
+        @DisplayName("边界:入参为 null 时返回空列表")
         void buildFromNullList() {
-            assertThrows(NullPointerException.class, () -> TreeUtil.buildTreeList(null),
-                    "入参为 null 时源码会在遍历时抛出 NullPointerException");
+            assertDoesNotThrow(() -> TreeUtil.buildTreeList(null), "入参为 null 时应返回空列表，不应抛空指针");
+            assertEquals(0, TreeUtil.buildTreeList(null).size(), "入参为 null 时结果应为空");
+        }
+
+        @Test
+        @DisplayName("正常路径:从根可达的环形数据被剪断,不会栈溢出")
+        void reachableCycleIsPruned() {
+            // root(0) 自身是根；10 的父级被改成 11、11 的父级是 10，
+            // 且 10 挂在根下形成 0 -> 10 -> 11 -> 10 的可达环
+            DemoTree root = new DemoTree().setId(0L).setParentId(0L);
+            DemoTree ten = new DemoTree().setId(10L).setParentId(0L);
+            DemoTree eleven = new DemoTree().setId(11L).setParentId(10L);
+            ten.setParentId(11L);
+
+            List<DemoTree> tree = assertDoesNotThrow(
+                    () -> TreeUtil.buildTreeList(List.of(root, ten, eleven)),
+                    "可达的环形数据不应导致栈溢出");
+            assertEquals(1, tree.size(), "从根出发的顶层节点应为 1 个");
+            assertNotNull(tree.get(0), "根节点应正常返回");
+        }
+
+        @Test
+        @DisplayName("正常路径:同一节点出现在多个分支下时各自展开")
+        void sharedNodeIsExpandedInEachBranch() {
+            DemoTree left = new DemoTree().setId(1L).setParentId(0L);
+            DemoTree right = new DemoTree().setId(2L).setParentId(0L);
+            DemoTree leftChild = new DemoTree().setId(4L).setParentId(1L);
+            DemoTree rightChild = new DemoTree().setId(5L).setParentId(2L);
+
+            List<DemoTree> tree = TreeUtil.buildTreeList(List.of(left, right, leftChild, rightChild));
+
+            assertEquals(2, tree.size(), "两个根节点都应出现在结果中");
+            assertEquals(1, tree.get(0).getChildren().size(), "左根节点应有 1 个子节点");
+            assertEquals(1, tree.get(1).getChildren().size(), "右根节点应有 1 个子节点");
+            assertEquals(4L, tree.get(0).getChildren().get(0).getId(), "左根节点挂的是 4");
+            assertEquals(5L, tree.get(1).getChildren().get(0).getId(), "右根节点挂的是 5");
+        }
+
+        @Test
+        @DisplayName("边界:ID 为空的节点按叶子处理,不抛空指针")
+        void nullIdNodeTreatedAsLeaf() {
+            DemoTree root = new DemoTree().setId(1L).setParentId(0L);
+            DemoTree noId = new DemoTree().setId(null).setParentId(1L);
+
+            List<DemoTree> tree = assertDoesNotThrow(() -> TreeUtil.buildTreeList(List.of(root, noId)),
+                    "ID 为空的节点不应导致拆箱空指针");
+            assertEquals(1, tree.size(), "根节点应正常返回");
+            assertEquals(0, tree.get(0).getChildren().get(0).getChildren().size(),
+                    "ID 为空的节点按叶子处理");
         }
     }
 
@@ -398,14 +445,15 @@ class TreeUtilTest {
         }
 
         @Test
-        @DisplayName("边界:子节点 ID 为 null 时被过滤跳过，不抛异常")
+        @DisplayName("边界:子节点 ID 为 null 时跳过该节点,但仍收集其子树")
         void nullChildIdIsSkipped() {
+            // 唯一的子节点 ID 为 null
             List<DemoTree> onlyNull = new ArrayList<>(Arrays.asList(
                     node(1L, 0L, "父"),
                     node(null, 1L, "无ID子节点")
             ));
             Set<Long> ids = assertDoesNotThrow(() -> TreeUtil.getChildrenIdList(1L, childLookup(onlyNull)),
-                    "子节点 ID 为 null 时应被 null 过滤跳过，而不是在递归调用处自动拆箱抛 NPE");
+                    "子节点 ID 为 null 时应跳过该节点，而不是在递归调用处自动拆箱抛 NPE");
             assertTrue(ids.isEmpty(), "唯一的子节点 ID 为 null 时应收集不到任何 ID，实际为：" + ids);
 
             // 混合场景：null ID 被跳过，正常 ID 照常收集
@@ -416,6 +464,23 @@ class TreeUtilTest {
             ));
             Set<Long> mixedIds = TreeUtil.getChildrenIdList(1L, childLookup(mixed));
             assertEquals(Set.of(2L), mixedIds, "null ID 应被跳过，其余正常 ID 不受影响");
+        }
+
+        @Test
+        @DisplayName("边界:ID 为 null 的节点会中断遍历并告警,当前 API 无法收集其子树")
+        void nullIdNodeBreaksTraversal() {
+            // 1 -> (无ID) -> 2 -> 3
+            // 注意：查询函数以 parentId 为键，ID 为 null 的节点没有可用的键去查它的子节点，
+            // 因此挂在它下面的 2、3 无法被收集。这是 API 形态决定的，需要调用方自行保证 ID 非空
+            List<DemoTree> data = new ArrayList<>(Arrays.asList(
+                    node(1L, 0L, "父"),
+                    node(null, 1L, "无ID中间节点"),
+                    node(2L, 2L, "无ID节点的下级"),
+                    node(3L, 2L, "再下一级")
+            ));
+            Set<Long> ids = assertDoesNotThrow(() -> TreeUtil.getChildrenIdList(1L, childLookup(data)),
+                    "ID 为 null 的节点应被跳过而不是抛异常");
+            assertTrue(ids.isEmpty(), "无法确定键时遍历在此中断，实际收集到：" + ids);
         }
 
         @Test

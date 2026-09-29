@@ -103,11 +103,13 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("long 重载：溢出时按 64 位截断")
-        void longOverflowTruncated() {
-            // BigInteger 精确算出 2^63，再 longValue() 只取低 64 位，得到 Long.MIN_VALUE
-            assertEquals(Long.MIN_VALUE, NumberUtil.add(Long.MAX_VALUE, 1L),
-                    "超出 long 范围时 longValue() 会回绕为 Long.MIN_VALUE（源码无溢出保护）");
+        @DisplayName("long 重载：溢出时抛 ServiceException 而不是静默回绕")
+        void longOverflowThrows() {
+            // 原实现直接 longValue()，2^63 会被截断为 Long.MIN_VALUE，金额场景会算出负数
+            assertThrows(ServiceException.class, () -> NumberUtil.add(Long.MAX_VALUE, 1L),
+                    "超出 long 范围必须报错，不能静默回绕成负数");
+            assertEquals(Long.MAX_VALUE, NumberUtil.add(Long.MAX_VALUE, 0L),
+                    "未溢出时结果应保持精确值");
         }
 
         @Test
@@ -179,10 +181,10 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("long 重载：下溢时按 64 位截断")
-        void longUnderflowTruncated() {
-            assertEquals(Long.MAX_VALUE, NumberUtil.subtract(Long.MIN_VALUE, 1L),
-                    "低于 long 范围时 longValue() 会回绕为 Long.MAX_VALUE（源码无溢出保护）");
+        @DisplayName("long 重载：下溢时抛 ServiceException 而不是静默回绕")
+        void longUnderflowThrows() {
+            assertThrows(ServiceException.class, () -> NumberUtil.subtract(Long.MIN_VALUE, 1L),
+                    "低于 long 范围必须报错，不能静默回绕成正数");
         }
     }
 
@@ -264,11 +266,12 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("long 重载：溢出时按 64 位截断")
-        void longOverflowTruncated() {
-            // BigInteger.valueOf(Long.MAX_VALUE) * 4 = 2^65 - 4，取低 64 位后按有符号解释为 -4
-            assertEquals(-4L, NumberUtil.multiply(Long.MAX_VALUE, 4L),
-                    "乘积超出 long 范围时 longValue() 只保留低 64 位，结果为 -4（源码无溢出保护）");
+        @DisplayName("long 重载：溢出时抛 ServiceException 而不是静默截断")
+        void longOverflowThrows() {
+            // 原实现只保留低 64 位，2^65-4 会被解释成 -4
+            assertThrows(ServiceException.class, () -> NumberUtil.multiply(Long.MAX_VALUE, 4L),
+                    "乘积超出 long 范围必须报错，不能静默变成负数");
+            assertEquals(12L, NumberUtil.multiply(3L, 4L), "未溢出时结果应保持精确值");
         }
     }
 
@@ -412,13 +415,19 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("负 scale 按 0 处理")
-        void negativeScaleTreatedAsZero() {
-            BigDecimal value = NumberUtil.round(1.5, -1, RoundingMode.HALF_UP);
-            assertEquals(0, value.compareTo(BigDecimal.valueOf(2)), "scale 为 -1 时被拉回为 0，1.5 → 2");
-            assertEquals(0, value.scale(), "负 scale 被按 0 处理，结果 scale 应为 0");
-            assertEquals(0, NumberUtil.round(1.4, -5, RoundingMode.HALF_UP).compareTo(BigDecimal.valueOf(1)),
-                    "scale 为 -5 时同样按 0 处理，1.4 → 1");
+        @DisplayName("负 scale 抛 ServiceException，不再静默按 0 处理")
+        void negativeScaleThrows() {
+            assertThrows(ServiceException.class, () -> NumberUtil.round(1.5, -1, RoundingMode.HALF_UP),
+                    "负 scale 是传参错误，必须让调用方感知");
+            assertThrows(ServiceException.class, () -> NumberUtil.round(1.4, -5, RoundingMode.HALF_UP),
+                    "负 scale 是传参错误，必须让调用方感知");
+        }
+
+        @Test
+        @DisplayName("roundingMode 为 null 抛 ServiceException")
+        void nullRoundingModeThrows() {
+            assertThrows(ServiceException.class, () -> NumberUtil.round(1.5, 2, null),
+                    "舍弃方式不能为 null");
         }
 
         @Test
@@ -447,31 +456,36 @@ public class NumberUtilTest {
     class FloorAndCeil {
 
         @Test
-        @DisplayName("floor 等价于 RoundingMode.DOWN（向 0 截断）")
+        @DisplayName("floor 使用 RoundingMode.FLOOR（向 -∞ 取整）")
         void floor() {
             assertEquals(0, NumberUtil.floor(1.9, 0).compareTo(BigDecimal.valueOf(1)), "floor(1.9) 应为 1");
             assertEquals(0, NumberUtil.floor(1.0, 0).compareTo(BigDecimal.valueOf(1)), "floor(1.0) 应为 1");
             assertEquals(0, NumberUtil.floor(1.234, 2).compareTo(new BigDecimal("1.23")), "floor 保留 2 位应为 1.23");
-            // 注意：RoundingMode.DOWN 是向 0 截断而非向 -∞ 取整，负数结果为 -1 而不是 -2
-            assertEquals(0, NumberUtil.floor(-1.1, 0).compareTo(BigDecimal.valueOf(-1)),
-                    "floor(-1.1) 按 DOWN 为 -1（向 0 截断，非向下取整）");
+            // 原实现用 DOWN（向 0 截断），负数会算成 -1；向 -∞ 取整的正确结果是 -2
+            assertEquals(0, NumberUtil.floor(-1.1, 0).compareTo(BigDecimal.valueOf(-2)),
+                    "floor(-1.1) 向 -∞ 取整应为 -2");
+            assertEquals(0, NumberUtil.floor(-2.0, 0).compareTo(BigDecimal.valueOf(-2)),
+                    "floor(-2.0) 应为 -2");
         }
 
         @Test
-        @DisplayName("ceil 等价于 RoundingMode.UP（背离 0 截断）")
+        @DisplayName("ceil 使用 RoundingMode.CEILING（向 +∞ 取整）")
         void ceil() {
             assertEquals(0, NumberUtil.ceil(1.1, 0).compareTo(BigDecimal.valueOf(2)), "ceil(1.1) 应为 2");
             assertEquals(0, NumberUtil.ceil(1.0, 0).compareTo(BigDecimal.valueOf(1)), "ceil(1.0) 应为 1");
             assertEquals(0, NumberUtil.ceil(1.236, 2).compareTo(new BigDecimal("1.24")), "ceil 保留 2 位应为 1.24");
-            assertEquals(0, NumberUtil.ceil(-1.9, 0).compareTo(BigDecimal.valueOf(-2)),
-                    "ceil(-1.9) 按 UP 为 -2（背离 0 截断）");
+            // 原实现用 UP（远离 0），负数会算成 -2；向 +∞ 取整的正确结果是 -1
+            assertEquals(0, NumberUtil.ceil(-1.9, 0).compareTo(BigDecimal.valueOf(-1)),
+                    "ceil(-1.9) 向 +∞ 取整应为 -1");
+            assertEquals(0, NumberUtil.ceil(-2.0, 0).compareTo(BigDecimal.valueOf(-2)),
+                    "ceil(-2.0) 应为 -2");
         }
 
         @Test
-        @DisplayName("floor / ceil 的负 scale 同样按 0 处理")
+        @DisplayName("floor / ceil 的负 scale 抛 ServiceException")
         void negativeScale() {
-            assertEquals(0, NumberUtil.floor(1.9, -1).scale(), "负 scale 被拉回为 0");
-            assertEquals(0, NumberUtil.ceil(1.1, -1).scale(), "负 scale 被拉回为 0");
+            assertThrows(ServiceException.class, () -> NumberUtil.floor(1.9, -1), "负 scale 是传参错误");
+            assertThrows(ServiceException.class, () -> NumberUtil.ceil(1.1, -1), "负 scale 是传参错误");
         }
     }
 }
