@@ -14,6 +14,7 @@ import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Objects;
 
 /**
  * <h1>RSA 工具类</h1>
@@ -53,16 +54,6 @@ public class RsaUtil {
     private String privateKey;
 
     /**
-     * 缓存的公钥
-     */
-    private PublicKey cachedPublicKey;
-
-    /**
-     * 缓存的私钥
-     */
-    private PrivateKey cachedPrivateKey;
-
-    /**
      * 缓存的 KeyFactory
      */
     private KeyFactory cachedKeyFactory;
@@ -92,16 +83,12 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public PublicKey getPublicKey(String publicKeyString) throws Exception {
-        if (java.util.Objects.isNull(publicKeyString)) {
-            throw new ServiceException("RSA 公钥未设置，请先调用 setPublicKey() 方法设置公钥");
-        }
-        if (cachedPublicKey != null) {
-            return cachedPublicKey;
+        if (Objects.isNull(publicKeyString)) {
+            throw new ServiceException("RSA 公钥未设置");
         }
         KeyFactory keyFactory = getKeyFactory();
         X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyString));
-        cachedPublicKey = keyFactory.generatePublic(x509EncodedKeySpec);
-        return cachedPublicKey;
+        return keyFactory.generatePublic(x509EncodedKeySpec);
     }
 
     /**
@@ -201,17 +188,13 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
-        if (java.util.Objects.isNull(privateKeyString)) {
-            throw new ServiceException("RSA 私钥未设置，请先调用 setPrivateKey() 方法设置私钥");
-        }
-        if (cachedPrivateKey != null) {
-            return cachedPrivateKey;
+        if (Objects.isNull(privateKeyString)) {
+            throw new ServiceException("RSA 私钥未设置");
         }
         KeyFactory keyFactory = getKeyFactory();
         PKCS8EncodedKeySpec private8KeySpec =
                 new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKeyString));
-        cachedPrivateKey = keyFactory.generatePrivate(private8KeySpec);
-        return cachedPrivateKey;
+        return keyFactory.generatePrivate(private8KeySpec);
     }
 
     /**

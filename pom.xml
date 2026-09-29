@@ -26,6 +26,9 @@
         <plugin.maven.gpg.version>3.2.8</plugin.maven.gpg.version>
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.23</logback.version>
+        <hibernate-validator.version>7.0.4.Final</hibernate-validator.version>
+        <jakarta-el-api.version>4.0.0</jakarta-el-api.version>
+        <jakarta-el.version>4.0.2</jakarta-el.version>
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -72,6 +75,28 @@
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.11.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 测试期 EL 实现：Hibernate Validator 的默认消息插值器依赖 jakarta.el.ExpressionFactory。
+             4.0.0 已在本地仓库，避免离线构建时解析失败。 -->
+        <dependency>
+            <groupId>jakarta.el</groupId>
+            <artifactId>jakarta.el-api</artifactId>
+            <version>${jakarta-el-api.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>jakarta.el</artifactId>
+            <version>${jakarta-el.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 测试期仅需 Jakarta Validation 的参考实现，用于验证 ValidateUtil.valid()。
+             仅使用本地仓库已有的 7.0.4.Final（Jakarta Validation 3.0，兼容本项目的 jakarta.validation-api 3.1.1 运行时）。 -->
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>${hibernate-validator.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
