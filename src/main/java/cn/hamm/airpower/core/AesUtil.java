@@ -106,7 +106,7 @@ public class AesUtil {
             return Base64.getEncoder().encodeToString(getCipher(ENCRYPT_MODE)
                     .doFinal(source.getBytes(UTF_8)));
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new ServiceException(e.getMessage());
         }
     }
 
@@ -125,7 +125,7 @@ public class AesUtil {
             return new String(getCipher(DECRYPT_MODE)
                     .doFinal(Base64.getDecoder().decode(content)), UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new ServiceException(e.getMessage());
         }
     }
 
@@ -143,7 +143,7 @@ public class AesUtil {
             cipher.init(type, secretKeySpec, ivParameterSpec);
             return cipher;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new ServiceException(e.getMessage());
         }
     }
 }
