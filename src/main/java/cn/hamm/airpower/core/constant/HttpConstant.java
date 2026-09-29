@@ -81,10 +81,16 @@ public class HttpConstant {
      * 代理
      */
     public static class Proxy {
+        @Contract(pure = true)
+        private Proxy() {
+        }
+
         /**
          * 代理头
          */
         public static class Header {
+            public static final String FORWARD = "Forwarded";
+            public static final String X_REAL_IP = "X-Real-IP";
             public static final String X_FORWARDED_FOR = "X-Forwarded-For";
             public static final String PROXY_CLIENT_IP = "Proxy-Client-IP";
             public static final String WL_PROXY_CLIENT_IP = "WL-Proxy-Client-IP";
@@ -94,10 +100,6 @@ public class HttpConstant {
             @Contract(pure = true)
             private Header() {
             }
-        }
-
-        @Contract(pure = true)
-        private Proxy() {
         }
     }
 }
