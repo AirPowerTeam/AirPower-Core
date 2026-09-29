@@ -174,46 +174,73 @@ class CollectionUtilTest {
         }
 
         @Test
-        @DisplayName("正常路径：fieldClass 为 Set.class 时原样返回集合")
-        void testSameSetInstance() {
+        @DisplayName("正常路径：fieldClass 为 Set.class 时返回 Set 类型的集合")
+        void testSetTypeIsHonored() {
             Set<String> source = new LinkedHashSet<>(List.of("a", "b"));
 
             Collection<String> result = CollectionUtil.getCollectWithoutNull(source, Set.class);
 
-            assertSame(source, result, "fieldClass 为 Set.class 时应原样返回入参集合");
-            assertEquals(2, result.size(), "原样返回时元素个数不变");
+            assertInstanceOf(HashSet.class, result, "fieldClass 为 Set.class 时应返回 Set 类型");
+            assertEquals(2, result.size(), "元素个数不变");
         }
 
         @Test
-        @DisplayName("正常路径：fieldClass 非 Set 时原样返回集合")
-        void testSameListInstance() {
+        @DisplayName("正常路径：fieldClass 非 Set 时返回 List 类型的集合")
+        void testListTypeIsHonored() {
             List<String> source = List.of("a", "b");
 
             Collection<String> result = CollectionUtil.getCollectWithoutNull(source, List.class);
 
-            assertSame(source, result, "fieldClass 非 Set 时应原样返回入参集合");
+            assertInstanceOf(ArrayList.class, result, "fieldClass 非 Set 时应返回 List 类型");
+            assertEquals(List.of("a", "b"), new ArrayList<>(result), "元素顺序与内容保持一致");
         }
 
         @Test
-        @DisplayName("边界值：空的入参集合原样返回")
+        @DisplayName("边界值：空的入参集合返回同类型空集合")
         void testEmptyCollection() {
             List<String> source = new ArrayList<>();
 
             Collection<String> result = CollectionUtil.getCollectWithoutNull(source, List.class);
 
-            assertSame(source, result, "空集合也应原样返回");
+            assertInstanceOf(ArrayList.class, result, "空集合应返回同类型的空集合");
             assertTrue(result.isEmpty(), "空集合返回后仍为空");
         }
 
         @Test
-        @DisplayName("当前行为：不会移除集合中的 null 元素")
-        void testNullElementKept() {
+        @DisplayName("正常路径：null 元素被真正移除")
+        void testNullElementRemoved() {
             Set<String> source = new LinkedHashSet<>(Arrays.asList("a", null, "b"));
 
             Collection<String> result = CollectionUtil.getCollectWithoutNull(source, Set.class);
 
-            assertEquals(3, result.size(), "方法名提示应过滤 null，但当前实现原样返回，null 元素被保留");
-            assertTrue(result.contains(null), "当前实现不会剔除 null 元素");
+            // 方法名承诺去掉 null，原实现直接返回原集合，null 元素原样保留
+            assertEquals(2, result.size(), "null 元素应被移除");
+            assertFalse(result.contains(null), "结果中不应再含有 null 元素");
+            assertEquals(Set.of("a", "b"), new HashSet<>(result), "非 null 元素应全部保留");
+        }
+
+        @Test
+        @DisplayName("边界值：集合中全为 null 时返回空集合")
+        void testAllNullElements() {
+            List<String> source = new ArrayList<>(Arrays.asList(null, null));
+
+            Collection<String> result = CollectionUtil.getCollectWithoutNull(source, List.class);
+
+            assertTrue(result.isEmpty(), "全为 null 的集合过滤后应为空集合");
+        }
+
+        @Test
+        @DisplayName("边界值：结果集合与入参集合相互独立")
+        void testDoesNotMutateSource() {
+            List<String> source = new ArrayList<>(Arrays.asList("a", null));
+
+            Collection<String> result = CollectionUtil.getCollectWithoutNull(source, List.class);
+
+            // 过滤不应改动原入参集合
+            assertEquals(2, source.size(), "原入参集合仍应保留全部元素（含 null）");
+            // 结果是独立的新集合，改动它不影响入参
+            result.add("b");
+            assertEquals(2, source.size(), "修改结果集合不应影响原入参集合");
         }
 
         @Test
@@ -685,15 +712,29 @@ class CollectionUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：集合中含 null 元素时抛 NullPointerException")
+        @DisplayName("边界值：集合中含 null 元素时跳过该行，不中断整份导出")
         void testNullElementInList() {
             List<ExportDemoModel> list = new ArrayList<>();
             list.add(fullModel());
             list.add(null);
 
-            assertThrows(NullPointerException.class,
-                    () -> CollectionUtil.toCsvInputStream(list, ExportDemoModel.class),
-                    "源码未对元素判空，集合中的 null 元素会抛 NullPointerException");
+            // 一条脏数据导致整份导出失败，对导出场景代价过高
+            assertDoesNotThrow(() -> CollectionUtil.toCsvInputStream(list, ExportDemoModel.class),
+                    "null 元素应被跳过而不是抛空指针");
+        }
+
+        @Test
+        @DisplayName("安全：公式注入前缀的单元格被加上防护前缀")
+        void testFormulaInjectionGuard() throws IOException {
+            List<ExportDemoModel> list = new ArrayList<>();
+            list.add(fullModel().setName("=1+1"));
+            list.add(fullModel().setName("@SUM(A1)"));
+
+            String csv = readUtf8(CollectionUtil.toCsvInputStream(list, ExportDemoModel.class));
+
+            assertFalse(csv.contains("\n=1+1"), "以 = 开头的值不能原样输出，否则 Excel 会当公式执行");
+            assertTrue(csv.contains("'=1+1"), "公式注入值应加单引号前缀：" + csv);
+            assertTrue(csv.contains("'@SUM(A1)"), "公式注入值应加单引号前缀：" + csv);
         }
 
         @Test

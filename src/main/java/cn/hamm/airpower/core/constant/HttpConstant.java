@@ -19,7 +19,7 @@ public class HttpConstant {
     private HttpConstant() {
     }
 
-    public static class Status {
+    public static final class Status {
         public static final int OK = 200;
         public static final int INTERNAL_SERVER_ERROR = 500;
 
@@ -31,7 +31,7 @@ public class HttpConstant {
     /**
      * 授权类型
      */
-    public static class GrantType {
+    public static final class GrantType {
         public static final String PASSWORD = "password";
         public static final String REFRESH_TOKEN = "refresh_token";
         public static final String CLIENT_CREDENTIALS = "client_credentials";
@@ -48,7 +48,7 @@ public class HttpConstant {
     /**
      * 请求头
      */
-    public static class Header {
+    public static final class Header {
         public static final String CONTENT_TYPE = "Content-Type";
         public static final String COOKIE = "Cookie";
         public static final String REQUEST_ID = "X-Request-ID";
@@ -64,7 +64,7 @@ public class HttpConstant {
     /**
      * 内容类型
      */
-    public static class ContentType {
+    public static final class ContentType {
         public static final String APPLICATION_JSON = "application/json";
         public static final String APPLICATION_JSON_UTF8 = "application/json;charset=UTF-8";
         public static final String APPLICATION_FORM_URLENCODED = "application/x-www-form-urlencoded";
@@ -80,7 +80,7 @@ public class HttpConstant {
     /**
      * 代理
      */
-    public static class Proxy {
+    public static final class Proxy {
         @Contract(pure = true)
         private Proxy() {
         }
@@ -88,7 +88,7 @@ public class HttpConstant {
         /**
          * 代理头
          */
-        public static class Header {
+        public static final class Header {
             public static final String FORWARD = "Forwarded";
             public static final String X_REAL_IP = "X-Real-IP";
             public static final String X_FORWARDED_FOR = "X-Forwarded-For";

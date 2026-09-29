@@ -25,10 +25,12 @@ public class StringUtil {
      *
      * @param str 字符串
      * @return 状态
+     * @apiNote 与 {@link #isEmpty(CharSequence)} 实现一致，保留以兼容按 {@code String}
+     * 静态类型调用的场景
      */
     @Contract("null -> true")
     public static boolean isEmpty(@Nullable String str) {
-        return str == null || str.isEmpty();
+        return isEmpty((CharSequence) str);
     }
 
     /**
@@ -58,17 +60,19 @@ public class StringUtil {
      *
      * @param str 字符串
      * @return 状态
+     * @apiNote 与 {@link #hasText(CharSequence)} 实现一致，保留以兼容按 {@code String}
+     * 静态类型调用的场景
      */
     @Contract("null -> false")
     public static boolean hasText(@Nullable String str) {
-        return str != null && !str.isBlank();
+        return hasText((CharSequence) str);
     }
 
     /**
-     * 字符串是否包含空格
+     * 字符串是否包含空白字符
      *
      * @param str 字符串
-     * @return 字符串
+     * @return 是否包含空白字符
      */
     public static boolean containsWhitespace(@Nullable CharSequence str) {
         if (!isEmpty(str)) {
@@ -85,22 +89,22 @@ public class StringUtil {
     }
 
     /**
-     * 去除字符串中的空格
+     * 字符串是否包含空白字符
      *
      * @param str 字符串
-     * @return 字符串
+     * @return 是否包含空白字符
      */
     public static boolean containsWhitespace(@Nullable String str) {
         return containsWhitespace((CharSequence) str);
     }
 
     /**
-     * 去除字符串中的空格
+     * 去除字符串中的所有空白字符
      *
      * @param str 字符串
-     * @return 字符串
+     * @return 去除空白后的字符串，入参为 null 时返回 null
      */
-    public static CharSequence trimAllWhitespace(CharSequence str) {
+    public static CharSequence trimAllWhitespace(@Nullable CharSequence str) {
         if (isEmpty(str)) {
             return str;
         } else {

@@ -17,6 +17,7 @@ import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -53,7 +54,9 @@ public class ReflectUtil {
      */
     public static @NotNull String getFieldGetter(@NotNull Field field) {
         final String fieldName = field.getName();
-        return GET + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+        // 固定 Locale.ROOT：土耳其语环境下 "i".toUpperCase() 得到 "İ"，
+        // 会把 getId 拼成 getİd，导不到方法、注解查找随之全部失效
+        return GET + fieldName.substring(0, 1).toUpperCase(Locale.ROOT) + fieldName.substring(1);
     }
 
     /**

@@ -5,15 +5,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -44,6 +48,11 @@ public class FileUtil {
     public static final String EXTENSION_SEPARATOR = ".";
 
     /**
+     * ZIP 条目名的目录分隔符（规范固定为 {@code /}，与平台无关）
+     */
+    private static final String ZIP_SEPARATOR = "/";
+
+    /**
      * 未知文件大小
      */
     private static final String UNKNOWN_FILE_SIZE = "错误的文件大小: %s";
@@ -63,7 +72,14 @@ public class FileUtil {
      * @return 后缀
      */
     public static @NotNull String getExtension(@NotNull String fileName) {
-        return fileName.substring(fileName.lastIndexOf(EXTENSION_SEPARATOR) + 1).toLowerCase();
+        int index = fileName.lastIndexOf(EXTENSION_SEPARATOR);
+        if (index < 0 || index == fileName.length() - EXTENSION_SEPARATOR.length()) {
+            // 无扩展名或以点结尾（如 "noext" / "archive."）时返回空串，
+            // 原实现会把整个文件名当成扩展名返回
+            return "";
+        }
+        // 固定 Locale.ROOT：土耳其语环境下 "TXT".toLowerCase() 会得到 "tхt"
+        return fileName.substring(index + EXTENSION_SEPARATOR.length()).toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -73,8 +89,12 @@ public class FileUtil {
      * @return 格式化后的文件大小
      */
     public static @NotNull String formatSize(long size) {
-        if (size <= 0) {
+        if (size < 0) {
             throw new ServiceException(String.format(UNKNOWN_FILE_SIZE, size));
+        }
+        if (size == 0) {
+            // 0 字节是合法的空文件，原实现与负数一起拒绝
+            return "0.00" + UNITS[0];
         }
         double fileSize = size;
         // 固定使用 ROOT Locale，避免德语等环境下输出 1,00KB 导致调用方解析失败
@@ -189,8 +209,8 @@ public class FileUtil {
      * @throws IOException IO 异常
      */
     private static void zipDirectory(Path dir, String dirName, @NotNull ZipOutputStream zos) throws IOException {
-        // 添加目录条目
-        dirName = formatDirectory(dirName);
+        // ZIP 规范要求条目名统一使用 '/'，不能沿用 File.separator（Windows 上是 '\'）
+        dirName = dirName.endsWith(ZIP_SEPARATOR) ? dirName : dirName + ZIP_SEPARATOR;
 
         ZipEntry dirEntry = new ZipEntry(dirName);
         zos.putNextEntry(dirEntry);
@@ -199,7 +219,7 @@ public class FileUtil {
         // 遍历目录中的所有文件和子目录
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path path : stream) {
-                String entryName = dirName + path.getFileName().toString();
+                String entryName = dirName + path.getFileName();
 
                 if (Files.isDirectory(path)) {
                     // 递归处理子目录
@@ -211,12 +231,8 @@ public class FileUtil {
                 zos.putNextEntry(fileEntry);
 
                 // 写入文件内容
-                try (java.io.BufferedInputStream bis = new java.io.BufferedInputStream(new FileInputStream(path.toFile()), 8192)) {
-                    byte[] buffer = new byte[8192];
-                    int length;
-                    while ((length = bis.read(buffer)) > 0) {
-                        zos.write(buffer, 0, length);
-                    }
+                try (InputStream bis = new BufferedInputStream(new FileInputStream(path.toFile()))) {
+                    bis.transferTo(zos);
                 }
                 zos.closeEntry();
             }
@@ -235,11 +251,22 @@ public class FileUtil {
         if (!Files.exists(path)) {
             return;
         }
+        // 逆序保证先删子项再删父目录
         try (Stream<Path> walk = Files.walk(path)) {
-            //noinspection ResultOfMethodCallIgnored
-            walk.sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+            List<Path> targets = walk.sorted(Comparator.reverseOrder()).toList();
+            List<String> failures = new ArrayList<>();
+            for (Path target : targets) {
+                try {
+                    // 原实现用 File::delete 忽略返回值，删除失败完全无感知
+                    Files.deleteIfExists(target);
+                } catch (IOException e) {
+                    failures.add(target.getFileName() + "(" + e.getMessage() + ")");
+                }
+            }
+            if (!failures.isEmpty()) {
+                // 部分删除失败时明确报错，避免调用方误以为目录已清空
+                throw new ServiceException("删除文件夹失败，" + failures.size() + " 个条目未删除：" + failures);
+            }
         } catch (IOException e) {
             throw new ServiceException("删除文件夹失败，" + e.getMessage());
         }

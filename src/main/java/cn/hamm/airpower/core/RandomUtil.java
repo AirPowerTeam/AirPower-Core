@@ -4,6 +4,7 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
@@ -38,8 +39,11 @@ public class RandomUtil {
 
     /**
      * 大写和小写字母
+     *
+     * @apiNote 固定 {@link Locale#ROOT}：土耳其语环境下 "i".toUpperCase() 得到
+     * 带点的 "İ"，产出的随机串会混入非 ASCII 字符
      */
-    private static final String BASE_CHAR_NUMBER = BASE_CHAR.toUpperCase() + BASE_CHAR_NUMBER_LOWER;
+    private static final String BASE_CHAR_NUMBER = BASE_CHAR.toUpperCase(Locale.ROOT) + BASE_CHAR_NUMBER_LOWER;
 
     /**
      * 禁止外部实例化

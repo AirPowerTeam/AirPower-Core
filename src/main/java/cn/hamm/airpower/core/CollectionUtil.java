@@ -42,10 +42,28 @@ public class CollectionUtil {
      * CSV 缩进符号
      */
     private static final String INDENT = "\t";
+
+    /**
+     * CSV 公式注入防护前缀
+     */
+    private static final String CSV_FORMULA_GUARD = "'";
+
+    /**
+     * 空值占位符
+     */
+    private static final String EMPTY_VALUE_PLACEHOLDER = "-";
+
+    /**
+     * 会被表格软件当作公式起始的字符
+     *
+     * @apiNote 不含 {@code \t}：TEXT / DATETIME 列会前置制表符做缩进，
+     * 那是本工具自身的标记，不应被当作公式防护对象
+     */
+    private static final String FORMULA_PREFIXES = "=+-@";
     /**
      * 导出字段缓存
      */
-    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 禁止外部实例化
@@ -63,10 +81,28 @@ public class CollectionUtil {
      * @return 处理后的集合
      */
     public static @NotNull <T> Collection<T> getCollectWithoutNull(Collection<T> list, Class<?> fieldClass) {
-        if (Objects.equals(Set.class, fieldClass)) {
-            return Objects.isNull(list) ? new HashSet<>() : list;
+        if (Objects.isNull(list) || list.isEmpty()) {
+            return newCollection(fieldClass);
         }
-        return Objects.isNull(list) ? new ArrayList<>() : list;
+        // 方法名承诺"去掉 null"，原实现直接返回原集合，null 元素原样保留
+        Collection<T> result = newCollection(fieldClass);
+        for (T item : list) {
+            if (Objects.nonNull(item)) {
+                result.add(item);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 按声明类型创建空集合
+     *
+     * @param fieldClass 数据类型
+     * @param <T>        数据类型
+     * @return 空集合
+     */
+    private static <T> @NotNull Collection<T> newCollection(Class<?> fieldClass) {
+        return Objects.equals(Set.class, fieldClass) ? new HashSet<>() : new ArrayList<>();
     }
 
     /**
@@ -109,17 +145,46 @@ public class CollectionUtil {
      */
     public static <M extends RootModel<M>> @NotNull List<String> getCsvValueList(@NotNull List<M> list, List<Field> fieldList) {
         List<String> rowList = new ArrayList<>();
-        list.forEach(entity -> {
+        for (M entity : list) {
+            if (Objects.isNull(entity)) {
+                // 集合中的 null 元素直接跳过，不让整份导出因一条脏数据失败
+                continue;
+            }
             List<String> columnList = new ArrayList<>();
-            fieldList.forEach(field -> {
+            for (Field field : fieldList) {
                 Object value = getCsvColumnValue(entity, field);
-                columnList.add(value.toString()
-                        .replace(CSV_COLUMN_DELIMITER, " ")
-                        .replace(CSV_ROW_DELIMITER, " "));
-            });
+                columnList.add(value.toString());
+            }
             rowList.add(String.join(CSV_COLUMN_DELIMITER, columnList));
-        });
+        }
         return rowList;
+    }
+
+    /**
+     * 转义 CSV 单元格中的分隔符与换行
+     *
+     * @param cell 单元格内容
+     * @return 转义后的内容
+     */
+    private static @NotNull String escapeCell(@NotNull String cell) {
+        return cell
+                .replace(CSV_COLUMN_DELIMITER, " ")
+                .replace(CSV_ROW_DELIMITER, " ");
+    }
+
+    /**
+     * 防护 CSV 公式注入
+     *
+     * @param cell 单元格内容
+     * @return 加了防护前缀的内容
+     * @apiNote 以 {@code = + - @} 开头的值在 Excel / WPS 中会被当作公式执行，
+     * 恶意数据可借此触发外部链接访问或 DDE 命令执行
+     */
+    private static @NotNull String guardFormula(@NotNull String cell) {
+        if (!cell.isEmpty() && FORMULA_PREFIXES.indexOf(cell.charAt(0)) >= 0) {
+            return CSV_FORMULA_GUARD + cell;
+        }
+        return cell;
     }
 
     /**
@@ -181,24 +246,29 @@ public class CollectionUtil {
     private static <M extends RootModel<M>> @NotNull Object getCsvColumnValue(@NotNull M model, @NotNull Field field) {
         Object value = ReflectUtil.getFieldValue(model, field);
         if (Objects.isNull(value) || !StringUtil.hasText(value.toString())) {
-            value = "-";
+            // 空值占位符由本工具生成，仍需按列类型走一遍转换以保持既有输出格式
+            value = EMPTY_VALUE_PLACEHOLDER;
         }
+        // 空值占位符由本工具生成，不需要公式注入防护
+        boolean isPlaceholder = EMPTY_VALUE_PLACEHOLDER.equals(value);
+        // 原始文本先做分隔符替换与公式防护，再进入类型转换
+        String text = isPlaceholder ? (String) value : guardFormula(escapeCell(value.toString()));
         try {
             Export export = ReflectUtil.getAnnotation(Export.class, field);
             if (Objects.isNull(export)) {
-                return value;
+                return text;
             }
             return switch (export.value()) {
-                case DATETIME -> INDENT + DateTimeUtil.format(Long.parseLong(value.toString()));
-                case TEXT -> INDENT + value;
+                case DATETIME -> INDENT + DateTimeUtil.format(Long.parseLong(text));
+                case TEXT -> INDENT + text;
                 case BOOLEAN -> (boolean) value ? "是" : "否";
                 case DICTIONARY -> {
                     Dictionary dictionary = ReflectUtil.getAnnotation(Dictionary.class, field);
                     if (Objects.isNull(dictionary)) {
-                        yield value;
+                        yield text;
                     } else {
                         IDictionary dict = DictionaryUtil.getDictionary(
-                                dictionary.value(), Integer.parseInt(value.toString())
+                                dictionary.value(), Integer.parseInt(text)
                         );
                         yield dict.getLabel();
                     }
@@ -213,12 +283,12 @@ public class CollectionUtil {
                     if (value instanceof Long longValue) {
                         yield BigDecimal.valueOf(longValue).toPlainString();
                     }
-                    yield value;
+                    yield text;
                 }
             };
         } catch (Exception e) {
             log.warn("导出列({})的数据处理失败，已回退为原始值, {}", field.getName(), e.getMessage());
-            return value;
+            return text;
         }
     }
 

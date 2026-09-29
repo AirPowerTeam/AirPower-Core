@@ -15,14 +15,21 @@ import org.jetbrains.annotations.NotNull;
 @Getter
 public class ServiceException extends RuntimeException implements IException<ServiceException> {
     /**
+     * 序列化版本号
+     */
+    private static final long serialVersionUID = 1L;
+    /**
      * 错误代码
      */
     private int code = Json.SERVICE_ERROR;
 
     /**
      * 错误数据
+     *
+     * @apiNote 标为 {@code transient}：本类继承自 {@code RuntimeException}
+     * （实现 Serializable），若 data 不可序列化，跨进程传递时会二次抛异常掩盖根因
      */
-    private Object data = null;
+    private transient Object data = null;
 
     /**
      * 抛出一个自定义错误信息的默认异常

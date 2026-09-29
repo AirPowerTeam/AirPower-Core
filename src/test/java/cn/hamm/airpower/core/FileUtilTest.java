@@ -88,11 +88,11 @@ class FileUtilTest {
         }
 
         @Test
-        @DisplayName("无后缀的文件名会返回整个名称的小写形式")
+        @DisplayName("无后缀的文件名返回空串")
         void noExtension() {
-            // 源码在无句点时截取整个文件名并统一小写化，此处断言源码的实际行为
-            assertEquals("noext", FileUtil.getExtension("noExt"), "无句点时应返回整个文件名的小写形式");
-            assertEquals("readme", FileUtil.getExtension("README"), "纯大写文件名应被全部小写化");
+            // 原实现无句点时会把整个文件名当成扩展名返回（"noext"）
+            assertEquals("", FileUtil.getExtension("noExt"), "无句点时应返回空串而不是整个文件名");
+            assertEquals("", FileUtil.getExtension("README"), "无后缀的文件名不应返回自身");
         }
 
         @Test
@@ -111,7 +111,7 @@ class FileUtilTest {
         @DisplayName("短文件名也能正确取到后缀")
         void shortFileName() {
             assertEquals("txt", FileUtil.getExtension("x.txt"), "短文件名应正确取到后缀");
-            assertEquals("x", FileUtil.getExtension("x"), "无后缀的单字符文件名应返回自身的小写形式");
+            assertEquals("", FileUtil.getExtension("x"), "无后缀的单字符文件名应返回空串");
         }
 
         @Test
@@ -169,11 +169,9 @@ class FileUtilTest {
         }
 
         @Test
-        @DisplayName("size 为 0 应抛出业务异常")
+        @DisplayName("size 为 0 时返回 0.00B（0 字节是合法的空文件）")
         void zero() {
-            ServiceException exception = assertThrows(ServiceException.class, () -> FileUtil.formatSize(0L),
-                    "文件大小为 0 时应抛出业务异常");
-            assertEquals("错误的文件大小: 0", exception.getMessage(), "异常信息应带上具体大小");
+            assertEquals("0.00B", FileUtil.formatSize(0L), "0 字节的合法空文件不应被拒绝");
         }
 
         @Test

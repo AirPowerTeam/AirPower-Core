@@ -56,7 +56,7 @@ public class DateTimeUtil {
     /**
      * 一小时的秒数
      */
-    public static final int SECOND_PER_HOUR = SECOND_PER_MINUTE * SECOND_PER_MINUTE;
+    public static final int SECOND_PER_HOUR = SECOND_PER_MINUTE * 60;
 
     /**
      * 一天的秒数
@@ -318,7 +318,8 @@ public class DateTimeUtil {
      * @return 日期
      */
     public static int getCurrentDay() {
-        return ZonedDateTime.now().getDayOfMonth();
+        // 与其余 getCurrentXxx() 保持一致，统一走 Date，避免两套时间源
+        return getDay(new Date());
     }
 
     /**

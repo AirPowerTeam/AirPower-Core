@@ -59,6 +59,8 @@ public class TaskUtil {
      *
      * @param runnable     任务
      * @param moreRunnable 更多任务
+     * @apiNote 线程池使用 {@code CallerRunsPolicy}，队列满时任务会在<b>调用方线程</b>
+     * 同步执行，此时不再是异步
      */
     public static void run(Runnable runnable, Runnable... moreRunnable) {
         String traceId = TraceUtil.getTraceId();
@@ -67,8 +69,9 @@ public class TaskUtil {
                 TraceUtil.setTraceId(traceId);
                 run.run();
             } catch (Throwable e) {
-                // 任务由 submit 提交，异常不会传递给调用方，这里统一兜底记录（含 Error）
-                log.error("异步执行任务失败, {}", e.getMessage());
+                // 任务由 submit 提交，异常不会传递给调用方，这里统一兜底记录（含 Error）。
+                // 必须传异常对象本身，只打印 getMessage() 会丢掉堆栈，线上问题无从定位
+                log.error("异步执行任务失败", e);
             } finally {
                 // 线程会被复用，清理 MDC 避免 TraceID 残留到下一个任务
                 TraceUtil.clearTraceId();

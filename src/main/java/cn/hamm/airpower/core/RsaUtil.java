@@ -153,7 +153,7 @@ public class RsaUtil {
      * @param publicKey 公钥
      * @return PEM
      */
-    public @NotNull String convertPublicKeyToPem(@NotNull PublicKey publicKey) {
+    public static @NotNull String convertPublicKeyToPem(@NotNull PublicKey publicKey) {
         String base64Encoded = Base64.getEncoder().encodeToString(publicKey.getEncoded());
         return "-----BEGIN PUBLIC KEY-----\n" +
                 wrapBase64Text(base64Encoded) +
@@ -178,7 +178,7 @@ public class RsaUtil {
      * @apiNote {@code getPrivateKey} 使用 {@link PKCS8EncodedKeySpec} 解析，
      * 因此头尾使用 PKCS#8 的 {@code PRIVATE KEY}
      */
-    public @NotNull String convertPrivateKeyToPem(@NotNull PrivateKey privateKey) {
+    public static @NotNull String convertPrivateKeyToPem(@NotNull PrivateKey privateKey) {
         String base64Encoded = Base64.getEncoder().encodeToString(privateKey.getEncoded());
         return "-----BEGIN PRIVATE KEY-----\n" +
                 wrapBase64Text(base64Encoded) +
@@ -201,7 +201,7 @@ public class RsaUtil {
      * @param base64Text 原始 {@code Base64}
      * @return 换行后的
      */
-    public @NotNull String wrapBase64Text(@NotNull String base64Text) {
+    public static @NotNull String wrapBase64Text(@NotNull String base64Text) {
         final int wrapLength = 64;
         StringBuilder wrappedText = new StringBuilder();
         int start = 0;
