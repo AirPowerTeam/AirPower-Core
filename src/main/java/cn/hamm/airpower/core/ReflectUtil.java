@@ -248,9 +248,11 @@ public class ReflectUtil {
         while (!isTheRootClass(currentClass)) {
             Field[] fields = getDeclaredFields(currentClass);
             for (Field field : fields) {
-                if (!Modifier.isStatic(field.getModifiers()) && !Modifier.isTransient(field.getModifiers())) {
-                    fieldList.add(field);
+                if (Modifier.isStatic(field.getModifiers()) || Modifier.isTransient(field.getModifiers())) {
+                    continue;
                 }
+                field.setAccessible(true);
+                fieldList.add(field);
             }
             currentClass = currentClass.getSuperclass();
         }
