@@ -67,8 +67,7 @@ public class ReflectUtil {
             field.setAccessible(true);
             return field.get(object);
         } catch (IllegalAccessException e) {
-            log.error("反射操作属性失败, {}", e.getMessage());
-            return null;
+            throw new ServiceException("获取对象指定属性的值失败, " + e.getMessage());
         } finally {
             field.setAccessible(false);
         }
