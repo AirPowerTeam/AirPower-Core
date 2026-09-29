@@ -43,7 +43,7 @@ public class DesensitizeUtil {
      */
     public static @NotNull String replace(String text, int head, int tail, String symbol) {
         if (head < 0 || tail < 0 || head + tail >= text.length()) {
-            return text;
+            return symbol.repeat(text.length());
         }
         StringBuilder stringBuilder = new StringBuilder(text.length());
         stringBuilder.append(text, 0, head);
