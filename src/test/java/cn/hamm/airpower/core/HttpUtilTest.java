@@ -624,6 +624,13 @@ class HttpUtilTest {
     class RequestTimeoutTest {
 
         /**
+         * 慢响应服务器的挂起时长
+         *
+         * @apiNote 需远大于被测的 1 秒超时，才能证明是超时生效而不是服务端恰好先返回
+         */
+        private static final long SLOW_HANG_MILLIS = 30_000L;
+
+        /**
          * 慢响应服务器：接受连接后长时间不返回响应头
          */
         private HttpServer slowServer;
@@ -644,7 +651,7 @@ class HttpUtilTest {
             // 接受请求后既不 sendResponseHeaders 也不关闭，保持连接挂起
             slowServer.createContext("/slow", exchange -> {
                 try {
-                    Thread.sleep(10_000L);
+                    Thread.sleep(SLOW_HANG_MILLIS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } finally {
@@ -672,6 +679,7 @@ class HttpUtilTest {
 
         @Test
         @DisplayName("服务端不响应时按请求级超时中断，而不是永久阻塞")
+        @Timeout(25)
         void timesOutWhenServerDoesNotRespond() {
             long start = System.nanoTime();
 
@@ -680,8 +688,11 @@ class HttpUtilTest {
                     "服务端接受连接后不响应，应按请求级超时抛异常而不是一直挂起");
 
             long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
-            assertTrue(elapsedMillis < 9_000L,
-                    "应在超时时间附近返回，实际耗时 " + elapsedMillis + " 毫秒（未生效则会挂起 10 秒以上）");
+            // 阈值取服务端挂起时长的一半：既能证明"没等满挂起时长"，
+            // 又给 CI 上可能较慢的调度留出余量，避免偶发失败
+            assertTrue(elapsedMillis < SLOW_HANG_MILLIS / 2,
+                    "应在超时时间附近返回，实际耗时 " + elapsedMillis + " 毫秒（未生效则会挂起 "
+                            + SLOW_HANG_MILLIS + " 毫秒以上）");
             assertNotNull(exception.getCause(), "包装异常应保留原始异常");
         }
 

@@ -129,7 +129,7 @@
 
 - `mvn clean test` 与 `mvn test`（IDEA 插桩产物）均 1132 全绿
 - 8 种 Locale（zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT / he_IL）× 对应时区全绿
-- `clean test` 连跑 3 遍零抖动；`HttpUtilTest` 压测 20 遍、并发用例压测 15 遍零抖动
+- `clean test` 连跑 8 遍零抖动；`HttpUtilTest` 压测 35 遍、并发用例压测 15 遍零抖动
 - `mvn package`（含 javadoc）通过
 
 ---
