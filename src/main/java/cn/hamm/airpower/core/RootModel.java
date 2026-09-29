@@ -133,6 +133,20 @@ public class RootModel<M extends RootModel<M>> {
         if (Objects.isNull(value)) {
             return;
         }
+        Meta meta = ReflectUtil.getAnnotation(Meta.class, field);
+        if (Objects.isNull(meta)) {
+            // 判断 Getter 是否被标记
+            String fieldGetter = ReflectUtil.getFieldGetter(field);
+            try {
+                Method getter = instance.getClass().getMethod(fieldGetter);
+                meta = ReflectUtil.getAnnotation(Meta.class, getter);
+                if (Objects.isNull(meta)) {
+                    ReflectUtil.setFieldValue(instance, field, null);
+                    return;
+                }
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
         if (value instanceof Collection<?> valueList) {
             // 是对象集合，逐个递归排除非元数据字段
             valueList.forEach(item -> {
@@ -144,20 +158,6 @@ public class RootModel<M extends RootModel<M>> {
         }
         if (isModel(value.getClass())) {
             ((RootModel<?>) value).excludeNotMeta();
-            return;
-        }
-        Meta meta = ReflectUtil.getAnnotation(Meta.class, field);
-        if (Objects.isNull(meta)) {
-            // 判断 Getter 是否被标记
-            String fieldGetter = ReflectUtil.getFieldGetter(field);
-            try {
-                Method getter = instance.getClass().getMethod(fieldGetter);
-                meta = ReflectUtil.getAnnotation(Meta.class, getter);
-                if (Objects.isNull(meta)) {
-                    ReflectUtil.setFieldValue(instance, field, null);
-                }
-            } catch (NoSuchMethodException ignored) {
-            }
         }
     }
 
