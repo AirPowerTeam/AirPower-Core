@@ -8,8 +8,10 @@
 
 - **基线**：`7.0.0`（`dev` @ `23d52c8`）
 - **分支**：`fix/global-defect-scan`
-- **规模**：修复 41 个缺陷（P0 × 3、P1 × 16、P2 × 22），新增 / 改写约 60 个测试用例
-- **验证**：7 种 Locale（zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT）× 对应时区下全量用例零失败
+- **规模**：修复 41 个缺陷（P0 × 3、P1 × 16、P2 × 22），测试用例 1115 个
+- **验证**：`mvn clean test` 与 `mvn test`（IDEA 插桩产物）均全绿；
+  9 种 Locale（zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT / he_IL / en_IN）× 对应时区零失败；
+  `clean test` 连跑 3 遍零抖动；`mvn package`（含 javadoc）通过
 
 ### 修复清单
 
@@ -70,6 +72,38 @@
 | P2-31 | `TaskUtil` | `CallerRunsPolicy` 与"异步"文档矛盾 | 已修复（补说明） |
 | P2-32 | `ServiceException` | `data` 未标 `transient`，缺 `serialVersionUID` | 已修复 |
 
+### 测试补强（第二轮）
+
+对照 ISSUE.md 逐条复查后发现，上一轮有 **5 个修复点缺少回归用例**——包括最隐蔽的两个。
+已补齐并逐个验证「注入缺陷 → 用例变红 → 恢复 → 用例变绿」：
+
+| 测试类 | 新增用例 | 覆盖的缺陷 |
+|--------|----------|------------|
+| `ReflectUtilTest.ConcurrencyTest` | 4 | **P0-2**：8 线程 × 2000 次并发 `getFieldValue`、读写混用、`accessible` 标志不被重置、并发构建缓存结果一致 |
+| `ReflectUtilTest.TurkishLocaleTest` | 3 | **`getFieldGetter` 的土耳其语问题**：tr_TR 下仍生成 `getId`、按 Getter 查 `@Export` 仍有效 |
+| `ReflectUtilTest.cacheIsKeyedByClassNotName` | 1 | **P1-4**：用自定义 `ClassLoader` 重复加载同名类，验证缓存以 `Class` 为键 |
+| `ValidateUtilTest.MultiViolationStabilityTest` | 3 | **P1-9**：同一模型连续 300 次校验，消息唯一且等于属性路径字典序最小的那条 |
+| `ValidateUtilTest.LifecycleTest` | 3 | **P1-10**：`close()` 后自动重建、重复关闭安全、关闭前后报错一致 |
+| `HttpUtilTest.RequestTimeoutTest` | 2 | **P1-14**：用只接受连接不响应的服务器验证请求级超时真生效，含正常响应对照组 |
+| `fixture/SameNameProbe` | 夹具 | 供同名类隔离加载测试使用 |
+
+用例数从 1098 增至 **1115**。
+
+### 顺带修掉的测试脆弱点
+
+三个既有用例（`isTheRootClass` / `getDeclaredFields` / `getLambdaFunctionName` 的 null 入参）
+断言了精确异常类型，但源码的 `@NotNull` 参数在两种编译方式下行为不同：
+
+- Maven `javac` 编译 → 不做运行时检查，null 在方法体内解引用抛 NPE
+- IDEA 开启 *Instrument code with @NotNull assertions* 重新编译 → 参数校验提前拦截，抛 `IllegalArgumentException`
+
+因此这些用例在 `mvn clean test` 下全绿，但在 IDEA 编译产物下（典型触发方式：加
+`-DargLine` 指定 Locale / 时区重跑）必然 3 个失败。根因是断言绑定了异常类型而非真正的
+契约——"未做判空"本身才是要锁住的行为。改为断言 `RuntimeException` 并注释说明差异，
+不影响缺陷检测能力：一旦有人补上判空，断言依然会失败。
+
+---
+
 ### 扫描中新发现并修复的缺陷
 
 以下问题在初版 ISSUE.md 中未列出，是多 Locale 交叉验证阶段发现并修复的：
@@ -93,6 +127,9 @@
 | `2c9c14c` | RSA 密钥链路与 HTTP 可用性（P1-11 ~ P1-16、P2-1 ~ P2-3、P2-7） |
 | `75b841d` | 国际化比较与正则量词（P2-4 ~ P2-6、P2-10、P2-25、P2-26） |
 | `e92d047` | CSV 导出、文件工具、Locale 依赖（P2-12 ~ P2-23、P2-27 ~ P2-32） |
+| `6e3fb48` | HostUtil 异常降级、`findByParentId` 防御性拷贝 |
+| `620107b` | 为 P0-2 / P1-4 / P1-9 / P1-10 / P1-14 与国际化缺陷补回归用例 |
+| `652ada1` | 让 null 入参用例不再依赖编译期插桩 |
 
 ---
 

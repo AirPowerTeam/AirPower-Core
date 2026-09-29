@@ -4,7 +4,8 @@
 
 扫描全部 42 个主源码文件 + 30 组可执行探针，共发现并修复 **41 个缺陷**（P0×3 / P1×16 / P2×22），
 另有 4 个是多 Locale 交叉验证阶段新发现的。交付物 `ISSUE.md`（扫描报告）与 `CHANGELOG.md`
-（修复明细 + 25 条行为变更提示），7 次提交，尚未 push。
+（修复明细 + 25 条行为变更提示 + 测试补强记录），9 次提交，尚未 push。
+测试用例共 1115 个。
 
 ### 三个 P0
 
@@ -43,6 +44,25 @@
 任何"字段名 → Getter 名"的转换都必须固定 `Locale.ROOT`。同类风险点已在本次全部处理：
 `IException` 忽略大小写比较、`RandomUtil` 字符集、`FileUtil.getExtension`。
 **后续新增此类转换时务必带 Locale.ROOT。**
+
+### 测试踩坑：`@NotNull` 参数的异常类型依赖编译方式
+
+同一 `@NotNull` 参数传 null，异常类型取决于谁编译的 class：
+
+- Maven `javac` → 无运行时检查，方法体内解引用抛 `NullPointerException`
+- IDEA 开启 *Instrument code with @NotNull assertions* → 提前拦截抛
+  `IllegalArgumentException`（字节码里有 `$$$reportNull$$$0`）
+
+**断言要锁"契约"而非"异常类型"**。项目里有三个 null 入参用例原本断言精确异常类型，
+`mvn clean test` 全绿，但只要 class 是 IDEA 编的（典型触发：加 `-DargLine` 跑多 Locale）
+就必然失败。已改为断言 `RuntimeException`。
+用 `javap -p Xxx.class | grep reportNull` 可确认产物是否被插桩。
+
+### 测试方法论：回归用例必须验证"能变红"
+
+补完用例后把缺陷重新注入源码（恢复 `setAccessible(false)`、删掉 `.timeout()`、
+把缓存 key 改回类名），确认对应用例确实失败再恢复源码。没验证过的回归用例
+可能根本不测任何东西。
 
 ### 待用户确认（未 push）
 
