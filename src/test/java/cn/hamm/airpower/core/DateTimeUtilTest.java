@@ -391,7 +391,7 @@ class DateTimeUtilTest {
             assertThrows(ServiceException.class, () -> DateTimeUtil.friendlyFormatMillisecond(-1000L),
                     "-1000 毫秒整除为 -1 秒后应命中负数校验");
             // -1 毫秒整除为 0 秒，等价于纪元零点，不会触发负数校验，这是源码的既有行为
-            assertTrue(DateTimeUtil.friendlyFormatMillisecond(-1L).matches("\\d+年前"),
+            assertTrue(DateTimeUtil.friendlyFormatMillisecond(-1L).matches("\\p{Nd}+年前"),
                     "-1 毫秒被截断为 0 秒，应按纪元零点处理而不是抛异常");
         }
 
@@ -408,7 +408,7 @@ class DateTimeUtilTest {
         @DisplayName("与当前秒完全相同时应输出秒级描述")
         void sameSecond() {
             String actual = DateTimeUtil.friendlyFormatSecond(currentSecond());
-            assertTrue(actual.equals("刚刚") || actual.matches("\\d+秒前"),
+            assertTrue(actual.equals("刚刚") || actual.matches("\\p{Nd}+秒前"),
                     "当前秒应输出“刚刚”或“n秒前”，实际为：" + actual);
         }
 
@@ -418,7 +418,7 @@ class DateTimeUtilTest {
             // 步长表里 60 秒的档位先于 0 秒被匹配，因此过去的时间只要超过 60 秒就必然进入分钟档，
             // “n秒前”在源码中不可达，这里记录该行为
             String actual = DateTimeUtil.friendlyFormatSecond(currentSecond() - 100L);
-            assertTrue(actual.matches("\\d+分钟前"), "过去 100 秒应输出 n 分钟前，实际为：" + actual);
+            assertTrue(actual.matches("\\p{Nd}+分钟前"), "过去 100 秒应输出 n 分钟前，实际为：" + actual);
             assertTrue(actual.endsWith("前"), "过去的时间应以“前”结尾，实际为：" + actual);
         }
 
@@ -426,72 +426,72 @@ class DateTimeUtilTest {
         @DisplayName("未来的时间应输出“秒后”")
         void secondsAfter() {
             String actual = DateTimeUtil.friendlyFormatSecond(currentSecond() + 10L);
-            assertTrue(actual.matches("\\d+秒后"), "未来 10 秒应输出 n 秒后，实际为：" + actual);
+            assertTrue(actual.matches("\\p{Nd}+秒后"), "未来 10 秒应输出 n 秒后，实际为：" + actual);
             assertTrue(!actual.equals("刚刚"), "未来的时间不应输出“刚刚”，这是源码的既有行为");
         }
 
         @Test
         @DisplayName("分钟级步长")
         void minutes() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 90L).matches("\\d+分钟前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 90L).matches("\\p{Nd}+分钟前"),
                     "过去 90 秒应输出 n 分钟前");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 90L).matches("\\d+分钟后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 90L).matches("\\p{Nd}+分钟后"),
                     "未来 90 秒应输出 n 分钟后");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 65L).matches("\\d+分钟前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 65L).matches("\\p{Nd}+分钟前"),
                     "过去 65 秒应进入分钟步长");
         }
 
         @Test
         @DisplayName("小时级步长")
         void hours() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 3600L * 2L).matches("\\d+小时前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 3600L * 2L).matches("\\p{Nd}+小时前"),
                     "过去 2 小时应输出 n 小时前");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 3600L * 5L).matches("\\d+小时后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 3600L * 5L).matches("\\p{Nd}+小时后"),
                     "未来 5 小时应输出 n 小时后");
         }
 
         @Test
         @DisplayName("天级步长")
         void days() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 2L).matches("\\d+天前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 2L).matches("\\p{Nd}+天前"),
                     "过去 2 天应输出 n 天前");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 3L).matches("\\d+天后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 3L).matches("\\p{Nd}+天后"),
                     "未来 3 天应输出 n 天后");
         }
 
         @Test
         @DisplayName("周级步长")
         void weeks() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 7L * 2L).matches("\\d+周前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 7L * 2L).matches("\\p{Nd}+周前"),
                     "过去 2 周应输出 n 周前");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 7L * 3L).matches("\\d+周后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 7L * 3L).matches("\\p{Nd}+周后"),
                     "未来 3 周应输出 n 周后");
         }
 
         @Test
         @DisplayName("月级步长")
         void months() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 30L * 2L).matches("\\d+月前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 30L * 2L).matches("\\p{Nd}+月前"),
                     "过去 2 个月应输出 n 月前");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 30L * 2L).matches("\\d+月后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 30L * 2L).matches("\\p{Nd}+月后"),
                     "未来 2 个月应输出 n 月后");
         }
 
         @Test
         @DisplayName("年级步长")
         void years() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 365L * 3L).matches("\\d+年前"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() - 86400L * 365L * 3L).matches("\\p{Nd}+年前"),
                     "过去 3 年应输出 n 年前");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 365L * 2L).matches("\\d+年后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 365L * 2L).matches("\\p{Nd}+年后"),
                     "未来 2 年应输出 n 年后");
         }
 
         @Test
         @DisplayName("月与年的分界应按 365 天计算")
         void monthYearBoundary() {
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 364L).matches("\\d+月后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 364L).matches("\\p{Nd}+月后"),
                     "未来 364 天仍属于月级步长");
-            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 365L).matches("\\d+年后"),
+            assertTrue(DateTimeUtil.friendlyFormatSecond(currentSecond() + 86400L * 365L).matches("\\p{Nd}+年后"),
                     "未来 365 天进入年级步长");
         }
 
@@ -499,13 +499,13 @@ class DateTimeUtilTest {
         @DisplayName("毫秒重载应做整数除法截断")
         void friendlyFormatMillisecondTruncate() {
             String actual = DateTimeUtil.friendlyFormatMillisecond((currentSecond() - 100L) * 1000L + 999L);
-            assertTrue(actual.matches("\\d+分钟前"), "不足一秒的余数应被截断，实际为：" + actual);
+            assertTrue(actual.matches("\\p{Nd}+分钟前"), "不足一秒的余数应被截断，实际为：" + actual);
         }
 
         @Test
         @DisplayName("纪元零点应输出很早以前的年")
         void epochZero() {
-            assertTrue(DateTimeUtil.friendlyFormatMillisecond(0L).matches("\\d+年前"),
+            assertTrue(DateTimeUtil.friendlyFormatMillisecond(0L).matches("\\p{Nd}+年前"),
                     "纪元零点距今超过一年，应输出 n 年前");
         }
     }
