@@ -6,16 +6,29 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.DemoModel;
 import cn.hamm.airpower.core.fixture.DemoTree;
 import cn.hamm.airpower.core.fixture.Gender;
+import cn.hamm.airpower.core.fixture.SameNameProbe;
 import cn.hamm.airpower.core.interfaces.IFunction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -657,6 +670,17 @@ class ReflectUtilTest {
         }
     }
 
+    /**
+     * 查找被测字段
+     *
+     * @param name 字段名
+     * @return 字段
+     * @throws NoSuchFieldException 字段不存在
+     */
+    static Field fieldOf(String name) throws NoSuchFieldException {
+        return DemoTree.class.getDeclaredField(name);
+    }
+
     @Nested
     @DisplayName("getFieldList 字段列表")
     class GetFieldListTest {
@@ -784,6 +808,39 @@ class ReflectUtilTest {
         void nullClassThrowsNpe() {
             assertThrows(NullPointerException.class, () -> ReflectUtil.getDeclaredFields(null),
                     "getDeclaredFields(null) 源码未做判空，应抛空指针");
+        }
+
+        @Test
+        @DisplayName("缓存以 Class 为键，同名类不会被串号")
+        void cacheIsKeyedByClassNotName() throws Exception {
+            // 回归 P1-4：缓存 key 曾是 clazz.getName()，两个同名但由不同 ClassLoader
+            // 加载的类会互相命中对方的 Field[]，反射读到的是错误的类
+            String className = "cn.hamm.airpower.core.fixture.SameNameProbe";
+
+            // 从已加载类的 CodeSource 取字节码位置，避免依赖 surefire 的工作目录
+            URL bytecodeUrl = SameNameProbe.class.getProtectionDomain()
+                    .getCodeSource().getLocation();
+            assertNotNull(bytecodeUrl, "无法定位测试类字节码目录");
+
+            // 用一个全新的 ClassLoader 加载同名类，模拟不同部署单元的同名类
+            try (URLClassLoader isolated = new URLClassLoader(
+                    new URL[]{bytecodeUrl}, ClassLoader.getPlatformClassLoader())) {
+                Class<?> sameName = isolated.loadClass(className);
+                assertEquals(className, sameName.getName(), "两个类的全限定名应完全相同");
+                assertNotSame(SameNameProbe.class, sameName,
+                        "两次加载应得到不同的 Class 对象");
+
+                // 分别取字段列表：若缓存以类名为键，第二次会命中第一次的结果
+                Field[] first = ReflectUtil.getDeclaredFields(SameNameProbe.class);
+                Field[] second = ReflectUtil.getDeclaredFields(sameName);
+
+                assertNotSame(first, second,
+                        "同名但不同 Class 的字段数组不应是同一个实例");
+                assertTrue(Arrays.stream(second).anyMatch(f -> "probeField".equals(f.getName())),
+                        "隔离加载的类应能正确取到自身字段：" + Arrays.toString(second));
+                assertEquals(first.length, second.length,
+                        "两个同名类的字段数量应一致");
+            }
         }
     }
 
@@ -931,6 +988,252 @@ class ReflectUtilTest {
             assertNotNull(found, "getField 应能找到本类字段");
             assertTrue(ReflectUtil.getFieldList(Child.class).contains(found),
                     "getField 找到的字段应与 getFieldList 缓存中的字段相等");
+        }
+    }
+
+    /**
+     * <h2>并发安全</h2>
+     *
+     * <p>回归 P0-2：{@code getFieldValue} / {@code setFieldValue} 曾在 {@code finally}
+     * 中把 {@code Field} 的 {@code accessible} 标志重置为 {@code false}。该标志是
+     * {@link Field} 的全局状态而非线程内状态，线程 A 设为 {@code true} 之后、
+     * 调用 {@code get} 之前被线程 B 的 finally 清掉，A 的读取就会抛
+     * {@code IllegalAccessException}。</p>
+     */
+    @Nested
+    @DisplayName("并发读写字段")
+    class ConcurrencyTest {
+
+        /**
+         * 并发线程数
+         */
+        private static final int THREADS = 8;
+
+        /**
+         * 每线程循环次数
+         */
+        private static final int LOOPS = 2000;
+
+        @Test
+        @DisplayName("多线程并发 getFieldValue 不应出现 IllegalAccessException")
+        @Timeout(60)
+        void concurrentGetFieldValueDoesNotFail() throws Exception {
+            DemoTree model = new DemoTree().setId(1L).setName("并发读取");
+            Field nameField = fieldOf("name");
+            Field idField = fieldOf("id");
+            Set<Throwable> errors = Collections.synchronizedSet(new HashSet<>());
+            List<Object> observed = Collections.synchronizedList(new ArrayList<>());
+
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+            try {
+                for (int i = 0; i < THREADS; i++) {
+                    pool.submit(() -> {
+                        try {
+                            start.await();
+                            for (int j = 0; j < LOOPS; j++) {
+                                observed.add(ReflectUtil.getFieldValue(model, nameField));
+                                ReflectUtil.getFieldValue(model, idField);
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                start.countDown();
+                pool.shutdown();
+                assertTrue(pool.awaitTermination(45, TimeUnit.SECONDS), "并发任务应在超时前完成");
+            } finally {
+                pool.shutdownNow();
+            }
+
+            assertTrue(errors.isEmpty(),
+                    "并发读取不应出现异常，实际捕获到：" + errors.stream().map(Throwable::getMessage).toList());
+            assertEquals(THREADS * LOOPS, observed.size(), "所有读取都应成功完成");
+            assertTrue(observed.stream().allMatch("并发读取"::equals),
+                    "并发读取的结果应全部正确，不能出现读到 null 或错值的情况");
+        }
+
+        @Test
+        @DisplayName("多线程并发 setFieldValue 与 getFieldValue 混用不应失败")
+        @Timeout(60)
+        void concurrentSetAndGetFieldValueDoNotInterfere() throws Exception {
+            // 写线程与读线程共用同一个 Field 对象，验证写路径也不再重置 accessible 标志
+            Field nameField = fieldOf("name");
+            Set<Throwable> errors = Collections.synchronizedSet(new HashSet<>());
+            int writers = THREADS / 2;
+            int readers = THREADS - writers;
+
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+            try {
+                for (int i = 0; i < writers; i++) {
+                    pool.submit(() -> {
+                        DemoTree model = new DemoTree().setId(1L);
+                        try {
+                            start.await();
+                            for (int j = 0; j < LOOPS; j++) {
+                                ReflectUtil.setFieldValue(model, nameField, "写入" + j);
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                for (int i = 0; i < readers; i++) {
+                    pool.submit(() -> {
+                        DemoTree model = new DemoTree().setId(1L).setName("读取");
+                        try {
+                            start.await();
+                            for (int j = 0; j < LOOPS; j++) {
+                                ReflectUtil.getFieldValue(model, nameField);
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                start.countDown();
+                pool.shutdown();
+                assertTrue(pool.awaitTermination(45, TimeUnit.SECONDS), "并发任务应在超时前完成");
+            } finally {
+                pool.shutdownNow();
+            }
+
+            assertTrue(errors.isEmpty(),
+                    "并发读写不应出现异常，实际捕获到：" + errors.stream().map(Throwable::getMessage).toList());
+        }
+
+        @Test
+        @DisplayName("读取后 Field 的 accessible 标志保持为 true（不再被 finally 重置）")
+        void accessibleFlagIsNotResetAfterRead() throws Exception {
+            Field nameField = fieldOf("name");
+            DemoTree model = new DemoTree().setId(1L).setName("值");
+
+            ReflectUtil.getFieldValue(model, nameField);
+
+            // getCacheFieldList 已把该字段设为可访问；若 finally 把它关掉，
+            // 每次读写都要重新触发 JDK 的访问检查，高并发下是实打实的热点
+            assertTrue(nameField.canAccess(model),
+                    "读取完成后 accessible 标志应保持为 true，不应被 finally 重置");
+        }
+
+        @Test
+        @DisplayName("多线程并发构建字段列表缓存结果一致")
+        @Timeout(30)
+        void concurrentGetFieldListIsConsistent() throws InterruptedException {
+            Set<List<String>> results = Collections.synchronizedSet(new HashSet<>());
+            Set<Throwable> errors = Collections.synchronizedSet(new HashSet<>());
+            int threads = 8;
+
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(threads);
+            try {
+                for (int i = 0; i < threads; i++) {
+                    pool.submit(() -> {
+                        try {
+                            start.await();
+                            for (int j = 0; j < 200; j++) {
+                                results.add(ReflectUtil.getFieldList(DemoModel.class).stream()
+                                        .map(Field::getName).sorted().toList());
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                start.countDown();
+                pool.shutdown();
+                assertTrue(pool.awaitTermination(20, TimeUnit.SECONDS), "并发任务应在超时前完成");
+            } finally {
+                pool.shutdownNow();
+            }
+
+            assertTrue(errors.isEmpty(), "并发获取字段列表不应出现异常：" + errors);
+            assertEquals(1, results.size(), "同一类的字段列表在并发下应始终一致");
+        }
+    }
+
+    /**
+     * <h2>国际化无关性</h2>
+     *
+     * <p>回归多 Locale 扫描中发现的缺陷：{@link #getFieldGetter(Field)} 曾使用无
+     * {@link Locale} 的 {@code toUpperCase()}，土耳其语环境下 {@code "i"} 会变成
+     * 带点的 {@code "İ"}，把 {@code getId} 拼成 {@code getİd}，导致按 Getter 查找
+     * 注解（如 {@code @Export} / {@code @Meta}）全部失效。</p>
+     */
+    @Nested
+    @DisplayName("土耳其语环境下的行为")
+    class TurkishLocaleTest {
+
+        /**
+         * 在指定默认 Locale 下执行
+         *
+         * @param locale   目标 Locale
+         * @param consumer 待执行逻辑
+         */
+        private void withDefaultLocale(Locale locale, Runnable consumer) {
+            Locale previous = Locale.getDefault();
+            try {
+                Locale.setDefault(locale);
+                consumer.run();
+            } finally {
+                Locale.setDefault(previous);
+            }
+        }
+
+        @Test
+        @DisplayName("getFieldGetter 在土耳其语环境下仍生成 getId 而非 getİd")
+        void getFieldGetterIsTurkishSafe() {
+            Field idField = findField(DemoTree.class, "id");
+            Field mobileField = findField(DemoModel.class, "mobile");
+
+            withDefaultLocale(new Locale("tr", "TR"), () -> {
+                assertEquals("getId", ReflectUtil.getFieldGetter(idField),
+                        "土耳其语环境下 getId 不能被拼成 getİd");
+                assertEquals("getMobile", ReflectUtil.getFieldGetter(mobileField),
+                        "土耳其语环境下 getMobile 不能被拼成 getMobİle");
+            });
+        }
+
+        /**
+         * 查找字段并包装查找失败
+         *
+         * @param clazz 类
+         * @param name  字段名
+         * @return 字段
+         */
+        private static Field findField(Class<?> clazz, String name) {
+            try {
+                return clazz.getDeclaredField(name);
+            } catch (NoSuchFieldException e) {
+                throw new IllegalStateException("测试夹具缺少字段 " + clazz.getSimpleName() + "." + name, e);
+            }
+        }
+
+        @Test
+        @DisplayName("按 Getter 查找注解在土耳其语环境下仍然有效")
+        void getAnnotationByGetterWorksInTurkishLocale() throws Exception {
+            // @Export 标在字段上，getExportFieldList 会先按 Getter 名找注解再回退到字段。
+            // Getter 名一旦被土耳其语规则污染，这条查找链就断了
+            withDefaultLocale(new Locale("tr", "TR"), () -> {
+                assertNotNull(CollectionUtil.getExportFieldList(
+                                cn.hamm.airpower.core.fixture.ExportDemoModel.class).stream()
+                                .filter(field -> "id".equals(field.getName()))
+                                .findFirst().orElse(null),
+                        "土耳其语环境下 id 列仍应被识别为导出列");
+            });
+        }
+
+        @Test
+        @DisplayName("getFieldList 在土耳其语环境下字段名保持原样")
+        void getFieldListIsTurkishSafe() {
+            withDefaultLocale(new Locale("tr", "TR"), () -> {
+                List<String> names = ReflectUtil.getFieldList(DemoModel.class).stream()
+                        .map(Field::getName).toList();
+                assertTrue(names.contains("id"), "字段名不应被 Locale 影响：" + names);
+                assertTrue(names.contains("mobile"), "字段名不应被 Locale 影响：" + names);
+            });
         }
     }
 }

@@ -610,4 +610,87 @@ class HttpUtilTest {
                     "原始异常应为连接失败的 IOException，实际为：" + exception.getCause());
         }
     }
+
+    /**
+     * <h2>请求级超时</h2>
+     *
+     * <p>回归 P1-14：此前只设置了 {@code HttpClient.connectTimeout}（建连超时），
+     * {@code HttpRequest} 上没有 {@code .timeout(...)}。服务端接受连接后不返回数据时，
+     * 调用线程会一直挂起直到上层网关超时。现在 {@code HttpRequest} 上也设置了请求级超时。</p>
+     */
+    @Nested
+    @DisplayName("请求级超时")
+    @Timeout(30)
+    class RequestTimeoutTest {
+
+        /**
+         * 慢响应服务器：接受连接后长时间不返回响应头
+         */
+        private HttpServer slowServer;
+
+        /**
+         * 慢响应服务器地址
+         */
+        private String slowUrl;
+
+        /**
+         * 启动一个只接受连接、不返回响应的服务器
+         *
+         * @throws IOException 启动失败
+         */
+        @BeforeEach
+        void startSlowServer() throws IOException {
+            slowServer = HttpServer.create(new InetSocketAddress(HttpConstant.LOCAL_IP_ADDRESS, 0), 0);
+            // 接受请求后既不 sendResponseHeaders 也不关闭，保持连接挂起
+            slowServer.createContext("/slow", exchange -> {
+                try {
+                    Thread.sleep(10_000L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    exchange.close();
+                }
+            });
+            slowServer.setExecutor(Executors.newCachedThreadPool(runnable -> {
+                Thread thread = new Thread(runnable);
+                thread.setDaemon(true);
+                return thread;
+            }));
+            slowServer.start();
+            slowUrl = "http://" + HttpConstant.LOCAL_IP_ADDRESS + ":" + slowServer.getAddress().getPort() + "/slow";
+        }
+
+        /**
+         * 停止慢响应服务器
+         */
+        @AfterEach
+        void stopSlowServer() {
+            if (null != slowServer) {
+                slowServer.stop(0);
+            }
+        }
+
+        @Test
+        @DisplayName("服务端不响应时按请求级超时中断，而不是永久阻塞")
+        void timesOutWhenServerDoesNotRespond() {
+            long start = System.nanoTime();
+
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> HttpUtil.create(1).setUrl(slowUrl).send(),
+                    "服务端接受连接后不响应，应按请求级超时抛异常而不是一直挂起");
+
+            long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+            assertTrue(elapsedMillis < 9_000L,
+                    "应在超时时间附近返回，实际耗时 " + elapsedMillis + " 毫秒（未生效则会挂起 10 秒以上）");
+            assertNotNull(exception.getCause(), "包装异常应保留原始异常");
+        }
+
+        @Test
+        @DisplayName("请求在超时前返回则正常成功")
+        void succeedsWhenRespondsInTime() {
+            // 对照组：同一个客户端在超时前拿到响应时不应受影响
+            assertDoesNotThrow(() -> HttpUtil.create(5).setUrl(baseUrl).get(),
+                    "超时时间内正常响应的请求不应受影响");
+        }
+    }
 }

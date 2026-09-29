@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -534,6 +535,119 @@ class ValidateUtilTest {
         @DisplayName("分组参数为 null 时按空分组处理")
         void nullActions() {
             assertDoesNotThrow(() -> ValidateUtil.valid(validModel(), (Class<?>[]) null), "分组参数为 null 时按空分组处理");
+        }
+    }
+
+    /**
+     * <h2>多违规时的错误消息稳定性</h2>
+     *
+     * <p>回归 P1-9：{@code valid} 曾直接取 {@code violations.iterator().next()}，
+     * 而 {@link Set} 的迭代顺序不保证稳定，同一个对象多次校验会报出不同字段，
+     * 上层无法据此做字段级回显。现改为按属性路径排序后取第一条。</p>
+     */
+    @Nested
+    @DisplayName("多违规时的错误消息稳定性")
+    class MultiViolationStabilityTest {
+
+        /**
+         * 重复校验次数
+         */
+        private static final int REPEAT = 300;
+
+        @Test
+        @DisplayName("同一对象连续多次校验，抛出的消息始终一致")
+        void messageIsStableAcrossRepeatedCalls() {
+            // name 为空、count 为空、maxValue 超界 —— 必然触发三条违规
+            Set<String> messages = new LinkedHashSet<>();
+            for (int i = 0; i < REPEAT; i++) {
+                ValidationException e = assertThrows(ValidationException.class,
+                        () -> ValidateUtil.valid(new ValidDemoModel().setMaxValue(999)),
+                        "第 " + i + " 次校验都应触发违规");
+                messages.add(e.getMessage());
+            }
+            assertEquals(1, messages.size(),
+                    "同一模型连续校验 " + REPEAT + " 次应始终报同一个字段，实际出现：" + messages);
+        }
+
+        @Test
+        @DisplayName("消息稳定的是字段路径，与 Set 迭代顺序无关")
+        void messageDependsOnPropertyPathNotIterationOrder() {
+            // count / maxValue / name 三条违规中，属性路径 "count" 字典序最小
+            Set<String> messages = new LinkedHashSet<>();
+            for (int i = 0; i < REPEAT; i++) {
+                ValidationException e = assertThrows(ValidationException.class,
+                        () -> ValidateUtil.valid(new ValidDemoModel().setMaxValue(999)),
+                        "模型必然存在多条违规");
+                messages.add(e.getMessage());
+            }
+            assertEquals("数量不能为空", messages.iterator().next(),
+                    "应取属性路径字典序最小的那条，实际为：" + messages);
+        }
+
+        @Test
+        @DisplayName("不同违规组合仍能各自稳定报出消息")
+        void differentViolationsRemainDeterministic() {
+            Set<String> messages = new LinkedHashSet<>();
+            for (int i = 0; i < REPEAT; i++) {
+                ValidationException e = assertThrows(ValidationException.class,
+                        () -> ValidateUtil.valid(new ValidDemoModel().setCount(1).setMaxValue(999)),
+                        "maxValue 超界必然触发违规");
+                messages.add(e.getMessage());
+            }
+            assertEquals(1, messages.size(), "单一违规的消息应稳定：" + messages);
+            assertEquals("最大值不能大于100", messages.iterator().next(), "应报最大值相关的提示");
+        }
+    }
+
+    /**
+     * <h2>验证器资源释放</h2>
+     *
+     * <p>回归 P1-10：{@code ValidatorFactory} 此前被静态持有却没有任何关闭入口，
+     * 在热部署 / 容器反复重载场景下无法回收。新增 {@link ValidateUtil#close()}。</p>
+     */
+    @Nested
+    @DisplayName("验证器生命周期")
+    class LifecycleTest {
+
+        @Test
+        @DisplayName("close() 后再次 valid() 可自动重新初始化")
+        void validWorksAfterClose() {
+            // 先确保验证器已初始化
+            assertDoesNotThrow(() -> ValidateUtil.valid(validModel()), "关闭前校验应正常");
+
+            ValidateUtil.close();
+
+            // 关闭后 validator 被置空，下次 valid 会重新构建工厂
+            assertDoesNotThrow(() -> ValidateUtil.valid(validModel()),
+                    "close() 之后 valid() 应自动重建验证器，而不是抛空指针");
+            ValidationException e = assertThrows(ValidationException.class,
+                    () -> ValidateUtil.valid(new ValidDemoModel().setMaxValue(999)),
+                    "重建后的验证器应照常报告违规");
+            assertNotNull(e.getMessage(), "重建后抛出的异常应带消息");
+        }
+
+        @Test
+        @DisplayName("重复调用 close() 是安全的")
+        void closeIsIdempotent() {
+            ValidateUtil.close();
+            assertDoesNotThrow(ValidateUtil::close, "重复关闭不应抛异常");
+            assertDoesNotThrow(ValidateUtil::close, "多次关闭仍不应抛异常");
+        }
+
+        @Test
+        @DisplayName("close() 释放资源不影响后续校验结果")
+        void closeDoesNotChangeResult() {
+            ValidationException before = assertThrows(ValidationException.class,
+                    () -> ValidateUtil.valid(new ValidDemoModel().setMaxValue(999)),
+                    "关闭前应报出违规");
+
+            ValidateUtil.close();
+
+            ValidationException after = assertThrows(ValidationException.class,
+                    () -> ValidateUtil.valid(new ValidDemoModel().setMaxValue(999)),
+                    "关闭后仍应报出违规");
+            assertEquals(before.getMessage(), after.getMessage(),
+                    "重建验证器后的报错应与关闭前完全一致");
         }
     }
 }
