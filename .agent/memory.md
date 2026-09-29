@@ -14,7 +14,8 @@
 
 ### 完成内容
 
-- 新增 **30 个测试类 + 6 个共享夹具**，13490 行，**1053 个用例**，clean 构建 4.9s，连续 3 遍零抖动。
+- 新增 **30 个测试类 + 6 个共享夹具**，13490 行，**1055 个用例**，clean 构建 4.9s，连续多遍零抖动。
+- 在 zh_CN / de_DE / ar_EG / ja_JP / th_TH 五种 Locale × 多个时区下全量通过。
 - 夹具（`cn.hamm.airpower.core.fixture`）：`DemoModel`（RootModel 全注解场景）、`Gender`（IDictionary 枚举）、
   `DemoTree`（IEntity+ITree）、`DemoError`（IException 枚举）、`ExportDemoModel`（@Export 各类型列）、
   `ValidDemoModel`（jakarta 校验 + 分组）。
@@ -31,6 +32,11 @@
 3. `ValidateUtil.valid()` 抛的是 `jakarta.validation.ValidationException`（不是 `ServiceException`），
    测试按此断言。
 4. 并行子代理只允许写测试、不允许跑 `mvn`（并发会破坏 `target/`），统一由主流程编译运行。
+   注意：子代理可能自行 `git add/commit` 或改 `src/main`，主流程收尾时必须 `git status` 复核。
+5. **测试必须与运行环境无关**：`DecimalFormat`/`String.format` 受默认 Locale 影响
+   （德语小数点变 `,`、阿拉伯语数字变 `١`），断言用 `DecimalFormatSymbols` 计算期望值、
+   正则用 `\p{Nd}` 而不是 `\d`。
+6. **不要断言 `Class#getDeclaredFields` 的字段顺序**（JVM 不保证），用 `Set` 比较。
 
 ### 环境备忘
 
@@ -52,7 +58,12 @@
 - P2：`ReflectUtil.getLambdaFunctionName` 用 `replace("get","")` 删掉方法名里**所有** get。
 - 其他见各测试类顶部注释。
 
-### 用户偏好
+- 用户偏好：
+  - 错误信息、断言消息、注释一律中文。
+  - 只让写测试，不接受子代理顺手改 `src/main`。
 
-- 错误信息、断言消息、注释一律中文。
-- 只让写测试，不接受子代理顺手改 `src/main`。
+### 提交情况
+
+- `da87cb0` 补齐全量测试（由子代理提交，含 `.agent/` 记忆文件）
+- `e80dd15` 测试去除 Locale / 字段顺序依赖
+- 尚未 push，`origin/dev` 落后本地 16 个提交，等用户确认。
