@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -110,7 +111,7 @@ public class RandomUtil {
      */
     public static @NotNull String randomString(final String baseString, int length) {
         if (Objects.isNull(baseString) || baseString.isEmpty()) {
-            throw new IllegalArgumentException("baseString is empty");
+            throw new ServiceException("baseString is empty");
         }
         length = Math.max(length, 1);
         final int baseLength = baseString.length();
