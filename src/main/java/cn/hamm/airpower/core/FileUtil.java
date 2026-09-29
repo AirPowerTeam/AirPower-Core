@@ -238,7 +238,7 @@ public class FileUtil {
                     .map(Path::toFile)
                     .forEach(File::delete);
         } catch (IOException e) {
-            log.error("删除文件夹失败, {}", e.getMessage());
+            throw new ServiceException("删除文件夹失败，" + e.getMessage());
         }
     }
 }
