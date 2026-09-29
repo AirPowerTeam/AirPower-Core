@@ -60,8 +60,10 @@ public class TaskUtil {
      * @param moreRunnable 更多任务
      */
     public static void run(Runnable runnable, Runnable... moreRunnable) {
+        String traceId = TraceUtil.getTraceId();
         getRunnableList(runnable, moreRunnable).forEach((run) -> EXECUTOR.submit(() -> {
             try {
+                TraceUtil.setTraceId(traceId);
                 run.run();
             } catch (Exception e) {
                 log.error("异步执行任务失败, {}", e.getMessage());
