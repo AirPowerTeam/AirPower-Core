@@ -189,13 +189,24 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("KeyFactory 被缓存：首次解析后再改算法名不影响已缓存的 KeyFactory")
-        void testKeyFactoryCached() throws Exception {
+        @DisplayName("KeyFactory 缓存随 cryptAlgorithm 变化失效")
+        void testKeyFactoryInvalidatedOnAlgorithmChange() throws Exception {
             RsaUtil instance = RsaUtil.create().setPublicKey(publicKeyBase64);
             assertNotNull(instance.getPublicKey(publicKeyBase64), "首次解析公钥应成功");
+
             instance.setCryptAlgorithm("NotAnAlgorithm");
-            assertNotNull(instance.getPublicKey(publicKeyBase64),
-                    "KeyFactory 已缓存，后续修改 cryptAlgorithm 不会重新创建（源码行为）");
+            // 原实现缓存不失效，仍复用 RSA 的 KeyFactory，配置变更形同虚设
+            assertThrows(java.security.NoSuchAlgorithmException.class,
+                    () -> instance.getPublicKey(publicKeyBase64),
+                    "切换 cryptAlgorithm 后缓存应失效，按新算法重新创建 KeyFactory 并报错");
+        }
+
+        @Test
+        @DisplayName("KeyFactory 在算法未变时复用缓存，不重复创建")
+        void testKeyFactoryReusedWhenAlgorithmUnchanged() throws Exception {
+            RsaUtil instance = RsaUtil.create().setPublicKey(publicKeyBase64);
+            assertNotNull(instance.getPublicKey(publicKeyBase64), "首次解析应成功");
+            assertNotNull(instance.getPublicKey(publicKeyBase64), "算法未变时应命中缓存并继续成功");
         }
     }
 
@@ -316,12 +327,37 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("PEM 中的换行符导致无法直接 Base64 解码（使用方需自行处理）")
-        void testPemCannotDecodeDirectly() {
+        @DisplayName("PEM 文本不能直接 Base64 解码，但可被 getPublicKey 直接解析")
+        void testPemIsAcceptedByGetPublicKey() throws Exception {
             String pem = rsaUtil.getPemPublicKey(keyPair);
             assertTrue(pem.contains("\n"), "PEM 内容应包含换行");
             assertThrows(IllegalArgumentException.class, () -> Base64.getDecoder().decode(pem),
-                    "含换行与分隔符的 PEM 不能直接 Base64 解码，需先剥离头尾与换行");
+                    "原始 PEM 仍不能直接 Base64 解码");
+            // 修复点：getPublicKey/getPrivateKey 自行剥离头尾与换行，
+            // "生成密钥对 -> 拿 PEM -> 设置回去" 这条链路不再是断的
+            assertArrayEqualsWithMessage(keyPair.getPublic().getEncoded(),
+                    RsaUtil.create().getPublicKey(pem).getEncoded(),
+                    "getPublicKey 应能直接解析带 PEM 头尾与换行的文本");
+        }
+
+        @Test
+        @DisplayName("PEM 私钥可直接回填使用，无需调用方自行剥离")
+        void testPrivateKeyPemRoundTrip() {
+            String pem = rsaUtil.getPemPrivateKey(keyPair);
+            RsaUtil instance = RsaUtil.create().setPrivateKey(pem).setPublicKey(rsaUtil.getPemPublicKey(keyPair));
+            String encrypted = assertDoesNotThrow(() -> instance.privateKeyEncrypt("中文内容"),
+                    "PEM 私钥应能直接用于加密");
+            assertEquals("中文内容", instance.publicKeyDecrypt(encrypted), "私钥加密后应能用公钥解密还原");
+        }
+
+        @Test
+        @DisplayName("PEM 公钥可直接回填使用，无需调用方自行剥离")
+        void testPublicKeyPemRoundTrip() {
+            String pem = rsaUtil.getPemPublicKey(keyPair);
+            RsaUtil instance = RsaUtil.create().setPublicKey(pem).setPrivateKey(rsaUtil.getPemPrivateKey(keyPair));
+            String encrypted = assertDoesNotThrow(() -> instance.publicKeyEncrypt("中文内容"),
+                    "PEM 公钥应能直接用于加密");
+            assertEquals("中文内容", instance.privateKeyDecrypt(encrypted), "公钥加密后应能用私钥解密还原");
         }
 
         @Test

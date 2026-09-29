@@ -348,11 +348,21 @@ class HttpUtilTest {
         }
 
         @Test
-        @DisplayName("get() 应覆盖此前设置的 POST 方法")
-        void testGetOverridesMethod() {
-            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).setMethod(HttpMethod.POST).get();
+        @DisplayName("get() 在方法为 POST 时抛异常，不再静默改回 GET")
+        void testGetRejectsConflictingMethod() {
+            // 原实现无条件把 method 重置为 GET，链式 setMethod(PUT).get() 会被静默改写
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> HttpUtil.create().setUrl(baseUrl).setMethod(HttpMethod.POST).get(),
+                    "已设置为 POST 时调用 get() 应显式报错，而不是静默改成 GET");
+            assertTrue(exception.getMessage().contains("GET"), "异常消息应提示如何发起 GET 请求：" + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("get() 在方法为默认 GET 时正常发送")
+        void testGetWithDefaultMethod() {
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).get();
             assertEquals(HttpConstant.Status.OK, response.statusCode(), "响应状态码应为 200");
-            assertEquals(HttpMethod.GET.name(), recordedMethod, "get() 应把方法重置为 GET");
+            assertEquals(HttpMethod.GET.name(), recordedMethod, "服务端收到的请求方法应为 GET");
         }
 
         @Test
@@ -515,21 +525,69 @@ class HttpUtilTest {
         void testUrlIsEmpty() {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().setUrl("").get(), "空 url 应抛出业务异常");
-            assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
-            assertNotNull(exception.getCause(), "包装异常应通过 initCause 保留原始异常");
+            assertEquals("发起请求失败，请求地址不能为空", exception.getMessage(),
+                    "应由 send 统一加上「发起请求失败」前缀，同时保留明确的根因提示");
+            assertInstanceOf(ServiceException.class, exception.getCause(), "应通过 initCause 保留原始异常");
+            assertEquals("请求地址不能为空", exception.getCause().getMessage(), "根因消息应说明是地址为空");
         }
 
         @Test
-        @DisplayName("方法为 PATCH 时应被包装为「发起请求失败，不支持的请求方法」")
-        void testUnsupportedMethod() {
-            ServiceException exception = assertThrows(ServiceException.class,
-                    () -> HttpUtil.create().setUrl(baseUrl).setMethod(HttpMethod.PATCH).send(),
-                    "PATCH 不在支持列表中，应抛出业务异常");
-            assertEquals("发起请求失败，不支持的请求方法", exception.getMessage(), "异常消息应包含不支持的请求方法提示");
-            assertInstanceOf(ServiceException.class, exception.getCause(),
-                    "原始异常应为 getHttpRequest 内部抛出的 ServiceException");
-            assertEquals("不支持的请求方法", exception.getCause().getMessage(),
-                    "原始异常消息应为「不支持的请求方法」");
+        @DisplayName("url 为 null 时应抛出 ServiceException")
+        void testUrlMissing() {
+            assertThrows(ServiceException.class, () -> HttpUtil.create().get(), "url 为 null 应抛出业务异常");
+        }
+
+        @Test
+        @DisplayName("方法为 PATCH 时应正常发出，不再抛「不支持的请求方法」")
+        void testPatchMethodSupported() {
+            // 枚举里暴露了 PATCH，getHttpRequest 此前却没有对应分支，运行到才报错
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl)
+                    .setMethod(HttpMethod.PATCH).send();
+            assertEquals(HttpConstant.Status.OK, response.statusCode(), "PATCH 请求应正常返回 200");
+            assertEquals(HttpMethod.PATCH.name(), recordedMethod, "服务端收到的请求方法应为 PATCH");
+        }
+
+        @Test
+        @DisplayName("patch(body) 应以 PATCH 方式发送指定请求体")
+        void testPatchWithBody() {
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).patch("{\"op\":\"patch\"}");
+            assertEquals(HttpConstant.Status.OK, response.statusCode(), "响应状态码应为 200");
+            assertEquals(HttpMethod.PATCH.name(), recordedMethod, "服务端收到的请求方法应为 PATCH");
+            assertEquals("{\"op\":\"patch\"}", recordedBody, "请求体应与发送内容一致");
+        }
+
+        @Test
+        @DisplayName("put(body) 应以 PUT 方式发送指定请求体")
+        void testPutWithBody() {
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).put("{\"op\":\"put\"}");
+            assertEquals(HttpConstant.Status.OK, response.statusCode(), "响应状态码应为 200");
+            assertEquals(HttpMethod.PUT.name(), recordedMethod, "服务端收到的请求方法应为 PUT");
+        }
+
+        @Test
+        @DisplayName("delete() 应以 DELETE 方式发送请求")
+        void testDelete() {
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).delete();
+            assertEquals(HttpConstant.Status.OK, response.statusCode(), "响应状态码应为 200");
+            assertEquals(HttpMethod.DELETE.name(), recordedMethod, "服务端收到的请求方法应为 DELETE");
+        }
+
+        @Test
+        @DisplayName("create 传入非正超时抛业务异常而不是 JDK 的 IllegalArgumentException")
+        void testInvalidTimeoutSecond() {
+            ServiceException zero = assertThrows(ServiceException.class, () -> HttpUtil.create(0),
+                    "超时 0 秒应抛出可读的业务异常");
+            assertTrue(zero.getMessage().contains("超时时间必须大于0秒"), "异常消息应说明超时要求：" + zero.getMessage());
+            assertThrows(ServiceException.class, () -> HttpUtil.create(-1), "负超时同样应抛业务异常");
+        }
+
+        @Test
+        @DisplayName("body 为 null 时按空串处理，不泄漏空指针")
+        void testNullBodyTreatedAsEmpty() {
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl)
+                    .setMethod(HttpMethod.POST).setBody(null).send();
+            assertEquals(HttpConstant.Status.OK, response.statusCode(), "null 请求体应按空串发送而不是抛 NPE");
+            assertEquals("", recordedBody, "null 请求体应被规范化为空串");
         }
 
         @Test

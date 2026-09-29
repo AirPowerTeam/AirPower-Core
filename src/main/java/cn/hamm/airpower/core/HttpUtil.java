@@ -66,6 +66,11 @@ public class HttpUtil {
     private HttpMethod method = GET;
 
     /**
+     * 超时时间（秒），同时用作建连超时与请求级超时
+     */
+    private int timeoutSecond = DEFAULT_TIMEOUT_SECOND;
+
+    /**
      * 请求体类型
      */
     private String contentType = HttpConstant.ContentType.APPLICATION_JSON_UTF8;
@@ -84,6 +89,10 @@ public class HttpUtil {
      * @return HttpUtil
      */
     public static @NotNull HttpUtil create(@Nullable ProxyConfig proxyConfig, int timeoutSecond) {
+        if (timeoutSecond <= 0) {
+            // Duration.ofSeconds(0/-1) 会抛 JDK 原生 IllegalArgumentException，泄漏到调用方
+            throw new ServiceException("超时时间必须大于0秒，当前为 " + timeoutSecond + " 秒");
+        }
         HttpUtil httpUtil = new HttpUtil();
         HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
         // 添加 proxy 代理
@@ -96,11 +105,14 @@ public class HttpUtil {
 
                 @Override
                 public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-
+                    // 代理不可用时至少留下告警，否则上层只会看到一个没有上下文的连接失败
+                    log.warn("通过代理({})访问({})失败, {}", proxyConfig.getHost(), uri, ioe.getMessage());
                 }
             });
         }
         httpClientBuilder.connectTimeout(Duration.ofSeconds(timeoutSecond));
+        // 同时作为请求级超时，避免服务端接受连接后不响应导致调用线程永久挂起
+        httpUtil.timeoutSecond = timeoutSecond;
         httpUtil.httpClient = httpClientBuilder.build();
         return httpUtil;
     }
@@ -176,7 +188,62 @@ public class HttpUtil {
      * @return HttpResponse
      */
     public final @NotNull HttpResponse<String> get() {
-        method = GET;
+        if (method == HttpMethod.GET) {
+            return send();
+        }
+        // 链式调用 setMethod(PUT).get() 时显式提示，避免被静默改回 GET
+        throw new ServiceException("当前请求方法为 " + method + "，如需发起 GET 请求请使用 HttpUtil.create().setMethod(GET)");
+    }
+
+    /**
+     * 发送 PUT 请求
+     *
+     * @return HttpResponse
+     */
+    public final @NotNull HttpResponse<String> put() {
+        return put(body);
+    }
+
+    /**
+     * 发送 PUT 请求
+     *
+     * @param body 请求体
+     * @return HttpResponse
+     */
+    public final @NotNull HttpResponse<String> put(String body) {
+        method = HttpMethod.PUT;
+        this.body = body;
+        return send();
+    }
+
+    /**
+     * 发送 PATCH 请求
+     *
+     * @return HttpResponse
+     */
+    public final @NotNull HttpResponse<String> patch() {
+        return patch(body);
+    }
+
+    /**
+     * 发送 PATCH 请求
+     *
+     * @param body 请求体
+     * @return HttpResponse
+     */
+    public final @NotNull HttpResponse<String> patch(String body) {
+        method = HttpMethod.PATCH;
+        this.body = body;
+        return send();
+    }
+
+    /**
+     * 发送 DELETE 请求
+     *
+     * @return HttpResponse
+     */
+    public final @NotNull HttpResponse<String> delete() {
+        method = HttpMethod.DELETE;
         return send();
     }
 
@@ -202,8 +269,15 @@ public class HttpUtil {
      * @return HttpRequest
      */
     private HttpRequest getHttpRequest() {
+        if (Objects.isNull(url) || url.isBlank()) {
+            throw new ServiceException("请求地址不能为空");
+        }
+        if (Objects.isNull(body)) {
+            body = "";
+        }
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                .uri(URI.create(url));
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(timeoutSecond));
         headers.forEach((key, value) -> requestBuilder.header(key, value.toString()));
         HttpRequest.BodyPublisher bodyPublisher = HttpRequest.BodyPublishers.ofString(body);
         switch (method) {
@@ -211,7 +285,8 @@ public class HttpUtil {
             case POST -> requestBuilder.POST(bodyPublisher);
             case PUT -> requestBuilder.PUT(bodyPublisher);
             case DELETE -> requestBuilder.DELETE();
-            default -> throw new ServiceException("不支持的请求方法");
+            // 枚举里暴露了 PATCH，实现却缺失，此前要运行到才报错
+            case PATCH -> requestBuilder.method("PATCH", bodyPublisher);
         }
         if (Objects.nonNull(cookies) && !cookies.isEmpty()) {
             List<String> cookieList = new ArrayList<>();
