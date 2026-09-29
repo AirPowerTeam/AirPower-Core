@@ -1,5 +1,59 @@
 # AirPower-Core 项目记忆
 
+## 2026-09-30 全局缺陷扫描与修复（分支 fix/global-defect-scan）
+
+扫描全部 42 个主源码文件 + 30 组可执行探针，共发现并修复 **41 个缺陷**（P0×3 / P1×16 / P2×22），
+另有 4 个是多 Locale 交叉验证阶段新发现的。交付物 `ISSUE.md`（扫描报告）与 `CHANGELOG.md`
+（修复明细 + 25 条行为变更提示），7 次提交，尚未 push。
+
+### 三个 P0
+
+| 缺陷 | 根因 | 后果 |
+|------|------|------|
+| `RootModel.desensitize()` 嵌套模型完全失效 | 白名单判定用 `this.getClass()`，递归时 `this` 已是子对象，条件不成立直接 return，`isDesensitize` 分支不可达 | 嵌套结构中的手机号/身份证**以明文返回**；原单测通过是因为夹具里嵌套模型与外层同类，恰好落在白名单内 |
+| `ReflectUtil` `finally` 里 `setAccessible(false)` | 该标志是 `Field` 的全局状态，线程 A 设 true 后被线程 B 清掉 | 多线程下随机 `IllegalAccessException`（8 线程 × 2000 次稳定复现）；同时让 `getCacheFieldList` 的 `setAccessible(true)` 完全白做 |
+| `setFieldValue` 只 `log.error` 吞异常 | 写入失败无感知 | 字段过滤/脱敏静默失效，敏感字段照常返回 |
+
+### 多 Locale 交叉验证揪出的隐蔽缺陷
+
+`ReflectUtil.getFieldGetter` 用无 Locale 的 `toUpperCase()`，土耳其语环境下 `getId`
+被拼成 `getİd`，导不到方法 → `@Export`/`@Meta` 注解查找**全部失效**，tr_TR 下
+导出的 9 列掉到 8 列。`RandomUtil` 的 `BASE_CHAR.toUpperCase()` 同类问题。
+**只跑默认 Locale 永远发现不了**，多 Locale × 多时区跑全量是性价比最高的检查手段。
+
+### 扫描方法论（可复用）
+
+1. **先写临时探针 @Test 打印实际行为**，再决定改不改。避免"看起来是 bug"改错方向。验证完删掉探针。
+2. **测试固化缺陷行为时**，改动前先问"这个断言在保护什么"。本次 20+ 个用例固化的是缺陷
+   行为（如 `floor(-1.5,0)` 断言为 `-1`），修复后要逐条改为断言正确行为，并在
+   `@DisplayName` 写明"不再……"的原因。
+3. 全量测试在 zh_CN / de_DE / tr_TR / ar_EG / ja_JP / th_TH / lt_LT 七种 Locale 下验证。
+
+### 踩过的坑
+
+- `RootModel` 跨实例调用 private 方法编译不过 → 改 `private static void handleNested(RootModel<?>, ...)`。
+- `RsaUtil.wrapException` 用 `Supplier` 无法抛受检异常 → 必须 `Callable` + `.call()`。
+- `AesUtil.iv` 有 `@Setter`，误删会导致测试编译失败。
+- 同一测试类方法名不能重复，加用例前先 grep。
+- AES Base64 密钥 `MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=` 解码后 23 字节（非法），
+  测密钥长度要用 `new byte[16]`。
+
+### 关键坑：`getFieldGetter` 的 Locale 依赖
+
+任何"字段名 → Getter 名"的转换都必须固定 `Locale.ROOT`。同类风险点已在本次全部处理：
+`IException` 忽略大小写比较、`RandomUtil` 字符集、`FileUtil.getExtension`。
+**后续新增此类转换时务必带 Locale.ROOT。**
+
+### 待用户确认（未 push）
+
+25 条行为变更中风险最高的三条：
+1. `HttpUtil.get()` 方法冲突时抛异常（原先静默改回 GET），上层若有
+   `setMethod(PUT).get()` 链式写法必须改。
+2. `NumberUtil` 的 long 重载溢出抛异常（原先 `multiply(MAX,4)` 静默返回 `-4`），金额场景需评估。
+3. CSV 新增公式注入防护，以 `= + - @` 开头的值加单引号前缀，下游解析需同步调整。
+
+---
+
 ## 2026-09-29 修复测试暴露的缺陷
 
 ### 修复清单（18 个主源码文件，+275/-63）
