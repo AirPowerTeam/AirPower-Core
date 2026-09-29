@@ -40,9 +40,10 @@ public class ReflectUtil {
     /**
      * 缓存属性列表
      *
-     * @apiNote 声明属性列表
+     * @apiNote 声明属性列表。以 {@code Class} 为键而非类名，避免同名类在不同
+     * {@code ClassLoader} 下互相串号
      */
-    private final static ConcurrentHashMap<String, Field[]> DECLARED_FIELD_LIST_MAP = new ConcurrentHashMap<>();
+    private final static ConcurrentHashMap<Class<?>, Field[]> DECLARED_FIELD_LIST_MAP = new ConcurrentHashMap<>();
 
     /**
      * 获取字段的 Getter 方法名
@@ -61,15 +62,17 @@ public class ReflectUtil {
      * @param object 对象
      * @param field  属性
      * @return 值
+     * @apiNote 不会在结束时重置 {@code accessible} 标志——该标志是 {@link Field}
+     * 的全局状态，多线程下"设真再设假"会让其他线程的读取随机抛
+     * {@code IllegalAccessException}
      */
     public static @Nullable Object getFieldValue(Object object, @NotNull Field field) {
         try {
             field.setAccessible(true);
             return field.get(object);
-        } catch (IllegalAccessException e) {
+        } catch (IllegalAccessException | IllegalArgumentException e) {
+            // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
             throw new ServiceException("获取对象指定属性的值失败, " + e.getMessage());
-        } finally {
-            field.setAccessible(false);
         }
     }
 
@@ -79,15 +82,16 @@ public class ReflectUtil {
      * @param object 对象
      * @param field  属性
      * @param value  值
+     * @apiNote 写入失败时抛出 {@link ServiceException}，不做静默忽略——否则
+     * {@code excludeNotMeta} / {@code desensitize} 的置空动作会被上层误认为已生效
      */
     public static void setFieldValue(Object object, @NotNull Field field, Object value) {
         try {
             field.setAccessible(true);
             field.set(object, value);
-        } catch (IllegalAccessException e) {
-            log.error("设置对象指定属性的值失败, {}", e.getMessage());
-        } finally {
-            field.setAccessible(false);
+        } catch (IllegalAccessException | IllegalArgumentException e) {
+            // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
+            throw new ServiceException("设置对象指定属性的值失败, " + e.getMessage());
         }
     }
 
@@ -245,10 +249,13 @@ public class ReflectUtil {
         }
         // 收集当前类和所有父类的字段，避免递归中的多次列表创建和合并
         Class<?> currentClass = clazz;
-        while (!isTheRootClass(currentClass)) {
+        // 接口与基本类型的 getSuperclass() 返回 null，需显式判空，否则空判断自身会抛 NPE
+        while (Objects.nonNull(currentClass) && !isTheRootClass(currentClass)) {
             Field[] fields = getDeclaredFields(currentClass);
             for (Field field : fields) {
-                if (Modifier.isStatic(field.getModifiers()) || Modifier.isTransient(field.getModifiers())) {
+                // 跳过静态、瞬态与编译器生成的字段（如内部类的 this$0）
+                int modifiers = field.getModifiers();
+                if (Modifier.isStatic(modifiers) || Modifier.isTransient(modifiers) || field.isSynthetic()) {
                     continue;
                 }
                 field.setAccessible(true);
@@ -267,7 +274,7 @@ public class ReflectUtil {
      */
     @Contract(pure = true)
     public static Field @NotNull [] getDeclaredFields(@NotNull Class<?> clazz) {
-        return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz.getName(), key -> clazz.getDeclaredFields());
+        return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz, key -> key.getDeclaredFields());
     }
 
     /**

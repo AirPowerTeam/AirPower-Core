@@ -1,7 +1,13 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.annotation.Desensitize;
+import cn.hamm.airpower.core.annotation.Meta;
+import cn.hamm.airpower.core.enums.DesensitizeType;
 import cn.hamm.airpower.core.fixture.DemoModel;
 import cn.hamm.airpower.core.fixture.ExportDemoModel;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.experimental.Accessors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,11 +24,14 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>本测试以<b>源码实际行为</b>为断言依据，当前行为要点：</p>
  * <ul>
- *     <li>{@link RootModel#desensitize()} 先排除非元数据字段，再以「自身类白名单」执行脱敏，
- *     因此 {@code @Desensitize} 标记的字段会被真正脱敏</li>
+ *     <li>{@link RootModel#desensitize()} 先排除非元数据字段，再递归对
+ *     <b>所有可达模型</b>（含类型不同的嵌套模型与模型集合）执行脱敏</li>
+ *     <li>{@link RootModel#excludeNotMetaAndDesensitize} 仍按类白名单语义：
+ *     白名单外的类型只排除非元数据字段，不做脱敏</li>
  *     <li>白名单分支下不校验 {@code @Meta}，非元数据字段也会被保留</li>
  *     <li>排除非元数据分支会递归处理嵌套模型与模型集合的元素</li>
  *     <li>白名单为 {@code null} 时按空名单处理，集合中的 {@code null} 元素会被跳过</li>
+ *     <li>自引用模型由「已访问集合」拦下，不会栈溢出</li>
  * </ul>
  *
  * @author Hamm.cn
@@ -574,5 +583,126 @@ class RootModelTest {
         void testGetTitle() {
             assertEquals("标题", model.getTitle(), "自定义 Getter 应返回 title 字段的值");
         }
+    }
+
+    @Nested
+    @DisplayName("desensitize 对不同类型的嵌套模型同样生效")
+    class NestedDesensitizeTest {
+
+        @Test
+        @DisplayName("正常路径：类型不同的嵌套模型的脱敏字段被脱敏")
+        void testNestedDifferentClassIsDesensitized() {
+            NestedHolder holder = new NestedHolder()
+                    .setChild(new ContactModel().setMobile(MOBILE).setRemark("子备注"));
+
+            holder.desensitize();
+
+            assertEquals("138****8000", holder.getChild().getMobile(),
+                    "嵌套模型类型与外层不同时，@Desensitize 字段同样必须被脱敏");
+            assertNull(holder.getChild().getRemark(),
+                    "嵌套模型中的非元数据字段同样应被排除");
+        }
+
+        @Test
+        @DisplayName("正常路径：类型不同的模型集合元素被脱敏")
+        void testCollectionDifferentClassIsDesensitized() {
+            ContactModel first = new ContactModel().setMobile(MOBILE);
+            ContactModel second = new ContactModel().setMobile("13956789001");
+            NestedHolder holder = new NestedHolder()
+                    .setChildren(new ArrayList<>(List.of(first, second)));
+
+            holder.desensitize();
+
+            assertEquals("138****8000", first.getMobile(), "集合元素的 mobile 应被脱敏");
+            assertEquals("139****9001", second.getMobile(), "集合中每个元素的 mobile 都应被脱敏");
+        }
+
+        @Test
+        @DisplayName("正常路径：多层嵌套的深层模型被脱敏")
+        void testDeeplyNestedIsDesensitized() {
+            ContactModel deep = new ContactModel().setMobile(MOBILE);
+            ContactModel middle = new ContactModel().setMobile(MOBILE);
+            middle.setChildren(new ArrayList<>(List.of(deep)));
+            NestedHolder holder = new NestedHolder().setChild(middle);
+
+            holder.desensitize();
+
+            assertEquals("138****8000", middle.getMobile(), "第一层嵌套模型应被脱敏");
+            assertEquals("138****8000", deep.getMobile(), "第二层嵌套模型也应被脱敏");
+        }
+
+        @Test
+        @DisplayName("边界值：自引用模型不会栈溢出")
+        void testSelfReferenceDoesNotOverflow() {
+            ContactModel self = new ContactModel().setMobile(MOBILE);
+            self.setChild(self);
+            NestedHolder holder = new NestedHolder().setChild(self);
+
+            assertDoesNotThrow(holder::desensitize, "自引用模型应被已访问集合拦住，不应栈溢出");
+            assertEquals("138****8000", self.getMobile(), "自引用模型自身仍应完成脱敏");
+        }
+
+        @Test
+        @DisplayName("边界值：集合中同时存在 null 元素与非模型元素不抛异常")
+        void testMixedCollectionElements() {
+            ContactModel valid = new ContactModel().setMobile(MOBILE);
+            List<ContactModel> mixed = new ArrayList<>(Arrays.asList(null, valid, null));
+            NestedHolder holder = new NestedHolder().setChildren(mixed);
+
+            assertDoesNotThrow(holder::desensitize, "集合中的 null 元素应被跳过");
+            assertEquals("138****8000", valid.getMobile(), "有效元素仍应被脱敏");
+        }
+    }
+
+    /**
+     * 外层模型：用于验证与自身类型不同的嵌套模型也能被脱敏
+     */
+    @Data
+    @EqualsAndHashCode(callSuper = true)
+    @Accessors(chain = true)
+    static class NestedHolder extends RootModel<NestedHolder> {
+        /**
+         * 嵌套模型
+         */
+        @Meta
+        private ContactModel child;
+
+        /**
+         * 模型集合
+         */
+        @Meta
+        private List<ContactModel> children;
+    }
+
+    /**
+     * 联系人模型：含脱敏字段与非元数据字段
+     */
+    @Data
+    @EqualsAndHashCode(callSuper = true)
+    @Accessors(chain = true)
+    static class ContactModel extends RootModel<ContactModel> {
+        /**
+         * 手机号
+         */
+        @Meta
+        @Desensitize(value = DesensitizeType.MOBILE)
+        private String mobile;
+
+        /**
+         * 非元数据字段
+         */
+        private String remark;
+
+        /**
+         * 嵌套的联系人
+         */
+        @Meta
+        private ContactModel child;
+
+        /**
+         * 联系人集合
+         */
+        @Meta
+        private List<ContactModel> children;
     }
 }

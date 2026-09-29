@@ -170,6 +170,16 @@ class ReflectUtilTest {
     }
 
     /**
+     * 内部类：编译器会生成 {@code this$0} 合成字段
+     */
+    class InnerHolder {
+        /**
+         * 名称
+         */
+        String name;
+    }
+
+    /**
      * 只有有参构造器的模型
      */
     static class WithArgsModel extends RootModel<WithArgsModel> {
@@ -347,12 +357,12 @@ class ReflectUtilTest {
         }
 
         @Test
-        @DisplayName("写入类型不匹配的值抛 IllegalArgumentException（源码仅捕获 IllegalAccessException）")
+        @DisplayName("写入类型不匹配的值抛 ServiceException 而不是被静默吞掉")
         void setWrongTypeThrows() throws NoSuchFieldException {
             RefHolder holder = new RefHolder();
             Field listField = RefHolder.class.getDeclaredField("list");
-            assertThrows(IllegalArgumentException.class, () -> ReflectUtil.setFieldValue(holder, listField, "不是集合"),
-                    "写入类型不匹配的值时源码未做转换，应抛 IllegalArgumentException 而不是被吞掉");
+            assertThrows(ServiceException.class, () -> ReflectUtil.setFieldValue(holder, listField, "不是集合"),
+                    "写入类型不匹配时必须让调用方感知，不能只记录日志");
         }
 
         @Test
@@ -377,12 +387,12 @@ class ReflectUtilTest {
         }
 
         @Test
-        @DisplayName("写入 static final 字段失败时只记录日志不抛异常")
-        void setStaticFinalFieldIsSilentlyIgnored() throws NoSuchFieldException {
+        @DisplayName("写入 static final 字段失败时抛 ServiceException，不再静默忽略")
+        void setStaticFinalFieldThrows() throws NoSuchFieldException {
             Field field = FieldHolder.class.getDeclaredField("CONST");
-            assertDoesNotThrow(() -> ReflectUtil.setFieldValue(null, field, 9),
-                    "写入 static final 字段失败时源码只记录日志，不应抛异常");
-            assertEquals(5, ReflectUtil.getFieldValue(null, field), "写入 static final 字段失败后原值应保持不变");
+            assertThrows(ServiceException.class, () -> ReflectUtil.setFieldValue(null, field, 9),
+                    "写入失败必须让调用方感知，否则脱敏/字段过滤会静默失效");
+            assertEquals(5, ReflectUtil.getFieldValue(null, field), "写入失败后原值应保持不变");
         }
 
         @Test
@@ -714,12 +724,22 @@ class ReflectUtilTest {
         }
 
         @Test
-        @DisplayName("基本类型与接口抛空指针（源码未处理 getSuperClass() 为 null）")
-        void primitiveAndInterfaceThrowNpe() {
-            assertThrows(NullPointerException.class, () -> ReflectUtil.getFieldList(int.class),
-                    "基本类型没有父类，getFieldList 应抛空指针");
-            assertThrows(NullPointerException.class, () -> ReflectUtil.getFieldList(List.class),
-                    "接口没有父类，getFieldList 应抛空指针");
+        @DisplayName("基本类型与接口不再抛空指针（已处理 getSuperClass() 为 null 的场景）")
+        void primitiveAndInterfaceReturnEmpty() {
+            assertDoesNotThrow(() -> ReflectUtil.getFieldList(int.class),
+                    "基本类型没有父类，getFieldList 不应抛空指针");
+            assertEquals(0, ReflectUtil.getFieldList(int.class).size(), "基本类型没有实例字段，应返回空列表");
+            assertDoesNotThrow(() -> ReflectUtil.getFieldList(List.class),
+                    "接口没有父类，getFieldList 不应抛空指针");
+            assertEquals(0, ReflectUtil.getFieldList(List.class).size(), "接口没有实例字段，应返回空列表");
+        }
+
+        @Test
+        @DisplayName("内部类的编译器生成字段 this$0 会被跳过")
+        void syntheticFieldsAreSkipped() {
+            List<String> names = ReflectUtil.getFieldList(InnerHolder.class).stream()
+                    .map(Field::getName).toList();
+            assertFalse(names.contains("this$0"), "编译器生成的内部类引用字段不应出现在字段列表中：" + names);
         }
     }
 

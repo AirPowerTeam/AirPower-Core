@@ -11,8 +11,11 @@ import org.jetbrains.annotations.NotNull;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 /**
@@ -53,14 +56,16 @@ public class RootModel<M extends RootModel<M>> {
     /**
      * 脱敏
      *
-     * @apiNote 先排除非元数据字段，再对 {@link cn.hamm.airpower.core.annotation.Desensitize}
-     * 标记的字段脱敏；自身类自动加入白名单，保证本模型的字段不会被误排除
+     * @apiNote 先排除非元数据字段，再对所有可达模型中
+     * {@link cn.hamm.airpower.core.annotation.Desensitize} 标记的字段脱敏。
+     * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
+     * 避免"订单 → 收货人"这类结构泄露明文敏感数据
      */
     public final void desensitize() {
-        excludeNotMeta();
-        //noinspection unchecked
-        Class<? extends RootModel<?>> selfClass = (Class<? extends RootModel<?>>) getClass();
-        excludeNotMetaAndDesensitize(List.of(selfClass), true);
+        // 先排除非元数据字段：每个模型实例都会走排除分支，自引用由已访问集合拦下
+        excludeNotMetaAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+        // 再对所有可达模型（含类型不同的嵌套模型）递归脱敏
+        desensitizeAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
     }
 
     /**
@@ -95,6 +100,7 @@ public class RootModel<M extends RootModel<M>> {
                 return;
             }
             if (whiteNameList.isEmpty() || !whiteNameList.contains(this.getClass())) {
+                // 当前类不在白名单中：只做非元数据排除，不触发脱敏
                 excludeFieldValueNotMeta(instance, field);
                 return;
             }
@@ -104,17 +110,15 @@ public class RootModel<M extends RootModel<M>> {
                     if (Objects.isNull(item) || !RootModel.isModel(item.getClass())) {
                         return;
                     }
-                    @SuppressWarnings("unchecked")
-                    M itemModel = (M) item;
-                    itemModel.excludeNotMetaAndDesensitize(whiteNameList, isDesensitize);
+                    // 集合元素按自身类重新判定白名单：
+                    // 在白名单内则继续递归（脱敏），否则只排除非元数据
+                    handleNested((RootModel<?>) item, whiteNameList, isDesensitize);
                 });
                 return;
             }
             if (RootModel.isModel(value.getClass())) {
-                // 如果是模型，则递归脱敏
-                @SuppressWarnings("unchecked")
-                M payload = ((M) value);
-                payload.excludeNotMetaAndDesensitize(whiteNameList, isDesensitize);
+                // 如果是模型，则递归处理
+                handleNested((RootModel<?>) value, whiteNameList, isDesensitize);
                 return;
             }
             if (isDesensitize) {
@@ -124,11 +128,80 @@ public class RootModel<M extends RootModel<M>> {
     }
 
     /**
+     * 按嵌套模型自身类是否在白名单中，决定做"排除非元数据"还是"排除 + 脱敏"
+     *
+     * @param nested        嵌套模型
+     * @param whiteList     类白名单
+     * @param isDesensitize 是否需要脱敏
+     * @apiNote 嵌套模型不在白名单中时保留"只排除不脱敏"的既有语义；
+     * 在白名单中时必须传递白名单继续递归，保证深层嵌套也能脱敏
+     */
+    private static void handleNested(
+            @NotNull RootModel<?> nested,
+            @NotNull List<Class<? extends RootModel<?>>> whiteList,
+            boolean isDesensitize
+    ) {
+        if (whiteList.contains(nested.getClass())) {
+            nested.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
+            return;
+        }
+        nested.excludeNotMeta();
+    }
+
+    /**
+     * 对所有可达模型递归脱敏
+     *
+     * @param visited 已访问的模型，按对象身份去重
+     * @apiNote 不使用类白名单，嵌套模型无论类型都会被脱敏；
+     * {@code visited} 防止自引用模型（{@code child == this}）导致栈溢出
+     */
+    private static void desensitizeAll(@NotNull RootModel<?> model, @NotNull Set<RootModel<?>> visited) {
+        if (!visited.add(model)) {
+            return;
+        }
+        model.filterModelFieldValue((instance, field) -> {
+            Object value = ReflectUtil.getFieldValue(instance, field);
+            if (Objects.isNull(value)) {
+                return;
+            }
+            if (value instanceof Collection<?> valueList) {
+                valueList.forEach(item -> {
+                    if (Objects.isNull(item) || !RootModel.isModel(item.getClass())) {
+                        return;
+                    }
+                    desensitizeAll((RootModel<?>) item, visited);
+                });
+                return;
+            }
+            if (RootModel.isModel(value.getClass())) {
+                desensitizeAll((RootModel<?>) value, visited);
+                return;
+            }
+            desensitizeFieldValue(instance, field, value);
+        });
+    }
+
+    /**
      * 排除非元数据字段
      *
-     * @param field 字段
+     * @param instance 模型实例
+     * @param field    字段
      */
-    private void excludeFieldValueNotMeta(M instance, @NotNull Field field) {
+    private static void excludeFieldValueNotMeta(@NotNull RootModel<?> instance, @NotNull Field field) {
+        excludeFieldValueNotMeta(instance, field, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 排除非元数据字段
+     *
+     * @param instance 模型实例
+     * @param field    字段
+     * @param visited  已访问的模型，按对象身份去重
+     * @apiNote 自引用模型（{@code child == this}）会形成无限递归，由 {@code visited} 拦下
+     */
+    private static void excludeFieldValueNotMeta(
+            @NotNull RootModel<?> instance, @NotNull Field field, @NotNull Set<RootModel<?>> visited
+    ) {
         Object value = ReflectUtil.getFieldValue(instance, field);
         if (Objects.isNull(value)) {
             return;
@@ -150,15 +223,32 @@ public class RootModel<M extends RootModel<M>> {
         if (value instanceof Collection<?> valueList) {
             // 是对象集合，逐个递归排除非元数据字段
             valueList.forEach(item -> {
-                if (Objects.nonNull(item) && isModel(item.getClass())) {
-                    ((RootModel<?>) item).excludeNotMeta();
+                if (Objects.isNull(item) || !isModel(item.getClass())) {
+                    return;
                 }
+                excludeNotMetaAll((RootModel<?>) item, visited);
             });
             return;
         }
         if (isModel(value.getClass())) {
-            ((RootModel<?>) value).excludeNotMeta();
+            excludeNotMetaAll((RootModel<?>) value, visited);
         }
+    }
+
+    /**
+     * 排除非元数据字段
+     *
+     * @param model   当前模型
+     * @param visited 已访问的模型，按对象身份去重
+     * @apiNote 自引用模型（{@code child == this}）会形成无限递归，由 {@code visited} 拦下
+     */
+    private static void excludeNotMetaAll(@NotNull RootModel<?> model, @NotNull Set<RootModel<?>> visited) {
+        if (!visited.add(model)) {
+            return;
+        }
+        model.filterModelFieldValue((instance, field) ->
+                excludeFieldValueNotMeta(instance, field, visited)
+        );
     }
 
     /**
@@ -168,7 +258,9 @@ public class RootModel<M extends RootModel<M>> {
      * @param field    字段
      * @param value    值
      */
-    private void desensitizeFieldValue(M instance, @NotNull Field field, @NotNull Object value) {
+    private static void desensitizeFieldValue(
+            @NotNull RootModel<?> instance, @NotNull Field field, @NotNull Object value
+    ) {
         Desensitize desensitize = ReflectUtil.getAnnotation(Desensitize.class, field);
         if (Objects.isNull(desensitize)) {
             return;
@@ -198,11 +290,10 @@ public class RootModel<M extends RootModel<M>> {
      *
      * @param consumer 过滤方法
      */
-    private void filterModelFieldValue(BiConsumer<M, Field> consumer) {
-        Class<M> clazz = (Class<M>) getClass();
-        List<Field> allFields = ReflectUtil.getFieldList(clazz);
+    private void filterModelFieldValue(BiConsumer<RootModel<?>, Field> consumer) {
+        List<Field> allFields = ReflectUtil.getFieldList(getClass());
         for (Field field : allFields) {
-            consumer.accept((M) this, field);
+            consumer.accept(this, field);
         }
     }
 }
