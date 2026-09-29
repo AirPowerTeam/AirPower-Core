@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -95,7 +96,7 @@ public class CollectionUtil {
         List<String> rowList = getCsvHeaderList(fieldList);
         List<String> valueList = valueListFunction.apply(fieldList);
         rowList.addAll(valueList);
-        return new ByteArrayInputStream(String.join(CSV_ROW_DELIMITER, rowList).getBytes());
+        return new ByteArrayInputStream(String.join(CSV_ROW_DELIMITER, rowList).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
