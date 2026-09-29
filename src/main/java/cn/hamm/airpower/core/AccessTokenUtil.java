@@ -128,9 +128,13 @@ public class AccessTokenUtil {
         String payloadBase = Base64.getUrlEncoder().encodeToString(
                 Json.toString(verifiedToken.getPayloads()).getBytes(UTF_8)
         );
-        String content = verifiedToken.getExpireTimestamps() +
+        long expireTimestamps = verifiedToken.getExpireTimestamps();
+        if (expireTimestamps <= 0) {
+            throw new ServiceException("令牌必须设置过期时间");
+        }
+        String content = expireTimestamps +
                 TOKEN_DELIMITER +
-                hmacSha256(secret, verifiedToken.getExpireTimestamps() + TOKEN_DELIMITER + payloadBase) +
+                hmacSha256(secret, expireTimestamps + TOKEN_DELIMITER + payloadBase) +
                 TOKEN_DELIMITER +
                 payloadBase;
         return Base64.getUrlEncoder().encodeToString(content.getBytes(UTF_8));
