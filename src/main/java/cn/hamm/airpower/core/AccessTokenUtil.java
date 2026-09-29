@@ -276,14 +276,29 @@ public class AccessTokenUtil {
             Mac mac = Mac.getInstance(HMAC_SHA_256);
             SecretKeySpec secretKeySpec = new SecretKeySpec(secret.getBytes(UTF_8), HMAC_SHA_256);
             mac.init(secretKeySpec);
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : mac.doFinal(content.getBytes(UTF_8))) {
-                hexString.append(String.format("%02x", b & 0xff));
-            }
-            return hexString.toString();
+            // 手工转十六进制：String.format 每次调用都要解析格式串，
+            // 在令牌签发/校验这类热路径上开销明显
+            return toHex(mac.doFinal(content.getBytes(UTF_8)));
         } catch (Exception e) {
             throw new ServiceException(HMAC_SHA_256_ERROR);
         }
+    }
+
+    /**
+     * 字节数组转小写十六进制字符串
+     *
+     * @param bytes 字节数组
+     * @return 十六进制字符串，每个字节占两位
+     */
+    private static @NotNull String toHex(byte @NotNull [] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        char[] digits = "0123456789abcdef".toCharArray();
+        for (int i = 0; i < bytes.length; i++) {
+            int value = bytes[i] & 0xff;
+            hexChars[i * 2] = digits[value >>> 4];
+            hexChars[i * 2 + 1] = digits[value & 0x0f];
+        }
+        return new String(hexChars);
     }
 
     /**

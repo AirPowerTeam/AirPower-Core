@@ -4,6 +4,7 @@ import cn.hamm.airpower.core.StringUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -182,7 +183,21 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
         if (Objects.isNull(str1) || Objects.isNull(str2)) {
             show(message);
         }
-        when(Objects.equals(str1.toLowerCase(), str2.toLowerCase()), message);
+        // 固定 Locale.ROOT：土耳其语环境下 "I".toLowerCase() 得到 "ı"，
+        // 会把 "I" 与 "i" 误判为不等
+        when(Objects.equals(normalizeCase(str1), normalizeCase(str2)), message);
+    }
+
+    /**
+     * 归一化字符串用于忽略大小写比较
+     *
+     * @param value 字符串
+     * @return 归一化结果
+     * @apiNote 固定使用 {@link java.util.Locale#ROOT}，避免土耳其语环境下
+     * 大写 I 转成点无点 i 导致比较结果失真
+     */
+    private static String normalizeCase(String value) {
+        return value.toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -248,7 +263,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
         if (Objects.isNull(str1) || Objects.isNull(str2)) {
             show(message);
         }
-        when(!Objects.equals(str1.toLowerCase(), str2.toLowerCase()), message);
+        when(!Objects.equals(normalizeCase(str1), normalizeCase(str2)), message);
     }
 
     /**

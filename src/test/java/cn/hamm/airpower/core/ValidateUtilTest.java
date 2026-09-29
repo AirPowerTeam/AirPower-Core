@@ -133,11 +133,11 @@ class ValidateUtilTest {
         }
 
         @Test
-        @DisplayName("是否中文: 正反例（注意空串也为真）")
+        @DisplayName("是否中文: 正反例（空串不再匹配）")
         void isChinese() {
-            // CHINESE = ^[\u4e00-\u9fff]*$ ：量词是 *，空串也匹配
+            // CHINESE = ^[\u4e00-\u9fff]+$ ：量词是 +，空串不再被判定为中文
             assertTrue(ValidateUtil.isChinese("中文"), "中文汉字应识别为中文");
-            assertTrue(ValidateUtil.isChinese(""), "空串也匹配 * 量词，源码当前行为");
+            assertFalse(ValidateUtil.isChinese(""), "空串不应被识别为中文");
             assertFalse(ValidateUtil.isChinese("abc"), "字母不是中文");
             assertFalse(ValidateUtil.isChinese("中a"), "中英混排不是纯中文");
             assertFalse(ValidateUtil.isChinese("a中"), "中英混排不是纯中文");
@@ -192,8 +192,10 @@ class ValidateUtilTest {
             assertTrue(ValidateUtil.isNormalCode("-"), "连字符是普通字符");
             assertTrue(ValidateUtil.isNormalCode("/"), "斜杠是普通字符");
             assertTrue(ValidateUtil.isNormalCode("+"), "加号是普通字符");
-            assertFalse(ValidateUtil.isNormalCode("ab"), "两个字符不匹配（无 + 量词）");
-            assertFalse(ValidateUtil.isNormalCode("A1"), "两个字符不匹配（无 + 量词）");
+            assertTrue(ValidateUtil.isNormalCode("ab"), "多字符普通字符串由 + 量词匹配");
+            assertTrue(ValidateUtil.isNormalCode("A1"), "字母数字混排由 + 量词匹配");
+            assertTrue(ValidateUtil.isNormalCode("user_name-01"), "下划线连字符数字组合应匹配");
+            assertFalse(ValidateUtil.isNormalCode("a b"), "含空格不应匹配");
             assertFalse(ValidateUtil.isNormalCode(" "), "空格不在允许集合中");
             assertFalse(ValidateUtil.isNormalCode(""), "空串不匹配");
         }

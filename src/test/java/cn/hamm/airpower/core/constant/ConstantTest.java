@@ -212,10 +212,10 @@ class ConstantTest {
         }
 
         @Test
-        @DisplayName("CHINESE 中文（允许空串）")
+        @DisplayName("CHINESE 中文（不允许空串）")
         void testChinese() {
             assertMatch(PatternConstant.CHINESE, "中文测试", true, "中文应匹配");
-            assertMatch(PatternConstant.CHINESE, "", true, "空串应匹配（正则使用 * 量词）");
+            assertMatch(PatternConstant.CHINESE, "", false, "空串不应匹配（正则使用 + 量词）");
             assertMatch(PatternConstant.CHINESE, "abc", false, "字母不应匹配中文");
             assertMatch(PatternConstant.CHINESE, "中文abc", false, "中英文混合不应匹配中文");
         }
@@ -251,7 +251,9 @@ class ConstantTest {
             assertMatch(PatternConstant.NORMAL_CODE, "/", true, "斜杠应匹配");
             assertMatch(PatternConstant.NORMAL_CODE, "\\", true, "反斜杠应匹配");
             assertMatch(PatternConstant.NORMAL_CODE, "", false, "空串不应匹配");
-            assertMatch(PatternConstant.NORMAL_CODE, "ab", false, "多字符不应匹配");
+            assertMatch(PatternConstant.NORMAL_CODE, "ab", true, "多字符由 + 量词匹配");
+            assertMatch(PatternConstant.NORMAL_CODE, "user_name-01", true, "多字符组合应由 + 量词匹配");
+            assertMatch(PatternConstant.NORMAL_CODE, "a b", false, "含空格不应匹配");
             assertMatch(PatternConstant.NORMAL_CODE, "*", false, "* 不在允许的字符集内");
         }
 

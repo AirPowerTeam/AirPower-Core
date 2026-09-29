@@ -45,8 +45,11 @@ public class Json {
 
     /**
      * {@code ObjectMapper}
+     *
+     * @apiNote 必须是 {@code volatile}：双重检查锁在无 volatile 时，
+     * 其他线程可能读到已分配引用但未完成内部初始化的实例
      */
-    private static ObjectMapper objectMapper = null;
+    private static volatile ObjectMapper objectMapper = null;
 
     /**
      * 错误代码
@@ -290,7 +293,7 @@ public class Json {
                     ObjectMapper mapper = new ObjectMapper();
                     // 忽略未声明的属性
                     mapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
-                    // 忽略值为 null 的属性
+                    // Map 中值为 null / 空串 / 空集合的键不参与序列化
                     mapper.configOverride(Map.class)
                             .setInclude(JsonInclude.Value.construct(JsonInclude.Include.NON_EMPTY, null));
                     // 忽略没有属性的类

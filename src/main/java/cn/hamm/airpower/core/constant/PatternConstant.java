@@ -42,7 +42,7 @@ public class PatternConstant {
     /**
      * 中文
      */
-    public static final Pattern CHINESE = compile("^[\\u4e00-\\u9fff]*$");
+    public static final Pattern CHINESE = compile("^[\\u4e00-\\u9fff]+$");
 
     /**
      * 手机
@@ -59,7 +59,7 @@ public class PatternConstant {
     /**
      * 普通字符
      */
-    public static final Pattern NORMAL_CODE = compile("^[@#%a-zA-Z0-9\\u4e00-\\u9fa5_\\-\\\\/+]$");
+    public static final Pattern NORMAL_CODE = compile("^[@#%a-zA-Z0-9\\u4e00-\\u9fa5_\\-\\\\/+]+$");
 
     /**
      * 数字或字母
