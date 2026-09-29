@@ -15,7 +15,7 @@ public class HostUtil {
     /**
      * 获取服务器主机名的完整方法
      */
-    public static String getHostName() {
+    public static @Nullable String getHostName() {
         try {
             String hostname = InetAddress.getLocalHost().getHostName();
             if (isValidHostname(hostname)) {
