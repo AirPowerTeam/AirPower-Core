@@ -88,7 +88,7 @@ public class RootModel<M extends RootModel<M>> {
             if (Objects.isNull(value)) {
                 return;
             }
-            if (!whiteList.isEmpty() && !whiteList.contains(this.getClass())) {
+            if (whiteList.isEmpty() || !whiteList.contains(this.getClass())) {
                 excludeFieldValueNotMeta(instance, field);
                 return;
             }
