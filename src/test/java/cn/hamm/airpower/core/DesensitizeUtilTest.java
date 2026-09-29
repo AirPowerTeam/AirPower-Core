@@ -60,10 +60,14 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("空符号：中间部分被清空")
+        @DisplayName("空符号：回退为默认符号而不是清空原文")
         void testReplaceWithEmptySymbol() {
-            assertEquals("ae", DesensitizeUtil.replace("abcde", 1, 1, ""),
-                    "符号为空串时中间 3 个字符应被清空");
+            // 原实现直接拼接空串，中间 3 个字符被静默删除，返回的 "ae" 长度与原文不符
+            assertEquals("a***e", DesensitizeUtil.replace("abcde", 1, 1, ""),
+                    "符号为空串时回退为默认符号 *，不能把原文静默删掉");
+            assertEquals(DesensitizeUtil.replace("abcde", 1, 1, "*"),
+                    DesensitizeUtil.replace("abcde", 1, 1, ""),
+                    "空符号的结果应与显式传 * 完全一致");
         }
 
         @Test
@@ -122,17 +126,24 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：symbol 为 null 时抛出空指针异常")
+        @DisplayName("边界：symbol 为 null 时回退为默认符号")
         void testReplaceWithNullSymbol() {
-            assertThrows(NullPointerException.class, () -> DesensitizeUtil.replace("abc", 1, 1, null),
-                    "symbol 为 null 时应抛出 NullPointerException");
+            assertEquals("a***e", DesensitizeUtil.replace("abcde", 1, 1, null),
+                    "symbol 为 null 时回退为默认符号 *，不应抛空指针");
         }
 
         @Test
-        @DisplayName("异常分支：symbol 为 null 且 head 为负时抛出空指针异常")
+        @DisplayName("边界：symbol 为 null 且 head 为负时同样回退为默认符号")
         void testReplaceWithNullSymbolAndNegativeHead() {
-            assertThrows(NullPointerException.class, () -> DesensitizeUtil.replace("abc", -1, 0, null),
-                    "整串替换分支中 symbol 为 null 也应抛出 NullPointerException");
+            assertEquals("***", DesensitizeUtil.replace("abc", -1, 0, null),
+                    "整串替换分支中 symbol 为 null 也应回退为默认符号，重复次数按原文长度");
+        }
+
+        @Test
+        @DisplayName("异常分支：text 为 null 抛 IllegalArgumentException")
+        void testReplaceWithNullText() {
+            assertThrows(IllegalArgumentException.class, () -> DesensitizeUtil.replace(null, 1, 1, "*"),
+                    "text 为 null 是调用错误，应抛带明确信息的 IllegalArgumentException");
         }
     }
 
@@ -396,19 +407,19 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：text 为 null 时抛出空指针异常")
+        @DisplayName("异常分支：text 为 null 抛 IllegalArgumentException")
         void testNullText() {
-            assertThrows(NullPointerException.class,
+            assertThrows(IllegalArgumentException.class,
                     () -> DesensitizeUtil.desensitize(null, DesensitizeType.CUSTOM, 1, 1),
-                    "text 为 null 时应抛出 NullPointerException");
+                    "text 为 null 是调用错误，应抛带明确信息的异常");
         }
 
         @Test
-        @DisplayName("异常分支：type 为 null 时抛出空指针异常")
+        @DisplayName("异常分支：type 为 null 抛 IllegalArgumentException")
         void testNullType() {
-            assertThrows(NullPointerException.class,
+            assertThrows(IllegalArgumentException.class,
                     () -> DesensitizeUtil.desensitize("abc", null, 1, 1),
-                    "type 为 null 时 switch 匹配会抛出 NullPointerException");
+                    "type 为 null 是调用错误，不应靠 switch 落空才抛 NPE");
         }
     }
 
@@ -483,11 +494,11 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：五参重载传 null 文本时抛出空指针异常")
+        @DisplayName("异常分支：五参重载传 null 文本抛 IllegalArgumentException")
         void testNullValueString() {
-            assertThrows(NullPointerException.class,
+            assertThrows(IllegalArgumentException.class,
                     () -> DesensitizeUtil.desensitize(null, DesensitizeType.MOBILE, 0, 0, "*"),
-                    "valueString 为 null 时应抛出 NullPointerException");
+                    "valueString 为 null 是调用错误，应抛带明确信息的异常");
         }
     }
 

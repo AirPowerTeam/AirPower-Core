@@ -5,6 +5,7 @@ import jakarta.validation.*;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -249,6 +250,7 @@ public class ValidateUtil {
      * @param model   数据模型
      * @param actions {@code 可选} 校验分组
      * @param <M>     模型类型
+     * @apiNote 多个违规时按属性路径排序后取第一条，保证同一对象的报错稳定可复现
      */
     public static <M extends RootModel<M>> void valid(M model, Class<?>... actions) {
         if (Objects.isNull(model)) {
@@ -256,17 +258,48 @@ public class ValidateUtil {
         }
         initValidator();
         Class<?>[] groups = Objects.isNull(actions) ? new Class<?>[0] : actions;
-        if (groups.length == 0) {
-            Set<ConstraintViolation<M>> violations = validator.validate(model);
-            if (violations.isEmpty()) {
-                return;
-            }
-            throw new ValidationException(violations.iterator().next().getMessage());
-        }
-        Set<ConstraintViolation<M>> violations = validator.validate(model, groups);
+        Set<ConstraintViolation<M>> violations = groups.length == 0
+                ? validator.validate(model)
+                : validator.validate(model, groups);
         if (violations.isEmpty()) {
             return;
         }
-        throw new ValidationException(violations.iterator().next().getMessage());
+        throw new ValidationException(firstViolation(violations).getMessage());
+    }
+
+    /**
+     * 取第一条违规
+     *
+     * @param violations 违规集合
+     * @param <M>        模型类型
+     * @return 第一条违规
+     * @apiNote {@link Set} 的迭代顺序不保证稳定，直接取 {@code iterator().next()}
+     * 会让同一个对象多次校验报出不同字段，上层无法据此做字段级回显
+     */
+    private static <M> @NotNull ConstraintViolation<M> firstViolation(
+            @NotNull Set<ConstraintViolation<M>> violations
+    ) {
+        return violations.stream()
+                .min(Comparator
+                        .comparing((ConstraintViolation<M> v) -> v.getPropertyPath().toString())
+                        .thenComparing(ConstraintViolation::getMessage))
+                .orElseThrow();
+    }
+
+    /**
+     * 关闭验证器并释放底层资源
+     *
+     * @apiNote {@link ValidatorFactory} 持有元数据缓存与 Provider 资源，
+     * 在热部署 / 容器反复重载场景下应由应用关闭钩子调用本方法释放。
+     * 调用后下次 {@link #valid} 会自动重新初始化
+     */
+    public static void close() {
+        synchronized (ValidateUtil.class) {
+            if (Objects.nonNull(validatorFactory)) {
+                validatorFactory.close();
+            }
+            validatorFactory = null;
+            validator = null;
+        }
     }
 }

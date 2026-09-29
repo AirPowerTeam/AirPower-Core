@@ -48,13 +48,30 @@ public class DictionaryUtil {
     public static <D extends IDictionary> @NotNull D getDictionary(
             @NotNull Class<D> enumClass, Function<D, Object> function, Object value
     ) {
-        return Arrays.stream(enumClass.getEnumConstants())
+        return Arrays.stream(getEnumConstants(enumClass))
                 .filter(enumItem -> Objects.equals(function.apply(enumItem), value))
                 .findFirst()
                 .orElseThrow(new ServiceException(
                         "传入的值(" + enumClass.getSimpleName() + "=" + value + ")不在字典可选范围内",
                         getDictionaryList(enumClass))
                 );
+    }
+
+    /**
+     * 获取枚举常量，校验目标确实是枚举类
+     *
+     * @param enumClass 枚举字典类
+     * @param <D>       字典类型
+     * @return 枚举常量数组
+     * @apiNote {@link Class#getEnumConstants()} 对非枚举类返回 {@code null}，
+     * 直接 {@code .stream()} 会抛 {@code NullPointerException}
+     */
+    private static <D extends IDictionary> D @NotNull [] getEnumConstants(@NotNull Class<D> enumClass) {
+        D[] constants = enumClass.getEnumConstants();
+        if (Objects.isNull(constants)) {
+            throw new ServiceException("字典类(" + enumClass.getName() + ")不是枚举，无法作为字典使用");
+        }
+        return constants;
     }
 
     /**
@@ -83,8 +100,9 @@ public class DictionaryUtil {
     ) {
         List<Map<String, Object>> mapList = new ArrayList<>();
         //取出所有枚举类型
-        Arrays.stream(clazz.getEnumConstants()).forEach(enumItem -> {
-            Map<String, Object> item = new HashMap<>(lambdas.length);
+        Arrays.stream(getEnumConstants(clazz)).forEach(enumItem -> {
+            // 容量按负载因子折算，否则 lambdas 较少时会立刻触发扩容
+            Map<String, Object> item = new HashMap<>((int) (lambdas.length / 0.75f) + 1);
             // 依次取出参数的值
             Arrays.stream(lambdas).forEach(lambda -> {
                 try {

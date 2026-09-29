@@ -174,12 +174,10 @@ class AesUtilTest {
                 byte[] key = new byte[length];
                 java.util.Arrays.fill(key, (byte) 'a');
                 ServiceException exception = assertThrows(ServiceException.class,
-                        () -> withKey(key).encrypt("长度非法"),
-                        "长度为 " + length + " 字节的密钥应抛出 ServiceException");
-                assertTrue(exception.getMessage().contains("Invalid AES key length")
-                                || exception.getMessage().contains("Empty")
-                                || exception.getMessage().contains("Missing"),
-                        "异常信息应来自 JDK 底层（Invalid AES key length / Empty / Missing），实际为：" + exception.getMessage());
+                        () -> AesUtil.create().setKey(key),
+                        "长度为 " + length + " 字节的密钥应在设置时就抛出 ServiceException");
+                assertTrue(exception.getMessage().contains("16、24 或 32 字节"),
+                        "异常信息应明确指出合法长度，实际为：" + exception.getMessage());
             }
         }
 
@@ -309,23 +307,43 @@ class AesUtilTest {
         }
 
         @Test
-        @DisplayName("setKey(byte[]) 传入 null 抛出 ServiceException")
+        @DisplayName("setKey(byte[]) 传入 null 立即抛出 ServiceException")
         void testSetKeyBytesWithNull() {
-            AesUtil instance = AesUtil.create().setKey((byte[]) null);
-            ServiceException exception = assertThrows(ServiceException.class, () -> instance.encrypt("任意内容"),
-                    "未设置密钥时加密应抛出 ServiceException");
-            assertEquals("加密密钥未设置", exception.getMessage(), "异常信息应说明密钥未设置");
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> AesUtil.create().setKey((byte[]) null),
+                    "设置 null 密钥应立即报错，而不是延后到加密时");
+            assertEquals("加密密钥不能为null", exception.getMessage(), "异常信息应说明密钥不能为 null");
         }
 
         @Test
-        @DisplayName("setKey(byte[]) 传入空数组抛出 ServiceException")
+        @DisplayName("setKey(byte[]) 传入空数组立即抛出 ServiceException")
         void testSetKeyBytesWithEmpty() {
-            AesUtil instance = AesUtil.create().setKey(new byte[0]);
             ServiceException exception = assertThrows(ServiceException.class,
-                    () -> instance.encrypt("任意内容"),
-                    "空密钥加密应抛出 ServiceException");
-            assertFalse(exception.getMessage() == null || exception.getMessage().isBlank(),
-                    "异常信息不应为空");
+                    () -> AesUtil.create().setKey(new byte[0]),
+                    "空密钥应立即报错");
+            assertTrue(exception.getMessage().contains("16、24 或 32 字节"),
+                    "异常信息应说明合法长度，实际为：" + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("setKey(String) 传入空串抛出 ServiceException")
+        void testSetKeyStringWithBlank() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> AesUtil.create().setKey(""),
+                    "空串密钥解码后是 0 长度数组，应立即报错");
+            assertEquals("加密密钥不能为空字符串", exception.getMessage(), "异常信息应说明密钥不能为空串");
+        }
+
+        @Test
+        @DisplayName("setIv 传入非 16 字节长度时加密抛出明确的 ServiceException")
+        void testInvalidIvLength() {
+            AesUtil instance = AesUtil.create()
+                    .setKey(new byte[16])
+                    .setIv(new byte[3]);
+            ServiceException exception = assertThrows(ServiceException.class, () -> instance.encrypt("内容"),
+                    "IV 长度非法应给出明确提示");
+            assertTrue(exception.getMessage().contains("偏移向量长度必须为 16 字节"),
+                    "异常信息应说明 IV 长度要求，实际为：" + exception.getMessage());
         }
     }
 

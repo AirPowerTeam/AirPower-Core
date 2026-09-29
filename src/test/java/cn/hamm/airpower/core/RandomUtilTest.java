@@ -103,11 +103,15 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("长度小于等于 0 时被拉回为 1")
+        @DisplayName("长度小于等于 0 时抛 ServiceException，不再静默拉回为 1")
         void nonPositiveLength() {
-            assertEquals(1, RandomUtil.randomString(0).length(), "长度 0 被 Math.max 拉回为 1");
-            assertEquals(1, RandomUtil.randomString(-1).length(), "长度 -1 被 Math.max 拉回为 1");
-            assertEquals(1, RandomUtil.randomString(Integer.MIN_VALUE).length(), "极小长度同样被拉回为 1");
+            // 原实现用 Math.max(length, 1)，调用方的传参错误被静默吞掉
+            assertThrows(ServiceException.class, () -> RandomUtil.randomString(0),
+                    "长度 0 是传参错误，必须让调用方感知");
+            assertThrows(ServiceException.class, () -> RandomUtil.randomString(-1),
+                    "负长度是传参错误，必须让调用方感知");
+            assertThrows(ServiceException.class, () -> RandomUtil.randomString(Integer.MIN_VALUE),
+                    "极小长度是传参错误，必须让调用方感知");
         }
 
         @Test
@@ -146,10 +150,12 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("长度小于等于 0 时被拉回为 1")
+        @DisplayName("长度小于等于 0 时抛 ServiceException，不再静默拉回为 1")
         void nonPositiveLength() {
-            assertEquals(1, RandomUtil.randomNumbers(0).length(), "长度 0 被 Math.max 拉回为 1");
-            assertEquals(1, RandomUtil.randomNumbers(-5).length(), "负长度同样被拉回为 1");
+            assertThrows(ServiceException.class, () -> RandomUtil.randomNumbers(0),
+                    "长度 0 是传参错误，必须让调用方感知");
+            assertThrows(ServiceException.class, () -> RandomUtil.randomNumbers(-5),
+                    "负长度是传参错误，必须让调用方感知");
         }
 
         @Test
@@ -216,10 +222,12 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("长度小于等于 0 时被拉回为 1")
+        @DisplayName("长度小于等于 0 时抛 ServiceException，不再静默拉回为 1")
         void nonPositiveLength() {
-            assertEquals(1, RandomUtil.randomString("abc", 0).length(), "长度 0 被 Math.max 拉回为 1");
-            assertEquals(1, RandomUtil.randomString("abc", -3).length(), "负长度同样被拉回为 1");
+            assertThrows(ServiceException.class, () -> RandomUtil.randomString("abc", 0),
+                    "长度 0 是传参错误，必须让调用方感知");
+            assertThrows(ServiceException.class, () -> RandomUtil.randomString("abc", -3),
+                    "负长度是传参错误，必须让调用方感知");
         }
 
         @Test

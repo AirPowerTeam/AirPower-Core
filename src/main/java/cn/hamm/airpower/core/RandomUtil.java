@@ -116,7 +116,10 @@ public class RandomUtil {
         if (Objects.isNull(baseString) || baseString.isEmpty()) {
             throw new ServiceException("随机字符样本不能为空");
         }
-        length = Math.max(length, 1);
+        if (length <= 0) {
+            // 原实现用 Math.max(length, 1) 把负数静默变成 1，调用方的传参错误被吞掉
+            throw new ServiceException("随机字符串长度必须大于0，当前为 " + length);
+        }
         final int baseLength = baseString.length();
         return IntStream.range(0, length)
                 .map(i -> randomInt(baseLength))

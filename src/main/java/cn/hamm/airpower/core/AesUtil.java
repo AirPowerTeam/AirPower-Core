@@ -12,6 +12,7 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static javax.crypto.Cipher.DECRYPT_MODE;
@@ -29,6 +30,16 @@ public class AesUtil {
      */
     @Setter(AccessLevel.NONE)
     private String algorithm = "AES";
+
+    /**
+     * 合法的 AES 密钥长度（字节）
+     */
+    private static final Set<Integer> VALID_KEY_LENGTHS = Set.of(16, 24, 32);
+
+    /**
+     * CBC 模式要求的 IV 长度（字节）
+     */
+    private static final int IV_LENGTH = 16;
 
     /**
      * 密钥
@@ -81,11 +92,16 @@ public class AesUtil {
         if (Objects.isNull(base64Key)) {
             throw new ServiceException("加密密钥不能为null");
         }
+        if (base64Key.isBlank()) {
+            throw new ServiceException("加密密钥不能为空字符串");
+        }
+        byte[] decoded;
         try {
-            return setKey(Base64.getDecoder().decode(base64Key));
+            decoded = Base64.getDecoder().decode(base64Key);
         } catch (IllegalArgumentException e) {
             throw new ServiceException("加密密钥不是合法的 Base64 字符串");
         }
+        return setKey(decoded);
     }
 
     /**
@@ -93,9 +109,17 @@ public class AesUtil {
      *
      * @param key 密钥
      * @return this
+     * @apiNote 长度必须为 {@code 16 / 24 / 32} 字节（AES-128/192/256），
+     * 在设置时就校验，避免错误延后到加密时才以"初始化密码器失败"暴露
      */
     public AesUtil setKey(byte[] key) {
-        this.key = key;
+        if (Objects.isNull(key)) {
+            throw new ServiceException("加密密钥不能为null");
+        }
+        if (!VALID_KEY_LENGTHS.contains(key.length)) {
+            throw new ServiceException("AES 密钥长度必须为 16、24 或 32 字节，当前为 " + key.length + " 字节");
+        }
+        this.key = key.clone();
         return this;
     }
 
@@ -151,6 +175,12 @@ public class AesUtil {
     private @NotNull Cipher getCipher(int type) {
         if (Objects.isNull(key)) {
             throw new ServiceException("加密密钥未设置");
+        }
+        if (Objects.isNull(iv)) {
+            throw new ServiceException("偏移向量未设置");
+        }
+        if (iv.length != IV_LENGTH) {
+            throw new ServiceException("偏移向量长度必须为 " + IV_LENGTH + " 字节，当前为 " + iv.length + " 字节");
         }
         try {
             SecretKeySpec secretKeySpec = new SecretKeySpec(key, algorithm);

@@ -4,6 +4,8 @@ import cn.hamm.airpower.core.enums.DesensitizeType;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Objects;
+
 /**
  * <h1>字符串脱敏处理工具类</h1>
  *
@@ -42,6 +44,13 @@ public class DesensitizeUtil {
      * @return 替换后的字符串
      */
     public static @NotNull String replace(String text, int head, int tail, String symbol) {
+        if (Objects.isNull(text)) {
+            throw new IllegalArgumentException("待脱敏文本不能为 null");
+        }
+        if (!StringUtil.hasText(symbol)) {
+            // 符号为空会导致原文被静默删除（symbol.repeat 抛 NPE，或空串拼接丢数据）
+            symbol = DEFAULT_SYMBOL;
+        }
         if (head < 0 || tail < 0 || head + tail >= text.length()) {
             return symbol.repeat(text.length());
         }
@@ -113,6 +122,12 @@ public class DesensitizeUtil {
     public static @NotNull String desensitize(
             @NotNull String valueString, @NotNull DesensitizeType type, int head, int tail, String symbol
     ) {
+        if (Objects.isNull(valueString)) {
+            throw new IllegalArgumentException("待脱敏文本不能为 null");
+        }
+        if (Objects.isNull(type)) {
+            throw new IllegalArgumentException("脱敏类型不能为 null");
+        }
         if (!StringUtil.hasText(symbol)) {
             // 脱敏符号为空时会导致原文被静默删除，统一回退为默认符号
             symbol = DEFAULT_SYMBOL;
