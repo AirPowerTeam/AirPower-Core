@@ -25,11 +25,6 @@ import static javax.crypto.Cipher.ENCRYPT_MODE;
 @Accessors(chain = true)
 public class AesUtil {
     /**
-     * Cipher 缓存（按加密模式缓存）
-     */
-    private final java.util.concurrent.ConcurrentHashMap<Integer, Cipher> cipherCache = new java.util.concurrent.ConcurrentHashMap<>();
-    
-    /**
      * 加密算法
      */
     @Setter(AccessLevel.NONE)
@@ -141,16 +136,14 @@ public class AesUtil {
      * @return {@code Cipher}
      */
     private @NotNull Cipher getCipher(int type) {
-        return cipherCache.computeIfAbsent(type, t -> {
-            try {
-                SecretKeySpec secretKeySpec = new SecretKeySpec(key, algorithm);
-                IvParameterSpec ivParameterSpec = new IvParameterSpec(iv);
-                Cipher cipher = Cipher.getInstance(algorithm + "/" + mode + "/" + padding);
-                cipher.init(t, secretKeySpec, ivParameterSpec);
-                return cipher;
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        try {
+            SecretKeySpec secretKeySpec = new SecretKeySpec(key, algorithm);
+            IvParameterSpec ivParameterSpec = new IvParameterSpec(iv);
+            Cipher cipher = Cipher.getInstance(algorithm + "/" + mode + "/" + padding);
+            cipher.init(type, secretKeySpec, ivParameterSpec);
+            return cipher;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
