@@ -11,6 +11,8 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -86,6 +88,17 @@ public class AccessTokenUtil {
     @Contract("_ -> fail")
     private static void throwException(String message) {
         throw new ServiceException(Json.UNAUTHORIZED_CODE, message);
+    }
+
+    /**
+     * 恒等比较
+     *
+     * @param a 第一个字符串
+     * @param b 第二个字符串
+     * @return 是否相等
+     */
+    private static boolean constantTimeEquals(@NotNull String a, @NotNull String b) {
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -202,7 +215,7 @@ public class AccessTokenUtil {
             throwException(ACCESS_TOKEN_INVALID);
         }
         //noinspection AlibabaUndefineMagicConstant
-        if (!hmacSha256(secret, list[0] + TOKEN_DELIMITER + list[2]).equals(list[1])) {
+        if (!constantTimeEquals(hmacSha256(secret, list[0] + TOKEN_DELIMITER + list[2]), list[1])) {
             throwException(ACCESS_TOKEN_INVALID);
         }
         if (Long.parseLong(list[0]) < System.currentTimeMillis() &&
