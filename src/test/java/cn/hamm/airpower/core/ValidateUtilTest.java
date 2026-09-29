@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.constant.PatternConstant;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.ValidDemoModel;
 import jakarta.validation.ValidationException;
@@ -238,79 +239,79 @@ class ValidateUtilTest {
     }
 
     @Nested
-    @DisplayName("正则类方法 - 传入 null 时的当前行为（源码无 null 保护）")
+    @DisplayName("正则类方法 - 传入 null 时返回 false")
     class NullInputs {
 
         @Test
-        @DisplayName("是否数字传 null")
+        @DisplayName("是否数字传 null 返回 false")
         void isNumberNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isNumber(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isNumber(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否整数传 null")
+        @DisplayName("是否整数传 null 返回 false")
         void isIntegerNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isInteger(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isInteger(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否邮箱传 null")
+        @DisplayName("是否邮箱传 null 返回 false")
         void isEmailNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isEmail(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isEmail(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否字母传 null")
+        @DisplayName("是否字母传 null 返回 false")
         void isLetterNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isLetter(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isLetter(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否字母或数字传 null")
+        @DisplayName("是否字母或数字传 null 返回 false")
         void isLetterOrNumberNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isLetterOrNumber(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isLetterOrNumber(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否中文传 null")
+        @DisplayName("是否中文传 null 返回 false")
         void isChineseNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isChinese(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isChinese(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否手机号传 null")
+        @DisplayName("是否手机号传 null 返回 false")
         void isMobilePhoneNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isMobilePhone(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isMobilePhone(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否座机传 null")
+        @DisplayName("是否座机传 null 返回 false")
         void isTelPhoneNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isTelPhone(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isTelPhone(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否普通字符传 null")
+        @DisplayName("是否普通字符传 null 返回 false")
         void isNormalCodeNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isNormalCode(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isNormalCode(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否纯数字加字母传 null")
+        @DisplayName("是否纯数字加字母传 null 返回 false")
         void isOnlyNumberAndLetterNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isOnlyNumberAndLetter(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isOnlyNumberAndLetter(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否自然数传 null")
+        @DisplayName("是否自然数传 null 返回 false")
         void isNaturalNumberNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isNaturalNumber(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isNaturalNumber(null), "传 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("是否自然整数传 null")
+        @DisplayName("是否自然整数传 null 返回 false")
         void isNaturalIntegerNull() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.isNaturalInteger(null), "传 null 应抛空指针");
+            assertFalse(ValidateUtil.isNaturalInteger(null), "传 null 应判定为不匹配");
         }
     }
 
@@ -335,17 +336,15 @@ class ValidateUtilTest {
         }
 
         @Test
-        @DisplayName("值为 null 时抛空指针（源码无 null 保护）")
+        @DisplayName("值为 null 时返回 false")
         void nullValue() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.validRegex(null, Pattern.compile(".*")),
-                    "传 null 应抛空指针");
+            assertFalse(ValidateUtil.validRegex(null, PatternConstant.NUMBER), "值为 null 应判定为不匹配");
         }
 
         @Test
-        @DisplayName("正则为 null 时抛空指针")
+        @DisplayName("正则为 null 时返回 false")
         void nullPattern() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.validRegex("abc", null),
-                    "正则传 null 应抛空指针");
+            assertFalse(ValidateUtil.validRegex("123", null), "正则为 null 应判定为不匹配");
         }
     }
 
@@ -387,10 +386,10 @@ class ValidateUtilTest {
         }
 
         @Test
-        @DisplayName("18 位末位为小写 x 返回 false（仅接受大写 X）")
+        @DisplayName("18 位末位为小写 x 返回 true（大小写均可）")
         void lowercaseX() {
-            // 加权和 167，flags[2] = 'X'，源码按 char 严格比较，小写 x 不匹配
-            assertFalse(ValidateUtil.isChina2Identity("11010519491231002x"), "小写 x 不被接受，源码仅认大写 X");
+            // 加权和 167，167 % 11 = 2，flags[2] = 'X'，源码把末位小写 x 归一化为 X 后比对
+            assertTrue(ValidateUtil.isChina2Identity("11010519491231002x"), "校验位允许小写 x");
         }
 
         @Test
@@ -402,10 +401,9 @@ class ValidateUtilTest {
         }
 
         @Test
-        @DisplayName("18 位前 17 位含非数字字符抛 NumberFormatException（源码未捕获）")
+        @DisplayName("18 位前 17 位含非数字字符返回 false")
         void notDigitInBody() {
-            assertThrows(NumberFormatException.class, () -> ValidateUtil.isChina2Identity("1101051949123100X2"),
-                    "前 17 位含 X 会触发 Integer.parseInt 抛数字格式异常");
+            assertFalse(ValidateUtil.isChina2Identity("1101051949123100X2"), "前 17 位含非数字字符应判定为不匹配");
         }
     }
 
@@ -531,10 +529,9 @@ class ValidateUtilTest {
         }
 
         @Test
-        @DisplayName("分组参数为 null 时抛空指针（源码直接访问 actions.length）")
+        @DisplayName("分组参数为 null 时按空分组处理")
         void nullActions() {
-            assertThrows(NullPointerException.class, () -> ValidateUtil.valid(validModel(), (Class<?>[]) null),
-                    "分组参数传 null 应抛空指针");
+            assertDoesNotThrow(() -> ValidateUtil.valid(validModel(), (Class<?>[]) null), "分组参数为 null 时按空分组处理");
         }
     }
 }

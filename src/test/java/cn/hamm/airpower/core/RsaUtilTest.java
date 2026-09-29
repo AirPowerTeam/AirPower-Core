@@ -102,14 +102,17 @@ class RsaUtilTest {
     /**
      * 去除 PEM 的头尾与换行，得到纯 Base64 内容
      *
+     * <p>公钥头尾为 {@code PUBLIC KEY}，私钥头尾为 PKCS#8 的 {@code PRIVATE KEY}，
+     * 两者均以 {@code -----} 包裹，顺序替换不影响结果。</p>
+     *
      * @param pem PEM 文本
      * @return 纯 Base64 文本
      */
     private static String stripPem(String pem) {
         return pem.replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")
-                .replace("-----BEGIN RSA PRIVATE KEY-----", "")
-                .replace("-----END RSA PRIVATE KEY-----", "")
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
                 .replace("\n", "");
     }
 
@@ -287,12 +290,14 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("getPemPrivateKey 头尾正确且内容为私钥的 Base64")
+        @DisplayName("getPemPrivateKey 头尾为 PKCS#8 的 PRIVATE KEY 且内容为私钥的 Base64")
         void testGetPemPrivateKey() {
             String pem = rsaUtil.getPemPrivateKey(keyPair);
             assertAll("私钥 PEM 结构应当正确",
-                    () -> assertTrue(pem.startsWith("-----BEGIN RSA PRIVATE KEY-----\n"), "应以 RSA 私钥 BEGIN 头开始"),
-                    () -> assertTrue(pem.endsWith("\n-----END RSA PRIVATE KEY-----"), "应以 RSA 私钥 END 尾结束"),
+                    () -> assertTrue(pem.startsWith("-----BEGIN PRIVATE KEY-----\n"), "应以 PKCS#8 私钥 BEGIN 头开始"),
+                    () -> assertTrue(pem.endsWith("\n-----END PRIVATE KEY-----"), "应以 PKCS#8 私钥 END 尾结束"),
+                    () -> assertFalse(pem.contains("RSA PRIVATE KEY"),
+                            "头尾应与内容一致，不应再使用 PKCS#1 的 RSA PRIVATE KEY 标注"),
                     () -> assertEquals(privateKeyBase64, stripPem(pem), "去除头尾后的内容应等于私钥的 Base64"));
         }
 
@@ -320,13 +325,24 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("剥离头尾后的 PEM 内容可重新解析为密钥")
+        @DisplayName("按 PKCS#8 头尾剥离后的私钥内容可重新解析为密钥")
         void testStripPemCanBeParsed() throws Exception {
             String pem = rsaUtil.getPemPrivateKey(keyPair);
             String content = stripPem(pem);
+            assertFalse(content.contains("-"), "按 PKCS#8 头尾完整剥离后不应残留分隔符 -----");
             assertArrayEqualsWithMessage(keyPair.getPrivate().getEncoded(),
                     RsaUtil.create().getPrivateKey(content).getEncoded(),
-                    "剥离后的私钥内容应能重新解析（说明 PEM 头标注为 RSA PRIVATE KEY，实际内容却是 PKCS#8）");
+                    "剥离后的私钥内容应能重新解析，说明 PEM 头尾与 PKCS#8 内容完全一致");
+        }
+
+        @Test
+        @DisplayName("convertPrivateKeyToPem 的头尾同样是 PKCS#8 的 PRIVATE KEY")
+        void testConvertPrivateKeyToPemHeader() {
+            String pem = rsaUtil.convertPrivateKeyToPem(keyPair.getPrivate());
+            assertAll("转换私钥的 PEM 头尾应与内容一致",
+                    () -> assertTrue(pem.startsWith("-----BEGIN PRIVATE KEY-----\n"), "应以 PKCS#8 私钥 BEGIN 头开始"),
+                    () -> assertTrue(pem.endsWith("\n-----END PRIVATE KEY-----"), "应以 PKCS#8 私钥 END 尾结束"),
+                    () -> assertFalse(pem.contains("RSA PRIVATE KEY"), "不应再使用 PKCS#1 的 RSA PRIVATE KEY 标注"));
         }
 
         @Test

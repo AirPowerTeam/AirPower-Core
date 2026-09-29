@@ -120,15 +120,36 @@ public class TreeUtil {
             long parentId,
             @NotNull Function<Long, List<E>> function
     ) {
-        Set<Long> list = new HashSet<>();
+        Set<Long> collected = new HashSet<>();
+        collectChildrenIdList(parentId, function, collected);
+        return collected;
+    }
+
+    /**
+     * 递归收集所有后代 {@code ID}
+     *
+     * @param parentId  父 ID
+     * @param function  获取子节点的函数
+     * @param collected 已收集的 ID 集合，用于过滤 {@code null} ID 与环形数据
+     * @param <E>       泛型
+     */
+    private static <
+            E extends IEntity<E> & ITree<E>
+            > void collectChildrenIdList(
+            long parentId,
+            @NotNull Function<Long, List<E>> function,
+            @NotNull Set<Long> collected
+    ) {
         List<E> children = function.apply(parentId);
         if (Objects.isNull(children)) {
-            children = List.of();
+            return;
         }
-        children.stream().map(IEntity::getId).forEach(id -> {
-            list.add(id);
-            list.addAll(getChildrenIdList(id, function));
+        children.stream().map(IEntity::getId).filter(Objects::nonNull).forEach(id -> {
+            if (!collected.add(id)) {
+                // 已收集过，避免环形数据导致无限递归
+                return;
+            }
+            collectChildrenIdList(id, function, collected);
         });
-        return list;
     }
 }

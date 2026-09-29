@@ -189,7 +189,10 @@ public class HttpUtil {
         try {
             return httpClient.send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
-            throw new ServiceException("发起请求失败，" + e.getMessage());
+            // 保留原始异常，便于上层区分超时、连接失败或请求非法
+            ServiceException serviceException = new ServiceException("发起请求失败，" + e.getMessage());
+            serviceException.initCause(e);
+            throw serviceException;
         }
     }
 
@@ -210,7 +213,7 @@ public class HttpUtil {
             case DELETE -> requestBuilder.DELETE();
             default -> throw new ServiceException("不支持的请求方法");
         }
-        if (Objects.nonNull(cookies)) {
+        if (Objects.nonNull(cookies) && !cookies.isEmpty()) {
             List<String> cookieList = new ArrayList<>();
             cookies.forEach((key, value) -> cookieList.add(key + "=" + value));
             requestBuilder.setHeader(

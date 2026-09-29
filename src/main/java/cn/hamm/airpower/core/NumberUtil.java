@@ -30,6 +30,16 @@ public class NumberUtil {
     private static final RoundingMode DEFAULT_ROUNDING_MODE = HALF_UP;
 
     /**
+     * 空的 {@code double} 数组（可变参数为 {@code null} 时的兜底）
+     */
+    private static final double[] EMPTY_DOUBLE = {};
+
+    /**
+     * 空的 {@code long} 数组（可变参数为 {@code null} 时的兜底）
+     */
+    private static final long[] EMPTY_LONG = {};
+
+    /**
      * 禁止外部实例化
      */
     @Contract(pure = true)
@@ -46,7 +56,8 @@ public class NumberUtil {
      */
     public static double add(double first, double second, double... values) {
         return calculate(BigDecimal::add, BigDecimal.valueOf(first), BigDecimal.valueOf(second),
-                Arrays.stream(values).mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
+                Arrays.stream(Objects.requireNonNullElse(values, EMPTY_DOUBLE))
+                        .mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
         ).doubleValue();
     }
 
@@ -60,7 +71,8 @@ public class NumberUtil {
      */
     public static long add(long first, long second, long... values) {
         return calculate(BigInteger::add, BigInteger.valueOf(first), BigInteger.valueOf(second),
-                Arrays.stream(values).mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
+                Arrays.stream(Objects.requireNonNullElse(values, EMPTY_LONG))
+                        .mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
         ).longValue();
     }
 
@@ -74,7 +86,8 @@ public class NumberUtil {
      */
     public static double subtract(double first, double second, double... values) {
         return calculate(BigDecimal::subtract, BigDecimal.valueOf(first), BigDecimal.valueOf(second),
-                Arrays.stream(values).mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
+                Arrays.stream(Objects.requireNonNullElse(values, EMPTY_DOUBLE))
+                        .mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
         ).doubleValue();
     }
 
@@ -88,7 +101,8 @@ public class NumberUtil {
      */
     public static long subtract(long first, long second, long... values) {
         return calculate(BigInteger::subtract, BigInteger.valueOf(first), BigInteger.valueOf(second),
-                Arrays.stream(values).mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
+                Arrays.stream(Objects.requireNonNullElse(values, EMPTY_LONG))
+                        .mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
         ).longValue();
     }
 
@@ -102,7 +116,8 @@ public class NumberUtil {
      */
     public static double multiply(double first, double second, double... values) {
         return calculate(BigDecimal::multiply, BigDecimal.valueOf(first), BigDecimal.valueOf(second),
-                Arrays.stream(values).mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
+                Arrays.stream(Objects.requireNonNullElse(values, EMPTY_DOUBLE))
+                        .mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
         ).doubleValue();
     }
 
@@ -116,7 +131,8 @@ public class NumberUtil {
      */
     public static long multiply(long first, long second, long... values) {
         return calculate(BigInteger::multiply, BigInteger.valueOf(first), BigInteger.valueOf(second),
-                Arrays.stream(values).mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
+                Arrays.stream(Objects.requireNonNullElse(values, EMPTY_LONG))
+                        .mapToObj(BigInteger::valueOf).toArray(BigInteger[]::new)
         ).longValue();
     }
 

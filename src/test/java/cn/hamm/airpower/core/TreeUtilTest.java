@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.*;
 import java.util.function.Function;
@@ -397,15 +398,46 @@ class TreeUtilTest {
         }
 
         @Test
-        @DisplayName("边界:子节点 ID 为 null 时会因自动拆箱抛出 NullPointerException(源码缺陷)")
-        void nullChildIdThrowsNullPointerException() {
-            List<DemoTree> list = new ArrayList<>(Arrays.asList(
+        @DisplayName("边界:子节点 ID 为 null 时被过滤跳过，不抛异常")
+        void nullChildIdIsSkipped() {
+            List<DemoTree> onlyNull = new ArrayList<>(Arrays.asList(
                     node(1L, 0L, "父"),
                     node(null, 1L, "无ID子节点")
             ));
-            assertThrows(NullPointerException.class,
-                    () -> TreeUtil.getChildrenIdList(1L, childLookup(list)),
-                    "getChildrenIdList 的入参是 long,子节点 ID 为 null 时递归调用会自动拆箱并抛 NPE");
+            Set<Long> ids = assertDoesNotThrow(() -> TreeUtil.getChildrenIdList(1L, childLookup(onlyNull)),
+                    "子节点 ID 为 null 时应被 null 过滤跳过，而不是在递归调用处自动拆箱抛 NPE");
+            assertTrue(ids.isEmpty(), "唯一的子节点 ID 为 null 时应收集不到任何 ID，实际为：" + ids);
+
+            // 混合场景：null ID 被跳过，正常 ID 照常收集
+            List<DemoTree> mixed = new ArrayList<>(Arrays.asList(
+                    node(1L, 0L, "父"),
+                    node(null, 1L, "无ID子节点"),
+                    node(2L, 1L, "正常子节点")
+            ));
+            Set<Long> mixedIds = TreeUtil.getChildrenIdList(1L, childLookup(mixed));
+            assertEquals(Set.of(2L), mixedIds, "null ID 应被跳过，其余正常 ID 不受影响");
+        }
+
+        @Test
+        @DisplayName("边界:环形数据（A 的父是 B、B 的父是 A）应正常收敛，不发生 StackOverflowError")
+        @Timeout(5)
+        void cyclicDataDoesNotOverflow() {
+            // 互相指向：A(1) 的父是 B(2)，B(2) 的父是 A(1)，并向下挂一条链 C(3) → D(4)
+            List<DemoTree> cycle = new ArrayList<>(Arrays.asList(
+                    node(1L, 2L, "A的父是B"),
+                    node(2L, 1L, "B的父是A"),
+                    node(3L, 2L, "B的子节点C"),
+                    node(4L, 3L, "C的子节点D")
+            ));
+            Set<Long> ids = assertDoesNotThrow(() -> TreeUtil.getChildrenIdList(1L, childLookup(cycle)),
+                    "已收集过的 ID 不再递归，环形数据应收敛返回而不是抛 StackOverflowError");
+            assertEquals(Set.of(1L, 2L, 3L, 4L), ids, "环形数据应一次性收集到全部可达 ID");
+
+            // 自环：节点的父级就是自己
+            List<DemoTree> selfLoop = new ArrayList<>(List.of(node(5L, 5L, "自环节点")));
+            Set<Long> selfIds = assertDoesNotThrow(() -> TreeUtil.getChildrenIdList(5L, childLookup(selfLoop)),
+                    "自环节点也应收敛返回，不应无限递归");
+            assertEquals(Set.of(5L), selfIds, "自环节点应只收集到自身 ID 一次");
         }
 
         @Test

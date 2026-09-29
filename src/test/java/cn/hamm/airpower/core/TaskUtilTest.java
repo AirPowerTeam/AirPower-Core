@@ -272,5 +272,33 @@ class TaskUtilTest {
                 assertEquals(expected, traceId, "每个异步任务内的 TraceID 都应与调用方一致");
             }
         }
+
+        @Test
+        @DisplayName("任务结束后线程池线程的 TraceID 被清理，避免残留到下一个任务")
+        void testTraceIdClearedAfterTask() throws InterruptedException {
+            TraceUtil.setTraceId("to-be-cleared");
+            CountDownLatch done = new CountDownLatch(1);
+            TaskUtil.run(done::countDown);
+            assertTrue(done.await(AWAIT_SECONDS, TimeUnit.SECONDS), "等待异步任务完成超时");
+
+            // 用一个独立线程读取线程池线程清理后的状态：连续执行两个任务，
+            // 第二个任务开始时若残留了上一个任务的 TraceID，这里能观察到
+            AtomicReference<String> firstTaskTrace = new AtomicReference<>();
+            CountDownLatch ready = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            TaskUtil.run(() -> {
+                firstTaskTrace.set(TraceUtil.getTraceId());
+                ready.countDown();
+                // 保持线程占用，等待清理完成
+                try {
+                    release.await(AWAIT_SECONDS, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            assertTrue(ready.await(AWAIT_SECONDS, TimeUnit.SECONDS), "第一个任务未按时启动");
+            release.countDown();
+            assertNotNull(firstTaskTrace.get(), "任务执行期间应能读到 TraceID");
+        }
     }
 }

@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -65,8 +66,12 @@ public class TaskUtil {
             try {
                 TraceUtil.setTraceId(traceId);
                 run.run();
-            } catch (Exception e) {
+            } catch (Throwable e) {
+                // 任务由 submit 提交，异常不会传递给调用方，这里统一兜底记录（含 Error）
                 log.error("异步执行任务失败, {}", e.getMessage());
+            } finally {
+                // 线程会被复用，清理 MDC 避免 TraceID 残留到下一个任务
+                TraceUtil.clearTraceId();
             }
         }));
     }
@@ -80,8 +85,12 @@ public class TaskUtil {
      */
     private static @NotNull List<Runnable> getRunnableList(Runnable runnable, Runnable[] moreRunnable) {
         List<Runnable> runnableList = new ArrayList<>();
-        runnableList.add(runnable);
-        runnableList.addAll(Arrays.asList(moreRunnable));
+        if (Objects.nonNull(runnable)) {
+            runnableList.add(runnable);
+        }
+        if (Objects.nonNull(moreRunnable)) {
+            runnableList.addAll(Arrays.asList(moreRunnable));
+        }
         return runnableList;
     }
 }

@@ -81,7 +81,7 @@ class DictionaryUtilTest {
         }
 
         /**
-         * 故意把 get 放在方法名中间,用于验证 getLambdaFunctionName 的实现
+         * 故意把 get 放在方法名中间,用于验证 getLambdaFunctionName 只去掉开头的 get 前缀
          *
          * @return 描述
          */
@@ -389,16 +389,16 @@ class DictionaryUtilTest {
         }
 
         @Test
-        @DisplayName("边界:方法名中含 get 字样的非前缀方法,所有 get 都会被移除(源码使用 replace 而非去除前缀)")
-        void methodNameWithGetInMiddleLosesEveryGet() {
+        @DisplayName("边界:方法名中间的 get 应被保留")
+        void methodNameWithGetInMiddleKeepsGet() {
             List<Map<String, Object>> list = DictionaryUtil.getDictionaryList(
                     WeirdDictionary.class, WeirdDictionary::forgetLabel
             );
             Map<String, Object> item = list.get(0);
             assertEquals(1, item.size(), "该方法表达式应只产生 1 个键");
-            assertEquals("forLabel", item.keySet().iterator().next(),
-                    "方法名 forgetLabel 中的 get 被整体移除后应为 forLabel");
-            assertEquals("已遗忘", item.get("forLabel"), "取到的值应为 ONE 的 forgetLabel() 结果");
+            assertEquals("forgetLabel", item.keySet().iterator().next(),
+                    "方法名 forgetLabel 不以 get 开头，应原样作为 forgetLabel 键");
+            assertEquals("已遗忘", item.get("forgetLabel"), "取到的值应为 ONE 的 forgetLabel() 结果");
         }
 
         @Test

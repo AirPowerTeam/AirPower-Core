@@ -162,4 +162,43 @@ class TraceUtilTest {
             assertNotEquals(first, second, "每次 resetTraceId 都应重新生成 UUID，两次结果不应相同");
         }
     }
+
+    @Nested
+    @DisplayName("clearTraceId 清除 TraceID")
+    class ClearTraceIdTest {
+
+        @Test
+        @DisplayName("正常路径：清除后读取为 null")
+        void testClearRemovesValue() {
+            TraceUtil.setTraceId("to-be-cleared");
+            TraceUtil.clearTraceId();
+            assertNull(TraceUtil.getTraceId(), "清除后 MDC 中不应再保留 TraceID");
+        }
+
+        @Test
+        @DisplayName("未设置时重复清除不抛异常")
+        void testClearWhenNotSet() {
+            assertDoesNotThrow(TraceUtil::clearTraceId, "未设置 TraceID 时清除应安全无副作用");
+            assertNull(TraceUtil.getTraceId(), "清除后仍应为 null");
+        }
+
+        @Test
+        @DisplayName("只清除 TraceID，不影响 MDC 中的其他键")
+        void testClearOnlyRemovesTraceId() {
+            MDC.put("其他键", "其他值");
+            TraceUtil.setTraceId("only-trace");
+            TraceUtil.clearTraceId();
+            assertNull(TraceUtil.getTraceId(), "TraceID 应被清除");
+            assertEquals("其他值", MDC.get("其他键"), "其他 MDC 键不应受影响");
+        }
+
+        @Test
+        @DisplayName("与 resetTraceId 的区别：reset 生成新值，clear 才是真正清空")
+        void testDifferenceWithReset() {
+            TraceUtil.resetTraceId();
+            assertNotNull(TraceUtil.getTraceId(), "resetTraceId 会重新生成 UUID");
+            TraceUtil.clearTraceId();
+            assertNull(TraceUtil.getTraceId(), "clearTraceId 才是真正清空 MDC");
+        }
+    }
 }

@@ -1,5 +1,7 @@
 package cn.hamm.airpower.core.constant;
 
+import org.jetbrains.annotations.Contract;
+
 /**
  * <h1>HTTP 常量</h1>
  *
@@ -10,9 +12,20 @@ public class HttpConstant {
 
     public static final String LOCAL_HOST = "localhost";
 
+    /**
+     * 禁止外部实例化
+     */
+    @Contract(pure = true)
+    private HttpConstant() {
+    }
+
     public static class Status {
         public static final int OK = 200;
         public static final int INTERNAL_SERVER_ERROR = 500;
+
+        @Contract(pure = true)
+        private Status() {
+        }
     }
 
     /**
@@ -26,6 +39,10 @@ public class HttpConstant {
         public static final String IMPLICIT = "implicit";
         public static final String BEARER = "Bearer";
         public static final String BASIC = "Basic";
+
+        @Contract(pure = true)
+        private GrantType() {
+        }
     }
 
     /**
@@ -38,6 +55,10 @@ public class HttpConstant {
         public static final String TRACE_ID = "X-Trace-ID";
         public static final String AUTHORIZATION = "Authorization";
         public static final String USER_AGENT = "User-Agent";
+
+        @Contract(pure = true)
+        private Header() {
+        }
     }
 
     /**
@@ -50,6 +71,10 @@ public class HttpConstant {
         public static final String MULTIPART_FORM_DATA = "multipart/form-data";
         public static final String TEXT_HTML = "text/html";
         public static final String TEXT_PLAIN = "text/plain";
+
+        @Contract(pure = true)
+        private ContentType() {
+        }
     }
 
     /**
@@ -65,6 +90,14 @@ public class HttpConstant {
             public static final String WL_PROXY_CLIENT_IP = "WL-Proxy-Client-IP";
             public static final String HTTP_CLIENT_IP = "HTTP_CLIENT_IP";
             public static final String HTTP_X_FORWARDED_FOR = "HTTP_X_FORWARDED_FOR";
+
+            @Contract(pure = true)
+            private Header() {
+            }
+        }
+
+        @Contract(pure = true)
+        private Proxy() {
         }
     }
 }

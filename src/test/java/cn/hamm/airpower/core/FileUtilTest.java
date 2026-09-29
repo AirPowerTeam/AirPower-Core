@@ -13,27 +13,22 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.Enumeration;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * {@link FileUtil} 单元测试。
  *
  * <p>所有文件读写均在 {@link TempDir} 提供的临时目录内进行，测试结束后由框架自动清理。</p>
  *
- * <p>注意：{@code formatSize} 内部使用 {@code DecimalFormat} 的默认 Locale，
- * 小数点符号会随 JVM 语言环境变化（如德语环境输出 {@code 1,00B}），
- * 因此本类的格式化断言以默认 Locale 为 {@code .} 的运行环境为准。</p>
+ * <p>注意：{@code formatSize} 已固定使用 {@code Locale.ROOT} 格式化小数，
+ * 因此在任意语言环境下都应输出 {@code 1.00B} 这类英文小数点格式。</p>
  */
 @DisplayName("文件工具类测试")
 class FileUtilTest {
@@ -131,69 +126,37 @@ class FileUtilTest {
     @DisplayName("formatSize 格式化文件大小")
     class FormatSizeTest {
 
-        /**
-         * 按 JVM 默认 Locale 的符号格式化两位小数（与源码 {@code new DecimalFormat("#.00")} 行为一致）
-         *
-         * @param value 数值
-         * @return 格式化结果
-         */
-        private String size(double value) {
-            return new DecimalFormat("#.00", DecimalFormatSymbols.getInstance(Locale.getDefault()))
-                    .format(value);
-        }
-
-        /**
-         * 默认 Locale 是否使用 ASCII 数字
-         *
-         * @return 是否使用 0-9
-         */
-        private boolean asciiDigits() {
-            DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(Locale.getDefault());
-            return symbols.getZeroDigit() == '0' && symbols.getDecimalSeparator() == '.';
-        }
-
         @Test
-        @DisplayName("小数分隔符与数字字形跟随 JVM 默认 Locale（源码未指定 Locale 的已知缺陷）")
-        void localeDependent() {
-            // 源码使用 new DecimalFormat("#.00") 未指定 DecimalFormatSymbols，
-            // 因此在德语等 Locale 下会输出 1,00B；此处固化该现状，防止被无意改动
-            assertEquals(size(1.0) + "B", FileUtil.formatSize(1L),
-                    "文件大小的数字与小数分隔符应与 JVM 默认 Locale 保持一致");
+        @DisplayName("小数点固定为英文句点，不受 JVM 默认 Locale 影响")
+        void localeIndependent() {
+            // 源码已固定使用 Locale.ROOT，德语等环境下也应输出 1.00B 而不是 1,00B
+            assertEquals("1.00B", FileUtil.formatSize(1L), "文件大小固定使用英文小数点，不应随 Locale 变化");
         }
 
         @Test
         @DisplayName("小于 1KB 时按字节输出")
         void bytes() {
-            assertEquals(size(1.0) + "B", FileUtil.formatSize(1L), "1 字节应输出 1.00B");
-            assertEquals(size(512) + "B", FileUtil.formatSize(512L), "512 字节应输出 512.00B");
-            // 1023 字节仍然小于 1024，因此结果不带小数进位
-            assertEquals(size(1023) + "B", FileUtil.formatSize(1023L), "1023 字节应输出 1023.00B");
-        }
-
-        @Test
-        @DisplayName("默认 Locale 使用 ASCII 数字时输出 1.00B 这类字面量")
-        void asciiLiterals() {
-            assumeTrue(asciiDigits(), "默认 Locale 使用非 ASCII 数字时跳过字面量断言");
             assertEquals("1.00B", FileUtil.formatSize(1L), "1 字节应输出 1.00B");
-            assertEquals("1.50KB", FileUtil.formatSize(1536L), "1536 字节应输出 1.50KB");
-            assertEquals("1.00GB", FileUtil.formatSize(1073741824L), "1GB 应输出 1.00GB");
+            assertEquals("512.00B", FileUtil.formatSize(512L), "512 字节应输出 512.00B");
+            // 1023 字节仍然小于 1024，因此结果不带小数进位
+            assertEquals("1023.00B", FileUtil.formatSize(1023L), "1023 字节应输出 1023.00B");
         }
 
         @Test
         @DisplayName("整除边界应升级单位")
         void scaleUp() {
-            assertEquals(size(1.0) + "KB", FileUtil.formatSize(1024L), "1024 字节应输出 1.00KB");
-            assertEquals(size(1.0) + "MB", FileUtil.formatSize(1048576L), "1MB 应输出 1.00MB");
-            assertEquals(size(1.0) + "GB", FileUtil.formatSize(1073741824L), "1GB 应输出 1.00GB");
-            assertEquals(size(1.0) + "TB", FileUtil.formatSize(1099511627776L), "1TB 应输出 1.00TB");
-            assertEquals(size(1.0) + "PB", FileUtil.formatSize(1125899906842624L), "1PB 应输出 1.00PB");
+            assertEquals("1.00KB", FileUtil.formatSize(1024L), "1024 字节应输出 1.00KB");
+            assertEquals("1.00MB", FileUtil.formatSize(1048576L), "1MB 应输出 1.00MB");
+            assertEquals("1.00GB", FileUtil.formatSize(1073741824L), "1GB 应输出 1.00GB");
+            assertEquals("1.00TB", FileUtil.formatSize(1099511627776L), "1TB 应输出 1.00TB");
+            assertEquals("1.00PB", FileUtil.formatSize(1125899906842624L), "1PB 应输出 1.00PB");
         }
 
         @Test
         @DisplayName("非整除时应保留两位小数")
         void decimal() {
-            assertEquals(size(1.5) + "KB", FileUtil.formatSize(1536L), "1536 字节应输出 1.50KB");
-            assertEquals(size(1.5) + "GB", FileUtil.formatSize(1073741824L + 536870912L),
+            assertEquals("1.50KB", FileUtil.formatSize(1536L), "1536 字节应输出 1.50KB");
+            assertEquals("1.50GB", FileUtil.formatSize(1073741824L + 536870912L),
                     "1.5GB 应按两位小数输出 1.50GB");
         }
 
@@ -201,7 +164,7 @@ class FileUtilTest {
         @DisplayName("刚好低于升级线时四舍五入后可能出现与单位同值的显示")
         void justBelowScale() {
             // 1048575 / 1024 = 1023.999…，按两位小数四舍五入后显示为 1024.00KB
-            assertEquals(size(1024) + "KB", FileUtil.formatSize(1024L * 1024L - 1L),
+            assertEquals("1024.00KB", FileUtil.formatSize(1024L * 1024L - 1L),
                     "小于 1MB 的最大值会因四舍五入显示为 1024.00KB");
         }
 

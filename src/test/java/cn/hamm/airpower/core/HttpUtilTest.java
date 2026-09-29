@@ -88,6 +88,11 @@ class HttpUtilTest {
     private static volatile String recordedCookie;
 
     /**
+     * 测试服务器已处理的请求次数（用于确认请求确实到达服务端，避免「请求头为 null」断言被空跑误判）
+     */
+    private static final AtomicInteger receivedCount = new AtomicInteger();
+
+    /**
      * 启动本地测试服务器（随机端口）
      *
      * @throws IOException 服务器启动失败
@@ -131,6 +136,7 @@ class HttpUtilTest {
         try (InputStream input = exchange.getRequestBody()) {
             body = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
+        receivedCount.incrementAndGet();
         recordedMethod = exchange.getRequestMethod();
         recordedBody = body;
         recordedContentType = firstHeader(exchange, HttpConstant.Header.CONTENT_TYPE);
@@ -166,6 +172,7 @@ class HttpUtilTest {
         recordedContentType = null;
         recordedCustomHeader = null;
         recordedCookie = null;
+        receivedCount.set(0);
     }
 
     @Nested
@@ -422,10 +429,23 @@ class HttpUtilTest {
         }
 
         @Test
-        @DisplayName("Cookie 集合为 null 时请求仍可正常发出")
+        @DisplayName("未调用 addCookie 时不应发送空的 Cookie 请求头")
+        void testNoCookieHeaderWhenCookiesAbsent() {
+            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).get();
+            assertEquals(HttpConstant.Status.OK, response.statusCode(), "响应状态码应为 200");
+            assertEquals(1, receivedCount.get(), "请求应确实到达测试服务端，否则后续断言无效");
+            assertNull(recordedCookie, "Cookie 集合为空时不应发送 Cookie 请求头，更不应发送空值");
+        }
+
+        @Test
+        @DisplayName("Cookie 集合为 null 时请求仍可正常发出，且不发送 Cookie 请求头")
         void testCookiesIsNull() {
-            HttpResponse<String> response = HttpUtil.create().setUrl(baseUrl).setCookies(null).get();
+            HttpResponse<String> response = assertDoesNotThrow(
+                    () -> HttpUtil.create().setUrl(baseUrl).setCookies(null).get(),
+                    "setCookies(null) 后构造请求时不应抛出 NullPointerException");
             assertEquals(HttpConstant.Status.OK, response.statusCode(), "Cookie 为 null 时请求仍应返回 200");
+            assertEquals(1, receivedCount.get(), "请求应确实到达测试服务端，否则后续断言无效");
+            assertNull(recordedCookie, "Cookie 集合为 null 时不应发送 Cookie 请求头");
         }
 
         @Test
@@ -472,12 +492,13 @@ class HttpUtilTest {
     @Timeout(20)
     class ExceptionTest {
         @Test
-        @DisplayName("url 为 null 时应抛出 ServiceException")
+        @DisplayName("url 为 null 时应抛出 ServiceException 并保留原始异常")
         void testUrlIsNull() {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().get(), "url 为 null 时应抛出业务异常");
             assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
             assertEquals(Json.SERVICE_ERROR, exception.getCode(), "异常码应为默认的服务错误码");
+            assertNotNull(exception.getCause(), "包装异常应通过 initCause 保留原始异常，便于上层定位根因");
         }
 
         @Test
@@ -486,6 +507,7 @@ class HttpUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().setUrl("这不是一个URL").get(), "非法 url 应抛出业务异常");
             assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
+            assertNotNull(exception.getCause(), "包装异常应通过 initCause 保留 URI 解析的原始异常");
         }
 
         @Test
@@ -494,6 +516,7 @@ class HttpUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().setUrl("").get(), "空 url 应抛出业务异常");
             assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
+            assertNotNull(exception.getCause(), "包装异常应通过 initCause 保留原始异常");
         }
 
         @Test
@@ -503,6 +526,10 @@ class HttpUtilTest {
                     () -> HttpUtil.create().setUrl(baseUrl).setMethod(HttpMethod.PATCH).send(),
                     "PATCH 不在支持列表中，应抛出业务异常");
             assertEquals("发起请求失败，不支持的请求方法", exception.getMessage(), "异常消息应包含不支持的请求方法提示");
+            assertInstanceOf(ServiceException.class, exception.getCause(),
+                    "原始异常应为 getHttpRequest 内部抛出的 ServiceException");
+            assertEquals("不支持的请求方法", exception.getCause().getMessage(),
+                    "原始异常消息应为「不支持的请求方法」");
         }
 
         @Test
@@ -512,6 +539,17 @@ class HttpUtilTest {
                     () -> HttpUtil.create().setUrl("http://127.0.0.1:1/api").get(),
                     "未监听的端口应抛出业务异常");
             assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
+        }
+
+        @Test
+        @DisplayName("send() 失败时应通过 initCause 保留原始的连接异常")
+        void testSendKeepsOriginalCause() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> HttpUtil.create().setUrl("http://127.0.0.1:1/api").get(),
+                    "连接未监听端口时应抛出业务异常");
+            assertNotNull(exception.getCause(), "包装后的 ServiceException 应保留原始异常");
+            assertInstanceOf(IOException.class, exception.getCause(),
+                    "原始异常应为连接失败的 IOException，实际为：" + exception.getCause());
         }
     }
 }

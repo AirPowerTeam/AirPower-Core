@@ -460,10 +460,16 @@ class JsonTest {
         }
 
         @Test
-        @DisplayName("parse 传入 null 文本抛 IllegalArgumentException（源码仅捕获 JsonProcessingException）")
-        void parseNullStringThrowsIllegalArgument() {
-            assertThrows(IllegalArgumentException.class, () -> Json.parse(null, UserModel.class),
-                    "parse(null, Class) 未被捕获，应抛出 IllegalArgumentException 而不是 ServiceException");
+        @DisplayName("parse 传 null 应抛业务异常")
+        void parseNullStringThrowsServiceException() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> Json.parse(null, UserModel.class),
+                    "parse(null, Class) 的 null 文本应被统一包装为 ServiceException，不能泄漏 IllegalArgumentException");
+            assertAll("异常应为业务异常，且信息以「JSON 反序列化失败，」开头",
+                    () -> assertTrue(exception.getMessage().startsWith("JSON 反序列化失败，"),
+                            "反序列化失败异常信息应以「JSON 反序列化失败，」开头，实际为：" + exception.getMessage()),
+                    () -> assertEquals(Json.SERVICE_ERROR, exception.getCode(),
+                            "业务异常的错误码应为 500，实际为：" + exception.getCode()));
         }
 
         @Test
@@ -526,10 +532,16 @@ class JsonTest {
         }
 
         @Test
-        @DisplayName("parseList 传入 null 文本抛 IllegalArgumentException（源码仅捕获 JsonProcessingException）")
-        void parseListNullStringThrowsIllegalArgument() {
-            assertThrows(IllegalArgumentException.class, () -> Json.parseList(null, DemoModel[].class),
-                    "parseList(null, ...) 未被捕获，应抛出 IllegalArgumentException 而不是 ServiceException");
+        @DisplayName("parseList 传 null 应抛业务异常")
+        void parseListNullStringThrowsServiceException() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> Json.parseList(null, DemoModel[].class),
+                    "parseList(null, ...) 的 null 文本应被统一包装为 ServiceException，不能泄漏 IllegalArgumentException");
+            assertAll("异常应为业务异常，且信息以「JSON 反序列化失败，」开头",
+                    () -> assertTrue(exception.getMessage().startsWith("JSON 反序列化失败，"),
+                            "反序列化失败异常信息应以「JSON 反序列化失败，」开头，实际为：" + exception.getMessage()),
+                    () -> assertEquals(Json.SERVICE_ERROR, exception.getCode(),
+                            "业务异常的错误码应为 500，实际为：" + exception.getCode()));
         }
     }
 

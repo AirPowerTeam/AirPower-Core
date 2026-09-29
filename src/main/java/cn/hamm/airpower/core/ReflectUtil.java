@@ -275,11 +275,14 @@ public class ReflectUtil {
      *
      * @param lambda 表达式
      * @return 函数名
+     * @apiNote 仅去掉 {@code get} 前缀，方法名中间的 {@code get} 会被保留
      */
     public static @NotNull String getLambdaFunctionName(@NotNull IFunction<?, ?> lambda) {
-        return getSerializedLambda(lambda)
-                .getImplMethodName()
-                .replace(GET, "");
+        String methodName = getSerializedLambda(lambda).getImplMethodName();
+        if (methodName.length() > GET.length() && methodName.startsWith(GET)) {
+            return methodName.substring(GET.length());
+        }
+        return methodName;
     }
 
     /**
@@ -294,7 +297,7 @@ public class ReflectUtil {
             replaceMethod.setAccessible(true);
             return (SerializedLambda) replaceMethod.invoke(lambda);
         } catch (Exception e) {
-            throw new ServiceException("反射获取Lamba方法名失败，" + e.getMessage());
+            throw new ServiceException("反射获取 Lambda 方法名失败，" + e.getMessage());
         }
     }
 

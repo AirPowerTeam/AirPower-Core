@@ -30,6 +30,15 @@ public class TraceUtil {
     }
 
     /**
+     * 清除 TraceID
+     *
+     * @apiNote 线程池等会复用线程的场景，任务结束后应调用，避免 TraceID 残留
+     */
+    public static void clearTraceId() {
+        MDC.remove(HttpConstant.Header.TRACE_ID);
+    }
+
+    /**
      * 设置 TraceID
      *
      * @param traceId TraceID

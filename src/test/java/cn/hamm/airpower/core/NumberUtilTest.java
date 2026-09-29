@@ -70,12 +70,15 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("double 重载：可变参数为 null 抛 NPE（源码防御检查失效）")
+        @DisplayName("double 重载：可变参数为 null 时按空数组处理")
         void doubleNullVarargs() {
-            // calculate() 内的 Objects.nonNull(values) 判空发生在调用方已执行 Arrays.stream(values) 之后，
-            // 因此显式传 null 数组会在 Arrays.stream 处抛 NullPointerException
-            assertThrows(NullPointerException.class, () -> NumberUtil.add(1.0, 2.0, (double[]) null),
-                    "可变参数显式传 null 时应在 Arrays.stream 处抛 NullPointerException");
+            // 源码在遍历可变参数前用 Objects.requireNonNullElse(values, 空数组) 兜底，
+            // 显式传 null 数组等价于「没有更多参数」，不会抛 NullPointerException
+            double result = assertDoesNotThrow(() -> NumberUtil.add(1.0, 2.0, (double[]) null),
+                    "可变参数显式传 null 时应按空数组兜底，不应抛出 NullPointerException");
+            assertEquals(3.0, result, DELTA, "add(1.0, 2.0, null) 应等价于 add(1.0, 2.0)，结果为 3.0");
+            assertEquals(NumberUtil.add(1.0, 2.0, new double[0]), result, DELTA,
+                    "传 null 与传空数组的结果应完全一致");
         }
 
         @Test
@@ -108,10 +111,13 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("long 重载：null 可变参数同样抛 NPE")
+        @DisplayName("long 重载：可变参数为 null 时按空数组处理")
         void longNullVarargs() {
-            assertThrows(NullPointerException.class, () -> NumberUtil.add(1L, 2L, (long[]) null),
-                    "可变参数显式传 null 时应抛 NullPointerException");
+            long result = assertDoesNotThrow(() -> NumberUtil.add(1L, 2L, (long[]) null),
+                    "可变参数显式传 null 时应按空数组兜底，不应抛出 NullPointerException");
+            assertEquals(3L, result, "add(1L, 2L, null) 应等价于 add(1L, 2L)，结果为 3");
+            assertEquals(NumberUtil.add(1L, 2L, new long[0]), result,
+                    "传 null 与传空数组的结果应完全一致");
         }
     }
 
@@ -142,10 +148,13 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("double 重载：null 可变参数抛 NPE")
+        @DisplayName("double 重载：可变参数为 null 时按空数组处理")
         void doubleNullVarargs() {
-            assertThrows(NullPointerException.class, () -> NumberUtil.subtract(10.0, 3.0, (double[]) null),
-                    "可变参数显式传 null 时应抛 NullPointerException");
+            double result = assertDoesNotThrow(() -> NumberUtil.subtract(10.0, 3.0, (double[]) null),
+                    "可变参数显式传 null 时应按空数组兜底，不应抛出 NullPointerException");
+            assertEquals(7.0, result, DELTA, "subtract(10.0, 3.0, null) 应等价于 subtract(10.0, 3.0)，结果为 7.0");
+            assertEquals(NumberUtil.subtract(10.0, 3.0, new double[0]), result, DELTA,
+                    "传 null 与传空数组的结果应完全一致");
         }
 
         @Test
@@ -205,10 +214,13 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("double 重载：null 可变参数抛 NPE")
+        @DisplayName("double 重载：可变参数为 null 时按空数组处理")
         void doubleNullVarargs() {
-            assertThrows(NullPointerException.class, () -> NumberUtil.multiply(2.0, 3.0, (double[]) null),
-                    "可变参数显式传 null 时应抛 NullPointerException");
+            double result = assertDoesNotThrow(() -> NumberUtil.multiply(2.0, 3.0, (double[]) null),
+                    "可变参数显式传 null 时应按空数组兜底，不应抛出 NullPointerException");
+            assertEquals(6.0, result, DELTA, "multiply(2.0, 3.0, null) 应等价于 multiply(2.0, 3.0)，结果为 6.0");
+            assertEquals(NumberUtil.multiply(2.0, 3.0, new double[0]), result, DELTA,
+                    "传 null 与传空数组的结果应完全一致");
         }
 
         @Test
@@ -239,6 +251,16 @@ public class NumberUtilTest {
         @DisplayName("long 重载：可变参数为空数组")
         void longEmptyVarargs() {
             assertEquals(6L, NumberUtil.multiply(2L, 3L, new long[0]), "空数组可变参数应被忽略");
+        }
+
+        @Test
+        @DisplayName("long 重载：可变参数为 null 时按空数组处理")
+        void longNullVarargs() {
+            long result = assertDoesNotThrow(() -> NumberUtil.multiply(2L, 3L, (long[]) null),
+                    "可变参数显式传 null 时应按空数组兜底，不应抛出 NullPointerException");
+            assertEquals(6L, result, "multiply(2L, 3L, null) 应等价于 multiply(2L, 3L)，结果为 6");
+            assertEquals(NumberUtil.multiply(2L, 3L, new long[0]), result,
+                    "传 null 与传空数组的结果应完全一致");
         }
 
         @Test

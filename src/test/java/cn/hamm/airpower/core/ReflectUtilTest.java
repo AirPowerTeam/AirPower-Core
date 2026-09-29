@@ -211,16 +211,25 @@ class ReflectUtilTest {
     }
 
     /**
-     * 方法名中带有 "get" 的目标类，用于验证 Lambda 方法名的替换逻辑
+     * 方法名中带有 "get" 的目标类，用于验证 Lambda 方法名只去掉 get 前缀
      */
     static class Targeter {
         /**
-         * 方法名中间包含 "get"
+         * 以 get 为前缀的方法名
          *
          * @return 固定值
          */
         public String getTarget() {
             return "target";
+        }
+
+        /**
+         * 去掉 get 前缀后，剩余部分仍含 get 字样的方法名
+         *
+         * @return 固定值
+         */
+        public String getForgetLabel() {
+            return "forgetLabel";
         }
     }
 
@@ -792,11 +801,19 @@ class ReflectUtilTest {
         }
 
         @Test
-        @DisplayName("方法名中间含 get 时会被一并替换（源码使用 replace 全量替换）")
-        void replacesEveryGetOccurrence() {
+        @DisplayName("只去掉方法名开头的 get 前缀")
+        void removesOnlyGetPrefix() {
             IFunction<Targeter, String> function = Targeter::getTarget;
-            assertEquals("Tar", ReflectUtil.getLambdaFunctionName(function),
-                    "源码使用 String.replace 全量替换「get」，getTarget 会被解析成「Tar」");
+            assertEquals("Target", ReflectUtil.getLambdaFunctionName(function),
+                    "getTarget 只应去掉开头的 get 前缀，剩余的 Target 应被完整保留");
+        }
+
+        @Test
+        @DisplayName("去掉 get 前缀后剩余部分仍含 get 时予以保留")
+        void keepsGetAfterPrefix() {
+            IFunction<Targeter, String> function = Targeter::getForgetLabel;
+            assertEquals("ForgetLabel", ReflectUtil.getLambdaFunctionName(function),
+                    "getForgetLabel 去掉前缀后应得到 ForgetLabel，中间位置的 get 不应被删除");
         }
 
         @Test
@@ -811,8 +828,8 @@ class ReflectUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> ReflectUtil.getLambdaFunctionName(function),
                     "匿名内部类没有 writeReplace 方法，应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("反射获取Lamba方法名失败，"),
-                    "Lambda 解析失败异常信息应以「反射获取Lamba方法名失败，」开头（源码把 Lamba 拼成了 Lamba）");
+            assertTrue(exception.getMessage().startsWith("反射获取 Lambda 方法名失败，"),
+                    "Lambda 解析失败异常信息应以「反射获取 Lambda 方法名失败，」开头，实际为 " + exception.getMessage());
         }
 
         @Test
@@ -821,8 +838,8 @@ class ReflectUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> ReflectUtil.getLambdaFunctionName(null),
                     "getLambdaFunctionName(null) 应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("反射获取Lamba方法名失败，"),
-                    "null 入参的异常信息也应以「反射获取Lamba方法名失败，」开头");
+            assertTrue(exception.getMessage().startsWith("反射获取 Lambda 方法名失败，"),
+                    "null 入参的异常信息也应以「反射获取 Lambda 方法名失败，」开头，实际为 " + exception.getMessage());
         }
     }
 

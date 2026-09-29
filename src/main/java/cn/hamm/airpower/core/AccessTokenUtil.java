@@ -205,6 +205,9 @@ public class AccessTokenUtil {
         if (!StringUtil.hasText(secret)) {
             throwException(SET_ENV_TOKEN_SECRET_FIRST);
         }
+        if (!StringUtil.hasText(accessToken)) {
+            throwException(ACCESS_TOKEN_INVALID);
+        }
         String source = "";
         try {
             source = new String(Base64.getUrlDecoder().decode(accessToken.getBytes(UTF_8)));
@@ -222,14 +225,43 @@ public class AccessTokenUtil {
         if (!constantTimeEquals(hmacSha256(secret, list[0] + TOKEN_DELIMITER + list[2]), list[1])) {
             throwException(ACCESS_TOKEN_INVALID);
         }
-        if (Long.parseLong(list[0]) < System.currentTimeMillis() &&
-                Long.parseLong(list[0]) != 0) {
+        long expireTimestamps = parseExpireTimestamps(list[0]);
+        if (expireTimestamps < System.currentTimeMillis()) {
             throwException(ACCESS_TOKEN_INVALID);
         }
-        Map<String, Object> payloads = Json.parse2Map(new String(
-                Base64.getUrlDecoder().decode(list[2].getBytes(UTF_8)))
-        );
-        return new VerifiedToken().setExpireTimestamps(Long.parseLong(list[0])).setPayloads(payloads);
+        return new VerifiedToken().setExpireTimestamps(expireTimestamps).setPayloads(parsePayloads(list[2]));
+    }
+
+    /**
+     * 解析令牌中的过期时间
+     *
+     * @param value 令牌中的过期时间字符串
+     * @return 过期时间（毫秒）
+     * @apiNote 非法内容按无效令牌处理；时间为 0 同样视为已过期
+     */
+    private static long parseExpireTimestamps(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throwException(ACCESS_TOKEN_INVALID);
+            return 0L;
+        }
+    }
+
+    /**
+     * 解析令牌中的负载数据
+     *
+     * @param value 令牌中的负载字符串
+     * @return 负载数据
+     * @apiNote 非法内容按无效令牌处理
+     */
+    private static @NotNull Map<String, Object> parsePayloads(String value) {
+        try {
+            return Json.parse2Map(new String(Base64.getUrlDecoder().decode(value.getBytes(UTF_8))));
+        } catch (Exception e) {
+            throwException(ACCESS_TOKEN_INVALID);
+            return new HashMap<>();
+        }
     }
 
     /**

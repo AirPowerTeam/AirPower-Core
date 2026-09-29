@@ -16,13 +16,13 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * <h1>RootModel 单元测试</h1>
  *
- * <p>本测试以<b>源码实际行为</b>为断言依据，刻意记录以下几处与文档/方法名不一致的行为：</p>
+ * <p>本测试以<b>源码实际行为</b>为断言依据，当前行为要点：</p>
  * <ul>
- *     <li>{@link RootModel#desensitize()} 内部传入空白名单，实际等价于
- *     {@link RootModel#excludeNotMeta()}，<b>不会脱敏</b></li>
+ *     <li>{@link RootModel#desensitize()} 先排除非元数据字段，再以「自身类白名单」执行脱敏，
+ *     因此 {@code @Desensitize} 标记的字段会被真正脱敏</li>
  *     <li>白名单分支下不校验 {@code @Meta}，非元数据字段也会被保留</li>
- *     <li>排除非元数据分支下不会递归处理模型集合的元素</li>
- *     <li>白名单分支遇到集合中的 {@code null} 元素会抛 {@link NullPointerException}</li>
+ *     <li>排除非元数据分支会递归处理嵌套模型与模型集合的元素</li>
+ *     <li>白名单为 {@code null} 时按空名单处理，集合中的 {@code null} 元素会被跳过</li>
  * </ul>
  *
  * @author Hamm.cn
@@ -191,24 +191,44 @@ class RootModelTest {
         }
 
         @Test
-        @DisplayName("当前行为：模型集合的元素不会被递归处理")
-        void testExcludeNotMetaWithChildrenNotRecurse() {
+        @DisplayName("排除非元数据时会递归处理模型集合")
+        void testExcludeNotMetaWithChildren() {
             DemoModel child = new DemoModel().setName("子").setRemark("子备注");
             model.setChildren(List.of(child));
 
             model.excludeNotMeta();
 
             assertNotNull(model.getChildren(), "标记了 @Meta 的 children 字段本身应被保留");
-            assertEquals("子备注", child.getRemark(), "排除非元数据分支不遍历集合元素，元素的 remark 当前不会被清空");
+            assertEquals(1, model.getChildren().size(), "children 集合本身的元素个数不应被改变");
+            assertNull(child.getRemark(), "排除非元数据时会遍历集合元素，元素的 remark 应被清空");
+            assertEquals("子", child.getName(), "集合元素的元数据字段 name 应被保留");
         }
 
         @Test
-        @DisplayName("当前行为：集合中的 null 元素在排除非元数据分支下不会抛异常")
-        void testExcludeNotMetaWithNullElementInCollection() {
-            model.setChildrenWithNull(Arrays.asList(new DemoModel(), null));
+        @DisplayName("正常路径：模型集合中的每个元素都被递归排除非元数据字段")
+        void testExcludeNotMetaWithChildrenEachElement() {
+            DemoModel first = new DemoModel().setName("一").setRemark("一备注").setTitle("一标题");
+            DemoModel second = new DemoModel().setName("二").setRemark("二备注");
+            model.setChildren(List.of(first, second));
 
-            assertDoesNotThrow(() -> model.excludeNotMeta(), "排除非元数据分支不遍历集合元素，含 null 元素不应抛异常");
+            model.excludeNotMeta();
+
+            assertNull(first.getRemark(), "集合中第一个元素的非元数据字段 remark 应被递归清空");
+            assertNull(second.getRemark(), "集合中第二个元素的非元数据字段 remark 应被递归清空");
+            assertEquals("一标题", first.getTitle(), "集合元素 Getter 上标记了 @Meta 的 title 应被保留");
+            assertEquals("一", first.getName(), "集合元素标记了 @Meta 的 name 应被保留");
+        }
+
+        @Test
+        @DisplayName("边界值：集合中的 null 元素被跳过，不抛异常")
+        void testExcludeNotMetaWithNullElementInCollection() {
+            DemoModel valid = new DemoModel().setName("一").setRemark("子备注");
+            model.setChildrenWithNull(Arrays.asList(valid, null));
+
+            assertDoesNotThrow(() -> model.excludeNotMeta(), "排除非元数据分支会先判空再取集合元素的类，含 null 元素不应抛异常");
             assertEquals(2, model.getChildrenWithNull().size(), "childrenWithNull 集合应保持原有元素个数");
+            assertNull(model.getChildrenWithNull().get(1), "集合中的 null 元素应被跳过后原样保留");
+            assertNull(valid.getRemark(), "非 null 元素仍会被递归排除非元数据字段");
         }
 
         @Test
@@ -222,13 +242,17 @@ class RootModelTest {
         }
 
         @Test
-        @DisplayName("异常分支：集合元素为 null 时白名单分支抛 NullPointerException")
+        @DisplayName("边界值：白名单分支下集合中的 null 元素被跳过，不抛异常")
         void testExcludeNotMetaWithWhiteListAndNullElement() {
-            model.setChildrenWithNull(Arrays.asList(new DemoModel(), null));
+            DemoModel valid = new DemoModel().setName("一").setRemark("子备注").setMobile(MOBILE);
+            model.setChildrenWithNull(Arrays.asList(valid, null));
 
-            assertThrows(NullPointerException.class,
-                    () -> model.excludeNotMeta(WHITE_LIST),
-                    "白名单分支会对集合元素调用 item.getClass()，遇到 null 元素当前会抛 NullPointerException");
+            assertDoesNotThrow(() -> model.excludeNotMeta(WHITE_LIST),
+                    "白名单分支会先判空再取集合元素的类，含 null 元素不应抛出 NullPointerException");
+            assertEquals(2, model.getChildrenWithNull().size(), "childrenWithNull 集合应保持原有元素个数");
+            assertNull(model.getChildrenWithNull().get(1), "集合中的 null 元素应被跳过后原样保留");
+            assertEquals("子备注", valid.getRemark(), "白名单分支不排除非元数据字段，元素 remark 应被保留");
+            assertEquals(MOBILE, valid.getMobile(), "excludeNotMeta 不做脱敏，元素 mobile 应保持原值");
         }
     }
 
@@ -237,28 +261,97 @@ class RootModelTest {
     class DesensitizeTest {
 
         @Test
-        @DisplayName("当前行为：等价于 excludeNotMeta，不会脱敏")
+        @DisplayName("desensitize 应对 @Desensitize 字段生效")
         void testDesensitizeDoesNotMask() {
             model.desensitize();
 
-            assertEquals(MOBILE, model.getMobile(), "当前实现下 desensitize 未真正脱敏，mobile 应保持原值");
-            assertEquals("secret-value", model.getSecret(), "当前实现下 secret 不被脱敏，应保持原值");
-            assertEquals(1234, model.getSecretNumber(), "当前实现下非字符串密文字段不被置空");
-            assertEquals(EMAIL, model.getEmail(), "当前实现下 email 不被脱敏，应保持原值");
-            assertNull(model.getRemark(), "desensitize 实际走的是排除非元数据分支，remark 仍会被清空");
+            assertEquals("138****8000", model.getMobile(), "desensitize 已真正脱敏，mobile 应保留前 3 位、后 4 位");
+            assertNull(model.getRemark(), "desensitize 会先排除非元数据字段，remark 应被清空");
             assertEquals("标题", model.getTitle(), "Getter 上有 @Meta 的 title 应被保留");
         }
 
         @Test
-        @DisplayName("当前行为：嵌套模型也不会被脱敏")
+        @DisplayName("正常路径：嵌套模型也会被脱敏")
         void testDesensitizeWithChildNotMask() {
             DemoModel child = new DemoModel().setMobile(MOBILE).setRemark("子备注");
             model.setChild(child);
 
             model.desensitize();
 
-            assertEquals(MOBILE, child.getMobile(), "当前实现下嵌套模型的 mobile 不会被脱敏");
-            assertNull(child.getRemark(), "嵌套模型仍会走排除非元数据分支，remark 被清空");
+            assertEquals("138****8000", child.getMobile(), "desensitize 会递归脱敏，嵌套模型的 mobile 应被脱敏");
+            assertNull(child.getRemark(), "desensitize 会递归排除非元数据字段，嵌套模型的 remark 应被清空");
+        }
+
+        @Test
+        @DisplayName("正常路径：desensitize 对全部 @Desensitize 字段生效")
+        void testDesensitizeAllAnnotatedFields() {
+            model.desensitize();
+
+            assertEquals("138****8000", model.getMobile(), "标记 @Desensitize(MOBILE) 的 mobile 应按手机号规则脱敏");
+            assertEquals("*", model.getSecret(), "replace=true 的 secret 应被整体替换为单个脱敏符号");
+            assertNull(model.getSecretNumber(), "Integer 类型的 secretNumber 不支持脱敏，应被置空");
+            assertEquals(EMAIL_MASKED, model.getEmail(), "自定义 head=1/tail=1/symbol=# 的 email 应按自定义规则脱敏");
+            assertNull(model.getRemark(), "desensitize 会先排除非元数据字段，remark 应被清空");
+            assertEquals("标题", model.getTitle(), "Getter 上有 @Meta 的 title 应被保留");
+            assertEquals(1L, model.getId(), "标记了 @Meta 的 id 应被保留");
+            assertEquals("Hamm", model.getName(), "标记了 @Meta 的 name 应被保留");
+            assertEquals(1700000000000L, model.getCreateTime(), "desensitize 不处理只读字段，createTime 应被保留");
+        }
+
+        @Test
+        @DisplayName("正常路径：嵌套模型与模型集合的元素都被递归脱敏")
+        void testDesensitizeChildAndChildren() {
+            DemoModel child = new DemoModel().setMobile(MOBILE).setEmail(EMAIL).setSecret("secret-value");
+            DemoModel childInList = new DemoModel().setMobile(MOBILE).setEmail(EMAIL).setSecret("secret-value");
+            model.setChild(child).setChildren(List.of(childInList));
+
+            model.desensitize();
+
+            assertEquals("138****8000", child.getMobile(), "嵌套模型的 mobile 应被递归脱敏");
+            assertEquals(EMAIL_MASKED, child.getEmail(), "嵌套模型的 email 应被递归脱敏");
+            assertEquals("*", child.getSecret(), "嵌套模型的 secret 应被递归替换为脱敏符号");
+            assertEquals("138****8000", childInList.getMobile(), "集合元素的 mobile 应被递归脱敏");
+            assertEquals(EMAIL_MASKED, childInList.getEmail(), "集合元素的 email 应被递归脱敏");
+            assertEquals("*", childInList.getSecret(), "集合元素的 secret 应被递归替换为脱敏符号");
+        }
+
+        @Test
+        @DisplayName("正常路径：desensitize 与「自身类白名单 + 脱敏」对嵌套模型和集合的脱敏结果一致")
+        void testDesensitizeSameAsSelfClassWhiteList() {
+            DemoModel child = new DemoModel().setMobile(MOBILE).setEmail(EMAIL).setRemark("子备注");
+            DemoModel childInList = new DemoModel().setMobile(MOBILE).setEmail(EMAIL).setRemark("子备注");
+            model.setChild(child).setChildren(List.of(childInList));
+
+            model.desensitize();
+
+            // 用结构相同但相互独立的模型，走「自身类白名单 + 脱敏」分支
+            DemoModel whiteListChild = new DemoModel().setMobile(MOBILE).setEmail(EMAIL).setRemark("子备注");
+            DemoModel whiteListChildInList = new DemoModel().setMobile(MOBILE).setEmail(EMAIL).setRemark("子备注");
+            DemoModel other = new DemoModel()
+                    .setId(1L)
+                    .setName("Hamm")
+                    .setMobile(MOBILE)
+                    .setRemark("备注")
+                    .setTitle("标题")
+                    .setSecret("secret-value")
+                    .setSecretNumber(1234)
+                    .setEmail(EMAIL);
+            other.setChild(whiteListChild).setChildren(List.of(whiteListChildInList));
+
+            other.excludeNotMetaAndDesensitize(List.of(DemoModel.class), true);
+
+            assertEquals("138****8000", child.getMobile(), "desensitize 应把嵌套模型的 mobile 脱敏");
+            assertEquals(EMAIL_MASKED, child.getEmail(), "desensitize 应把嵌套模型的 email 脱敏");
+            assertEquals("138****8000", childInList.getMobile(), "desensitize 应把集合元素的 mobile 脱敏");
+            assertEquals(EMAIL_MASKED, childInList.getEmail(), "desensitize 应把集合元素的 email 脱敏");
+            assertEquals(child.getMobile(), whiteListChild.getMobile(), "两种方式对嵌套模型 mobile 的脱敏结果应一致");
+            assertEquals(child.getEmail(), whiteListChild.getEmail(), "两种方式对嵌套模型 email 的脱敏结果应一致");
+            assertEquals(childInList.getMobile(), whiteListChildInList.getMobile(), "两种方式对集合元素 mobile 的脱敏结果应一致");
+            assertEquals(childInList.getEmail(), whiteListChildInList.getEmail(), "两种方式对集合元素 email 的脱敏结果应一致");
+            assertNull(child.getRemark(), "desensitize 会先排除非元数据字段，嵌套模型的 remark 应被清空");
+            assertNull(childInList.getRemark(), "desensitize 会先排除非元数据字段，集合元素的 remark 应被清空");
+            assertEquals("子备注", whiteListChild.getRemark(), "白名单分支不排除非元数据字段，嵌套模型的 remark 应被保留");
+            assertEquals("子备注", whiteListChildInList.getRemark(), "白名单分支不排除非元数据字段，集合元素的 remark 应被保留");
         }
 
         @Test
@@ -421,25 +514,28 @@ class RootModelTest {
         }
 
         @Test
-        @DisplayName("当前缺陷：集合含 null 元素时抛 NullPointerException")
+        @DisplayName("边界值：集合中的 null 元素被跳过，不抛异常")
         void testDesensitizeWithNullElementInCollection() {
-            model.setChildrenWithNull(Arrays.asList(new DemoModel(), null));
-
-            assertThrows(NullPointerException.class,
-                    () -> model.excludeNotMetaAndDesensitize(WHITE_LIST, true),
-                    "白名单分支对集合元素调用 item.getClass() 未判空，含 null 元素会抛 NullPointerException");
-        }
-
-        @Test
-        @DisplayName("当前缺陷：集合抛异常前，已处理的元素已被就地修改")
-        void testDesensitizePartialWhenNpeThrown() {
             DemoModel valid = new DemoModel().setMobile(MOBILE);
             model.setChildrenWithNull(Arrays.asList(valid, null));
 
-            assertThrows(NullPointerException.class,
-                    () -> model.excludeNotMetaAndDesensitize(WHITE_LIST, true),
-                    "含 null 元素的集合应抛出 NullPointerException");
-            assertEquals("138****8000", valid.getMobile(), "异常抛出前，位于 null 元素之前的元素应已完成脱敏");
+            assertDoesNotThrow(() -> model.excludeNotMetaAndDesensitize(WHITE_LIST, true),
+                    "白名单分支会先判空再取集合元素的类，含 null 元素不应抛出 NullPointerException");
+            assertEquals(2, model.getChildrenWithNull().size(), "childrenWithNull 集合应保持原有元素个数");
+            assertNull(model.getChildrenWithNull().get(1), "集合中的 null 元素应被跳过后原样保留");
+            assertEquals("138****8000", valid.getMobile(), "非 null 元素仍会被正常脱敏");
+        }
+
+        @Test
+        @DisplayName("边界值：集合含 null 元素时其余元素仍被完整脱敏")
+        void testDesensitizeWithNullElementInCollectionAndValidElement() {
+            DemoModel valid = new DemoModel().setMobile(MOBILE).setEmail(EMAIL);
+            model.setChildrenWithNull(Arrays.asList(valid, null));
+
+            assertDoesNotThrow(() -> model.excludeNotMetaAndDesensitize(WHITE_LIST, true),
+                    "null 元素被跳过后，其余元素应全部处理完成且不抛出异常");
+            assertEquals("138****8000", valid.getMobile(), "位于 null 元素之前的元素应已完成脱敏");
+            assertEquals(EMAIL_MASKED, valid.getEmail(), "非 null 元素的其他脱敏字段也应被正常脱敏");
         }
 
         @Test
@@ -453,18 +549,19 @@ class RootModelTest {
         }
 
         @Test
-        @DisplayName("异常分支：白名单为 null 且存在非空字段时抛 NullPointerException")
+        @DisplayName("边界值：白名单为 null 时按空名单处理，不抛异常")
         void testNullWhiteListWithValue() {
-            assertThrows(NullPointerException.class,
-                    () -> model.excludeNotMetaAndDesensitize(null, true),
-                    "源码未对 whiteList 判空，字段存在非空值时调用 isEmpty() 会抛 NullPointerException");
+            assertDoesNotThrow(() -> model.excludeNotMetaAndDesensitize(null, true),
+                    "whiteList 为 null 时源码按空名单处理，不应抛出 NullPointerException");
+            assertNull(model.getRemark(), "按空名单处理时走排除非元数据分支，remark 应被清空");
+            assertEquals(MOBILE, model.getMobile(), "按空名单处理时不做脱敏，mobile 应保持原值");
         }
 
         @Test
-        @DisplayName("边界值：白名单为 null 但字段全为 null 时不抛异常")
+        @DisplayName("边界值：白名单为 null 且模型全为 null 时不抛异常")
         void testNullWhiteListWithEmptyModel() {
             assertDoesNotThrow(() -> new DemoModel().excludeNotMetaAndDesensitize(null, true),
-                    "字段值全为 null 时源码在判空之前就 return，不会访问 whiteList");
+                    "字段值全为 null 时各分支均直接跳过，不会访问 whiteList，不应抛出异常");
         }
     }
 

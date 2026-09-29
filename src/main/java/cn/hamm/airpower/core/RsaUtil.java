@@ -144,12 +144,14 @@ public class RsaUtil {
      *
      * @param privateKey 私钥
      * @return PEM
+     * @apiNote {@code getPrivateKey} 使用 {@link PKCS8EncodedKeySpec} 解析，
+     * 因此头尾使用 PKCS#8 的 {@code PRIVATE KEY}
      */
     public @NotNull String convertPrivateKeyToPem(@NotNull PrivateKey privateKey) {
         String base64Encoded = Base64.getEncoder().encodeToString(privateKey.getEncoded());
-        return "-----BEGIN RSA PRIVATE KEY-----\n" +
+        return "-----BEGIN PRIVATE KEY-----\n" +
                 wrapBase64Text(base64Encoded) +
-                "-----END RSA PRIVATE KEY-----";
+                "-----END PRIVATE KEY-----";
     }
 
     /**

@@ -166,7 +166,7 @@ public class CollectionUtil {
             }
             fieldList.add(new CsvField().setField(field).setSort(export.sort()));
         }
-        // sort 排序 从小到大
+        // sort 排序，数值大的列排在前面
         fieldList.sort(Comparator.comparing(CsvField::getSort).reversed());
         return fieldList.stream().map(CsvField::getField).toList();
     }
@@ -217,6 +217,7 @@ public class CollectionUtil {
                 }
             };
         } catch (Exception e) {
+            log.warn("导出列({})的数据处理失败，已回退为原始值, {}", field.getName(), e.getMessage());
             return value;
         }
     }

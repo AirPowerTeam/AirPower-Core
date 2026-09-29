@@ -4,7 +4,6 @@ import cn.hamm.airpower.core.annotation.Description;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.interfaces.IException;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
@@ -196,7 +195,7 @@ public class Json {
     public static <T> T parse(String json, Class<T> clazz) {
         try {
             return getObjectMapper().readValue(json, clazz);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -212,7 +211,7 @@ public class Json {
     public static <T> T parse(String json, TypeReference<T> typeReference) {
         try {
             return getObjectMapper().readValue(json, typeReference);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -228,7 +227,7 @@ public class Json {
     public static <T> T[] parseList(String json, Class<? extends T[]> clazz) {
         try {
             return getObjectMapper().readValue(json, clazz);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new ServiceException("JSON 反序列化失败，" + e.getMessage());
         }
     }
@@ -274,7 +273,7 @@ public class Json {
     public static String toString(Object object) {
         try {
             return getObjectMapper().writeValueAsString(object);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new ServiceException("JSON 序列化失败，" + e.getMessage());
         }
     }

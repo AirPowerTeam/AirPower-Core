@@ -56,6 +56,9 @@ public class RandomUtil {
      * @return 随机字节数组
      */
     public static byte @NotNull [] randomBytes(int length) {
+        if (length < 0) {
+            throw new ServiceException("随机字节数组长度不能小于0");
+        }
         byte[] bytes = new byte[length];
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for (int i = 0; i < length; i++) {
@@ -111,7 +114,7 @@ public class RandomUtil {
      */
     public static @NotNull String randomString(final String baseString, int length) {
         if (Objects.isNull(baseString) || baseString.isEmpty()) {
-            throw new ServiceException("baseString is empty");
+            throw new ServiceException("随机字符样本不能为空");
         }
         length = Math.max(length, 1);
         final int baseLength = baseString.length();

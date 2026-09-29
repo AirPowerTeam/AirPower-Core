@@ -113,6 +113,10 @@ public class DesensitizeUtil {
     public static @NotNull String desensitize(
             @NotNull String valueString, @NotNull DesensitizeType type, int head, int tail, String symbol
     ) {
+        if (!StringUtil.hasText(symbol)) {
+            // 脱敏符号为空时会导致原文被静默删除，统一回退为默认符号
+            symbol = DEFAULT_SYMBOL;
+        }
         switch (type) {
             case BANK_CARD,
                  ID_CARD,

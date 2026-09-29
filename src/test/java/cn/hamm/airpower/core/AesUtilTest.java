@@ -140,12 +140,10 @@ class AesUtilTest {
         @Test
         @DisplayName("未设置 key 时加解密均抛出 ServiceException")
         void testCryptWithoutKey() {
-            // 未设置 key，Cipher 初始化必然失败
-            ServiceException exception = assertThrows(ServiceException.class,
+            ServiceException decryptException = assertThrows(ServiceException.class,
                     () -> AesUtil.create().decrypt("dGVzdA=="),
                     "未设置密钥时解密应抛出 ServiceException");
-            assertFalse(exception.getMessage() == null || exception.getMessage().isBlank(),
-                    "异常信息不应为空（JDK 底层异常信息会透传）");
+            assertEquals("加密密钥未设置", decryptException.getMessage(), "异常信息应说明密钥未设置");
             assertThrows(ServiceException.class, () -> AesUtil.create().encrypt("内容"),
                     "未设置密钥时加密应抛出 ServiceException");
         }
@@ -293,27 +291,30 @@ class AesUtilTest {
         }
 
         @Test
-        @DisplayName("setKey(String) 传入非法 Base64 抛出 IllegalArgumentException（源码未捕获）")
+        @DisplayName("setKey(String) 传入非法 Base64 抛出 ServiceException")
         void testSetKeyWithIllegalBase64() {
-            assertThrows(IllegalArgumentException.class,
+            ServiceException exception = assertThrows(ServiceException.class,
                     () -> AesUtil.create().setKey("这不是Base64!!!"),
-                    "非法 Base64 密钥字符串应抛出 IllegalArgumentException");
+                    "非法 Base64 密钥字符串应抛出 ServiceException");
+            assertEquals("加密密钥不是合法的 Base64 字符串", exception.getMessage(), "异常信息应说明是 Base64 非法");
         }
 
         @Test
-        @DisplayName("setKey(String) 传入 null 抛出 NullPointerException（源码未做判空）")
+        @DisplayName("setKey(String) 传入 null 抛出 ServiceException")
         void testSetKeyStringWithNull() {
-            assertThrows(NullPointerException.class,
+            ServiceException exception = assertThrows(ServiceException.class,
                     () -> AesUtil.create().setKey((String) null),
-                    "null 的 Base64 密钥字符串应抛出 NullPointerException");
+                    "null 的 Base64 密钥字符串应抛出 ServiceException");
+            assertEquals("加密密钥不能为null", exception.getMessage(), "异常信息应说明密钥不能为 null");
         }
 
         @Test
         @DisplayName("setKey(byte[]) 传入 null 抛出 ServiceException")
         void testSetKeyBytesWithNull() {
             AesUtil instance = AesUtil.create().setKey((byte[]) null);
-            assertThrows(ServiceException.class, () -> instance.encrypt("任意内容"),
+            ServiceException exception = assertThrows(ServiceException.class, () -> instance.encrypt("任意内容"),
                     "未设置密钥时加密应抛出 ServiceException");
+            assertEquals("加密密钥未设置", exception.getMessage(), "异常信息应说明密钥未设置");
         }
 
         @Test

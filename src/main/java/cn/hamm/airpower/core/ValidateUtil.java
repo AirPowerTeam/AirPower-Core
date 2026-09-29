@@ -21,7 +21,7 @@ public class ValidateUtil {
     /**
      * 验证器实例
      */
-    private static Validator validator;
+    private static volatile Validator validator;
 
     /**
      * 禁止外部实例化
@@ -38,7 +38,10 @@ public class ValidateUtil {
     /**
      * 初始化验证器
      */
-    private static void initValidator() {
+    private static synchronized void initValidator() {
+        if (validator != null) {
+            return;
+        }
         if (validatorFactory == null) {
             validatorFactory = Validation.buildDefaultValidatorFactory();
         }
@@ -194,12 +197,35 @@ public class ValidateUtil {
             return false;
         }
         if (idCard.length() == id2Length) {
-            // 校验二代身份证
+            // 前 17 位必须是数字，校验位允许大写 X 或小写 x
+            if (!isDigits(idCard, id2Length - 1)) {
+                return false;
+            }
+            char checkCode = idCard.charAt(idCard.length() - 1);
+            if (checkCode == 'x') {
+                checkCode = 'X';
+            }
             int sum = IntStream.range(0, idCard.length() - 1).map(i -> Integer.parseInt(String.valueOf(idCard.charAt(i))) * factor[i]).sum();
             // 求和后取余数11，得到的余数与校验码进行匹配，匹配成功，说明通过验证。
-            return flags[sum % id2Mod] == idCard.charAt(idCard.length() - 1);
+            return flags[sum % id2Mod] == checkCode;
         }
         throw new ServiceException("暂不支持一代身份证校验");
+    }
+
+    /**
+     * 判断前 {@code length} 个字符是否都是数字
+     *
+     * @param value  字符串
+     * @param length 校验长度
+     * @return 是否为纯数字
+     */
+    private static boolean isDigits(String value, int length) {
+        for (int i = 0; i < length; i++) {
+            if (!Character.isDigit(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -210,6 +236,10 @@ public class ValidateUtil {
      * @return 验证结果
      */
     public static boolean validRegex(String value, @NotNull Pattern pattern) {
+        if (Objects.isNull(value) || Objects.isNull(pattern)) {
+            // 空值与空正则一律视为不匹配，避免抛出空指针
+            return false;
+        }
         return pattern.matcher(value).matches();
     }
 
@@ -225,14 +255,15 @@ public class ValidateUtil {
             return;
         }
         initValidator();
-        if (actions.length == 0) {
+        Class<?>[] groups = Objects.isNull(actions) ? new Class<?>[0] : actions;
+        if (groups.length == 0) {
             Set<ConstraintViolation<M>> violations = validator.validate(model);
             if (violations.isEmpty()) {
                 return;
             }
             throw new ValidationException(violations.iterator().next().getMessage());
         }
-        Set<ConstraintViolation<M>> violations = validator.validate(model, actions);
+        Set<ConstraintViolation<M>> violations = validator.validate(model, groups);
         if (violations.isEmpty()) {
             return;
         }

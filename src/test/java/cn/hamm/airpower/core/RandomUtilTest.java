@@ -59,12 +59,16 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("负长度抛 NegativeArraySizeException（源码未做参数校验）")
+        @DisplayName("负长度抛 ServiceException：随机字节数组长度不能小于0")
         void negativeLength() {
-            assertThrows(NegativeArraySizeException.class, () -> RandomUtil.randomBytes(-1),
-                    "负长度会在 new byte[length] 处抛 NegativeArraySizeException，源码未包装为业务异常");
-            assertThrows(NegativeArraySizeException.class, () -> RandomUtil.randomBytes(-100),
-                    "负长度同样抛 NegativeArraySizeException");
+            ServiceException e1 = assertThrows(ServiceException.class, () -> RandomUtil.randomBytes(-1),
+                    "负长度应被参数校验拦截，抛出业务异常而不是 NegativeArraySizeException");
+            assertEquals("随机字节数组长度不能小于0", e1.getMessage(), "异常消息应与源码一致");
+            assertEquals(Json.SERVICE_ERROR, e1.getCode(), "应携带默认业务错误码 500");
+
+            ServiceException e2 = assertThrows(ServiceException.class, () -> RandomUtil.randomBytes(-100),
+                    "任意负长度都应被同一处校验拦截");
+            assertEquals("随机字节数组长度不能小于0", e2.getMessage(), "异常消息应一致");
         }
 
         @Test
@@ -166,27 +170,29 @@ public class RandomUtilTest {
     class RandomStringFromBase {
 
         @Test
-        @DisplayName("baseString 为 null 抛 ServiceException")
+        @DisplayName("baseString 为 null 抛 ServiceException：随机字符样本不能为空")
         void nullBaseString() {
             ServiceException e = assertThrows(ServiceException.class, () -> RandomUtil.randomString(null, 8),
                     "baseString 为 null 应抛出 ServiceException");
-            assertEquals("baseString is empty", e.getMessage(), "异常消息与源码保持一致（源码为英文）");
+            assertEquals("随机字符样本不能为空", e.getMessage(), "异常消息应与源码一致");
             assertEquals(Json.SERVICE_ERROR, e.getCode(), "应携带默认业务错误码 500");
         }
 
         @Test
-        @DisplayName("baseString 为空串抛 ServiceException")
+        @DisplayName("baseString 为空串抛 ServiceException：随机字符样本不能为空")
         void emptyBaseString() {
             ServiceException e = assertThrows(ServiceException.class, () -> RandomUtil.randomString("", 8),
                     "baseString 为空串应抛出 ServiceException");
-            assertEquals("baseString is empty", e.getMessage(), "异常消息与源码保持一致（源码为英文）");
+            assertEquals("随机字符样本不能为空", e.getMessage(), "异常消息应与源码一致");
+            assertEquals(Json.SERVICE_ERROR, e.getCode(), "应携带默认业务错误码 500");
         }
 
         @Test
-        @DisplayName("baseString 为 null 时不受长度参数影响，始终抛异常")
+        @DisplayName("baseString 为 null 时不受长度参数影响，始终抛同一异常")
         void nullBaseStringBeforeLengthCheck() {
-            assertThrows(ServiceException.class, () -> RandomUtil.randomString(null, 0),
-                    "长度校验在 baseString 校验之后，长度非法也先抛 ServiceException");
+            ServiceException e = assertThrows(ServiceException.class, () -> RandomUtil.randomString(null, 0),
+                    "样本校验先于长度处理，长度非法也先抛 ServiceException");
+            assertEquals("随机字符样本不能为空", e.getMessage(), "异常消息应与 null 样本时保持一致");
         }
 
         @Test

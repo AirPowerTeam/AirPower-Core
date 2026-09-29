@@ -78,7 +78,14 @@ public class AesUtil {
      * @return this
      */
     public AesUtil setKey(String base64Key) {
-        return setKey(Base64.getDecoder().decode(base64Key));
+        if (Objects.isNull(base64Key)) {
+            throw new ServiceException("加密密钥不能为null");
+        }
+        try {
+            return setKey(Base64.getDecoder().decode(base64Key));
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException("加密密钥不是合法的 Base64 字符串");
+        }
     }
 
     /**
@@ -105,8 +112,10 @@ public class AesUtil {
         try {
             return Base64.getEncoder().encodeToString(getCipher(ENCRYPT_MODE)
                     .doFinal(source.getBytes(UTF_8)));
+        } catch (ServiceException e) {
+            throw e;
         } catch (Exception e) {
-            throw new ServiceException(e.getMessage());
+            throw new ServiceException("加密失败，" + e.getMessage());
         }
     }
 
@@ -124,8 +133,12 @@ public class AesUtil {
         try {
             return new String(getCipher(DECRYPT_MODE)
                     .doFinal(Base64.getDecoder().decode(content)), UTF_8);
+        } catch (ServiceException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException("解密内容不是合法的 Base64 字符串");
         } catch (Exception e) {
-            throw new ServiceException(e.getMessage());
+            throw new ServiceException("解密失败，" + e.getMessage());
         }
     }
 
@@ -136,6 +149,9 @@ public class AesUtil {
      * @return {@code Cipher}
      */
     private @NotNull Cipher getCipher(int type) {
+        if (Objects.isNull(key)) {
+            throw new ServiceException("加密密钥未设置");
+        }
         try {
             SecretKeySpec secretKeySpec = new SecretKeySpec(key, algorithm);
             IvParameterSpec ivParameterSpec = new IvParameterSpec(iv);
@@ -143,7 +159,7 @@ public class AesUtil {
             cipher.init(type, secretKeySpec, ivParameterSpec);
             return cipher;
         } catch (Exception e) {
-            throw new ServiceException(e.getMessage());
+            throw new ServiceException("初始化密码器失败，" + e.getMessage());
         }
     }
 }

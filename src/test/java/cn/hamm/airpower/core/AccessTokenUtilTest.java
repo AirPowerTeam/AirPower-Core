@@ -457,10 +457,29 @@ class AccessTokenUtilTest {
         @Test
         @DisplayName("accessToken 为空串或空白串时抛出 401 ServiceException")
         void testBlankToken() {
-            for (String blank : new String[]{"", "   "}) {
-                assertThrows(ServiceException.class,
+            for (String blank : new String[]{"", "   ", "\t\n "}) {
+                ServiceException exception = assertThrows(ServiceException.class,
                         () -> AccessTokenUtil.create().verify(blank, SECRET),
                         "令牌为空白串时[" + blank + "]应抛出 ServiceException");
+                assertAll("空白令牌应报 401 且提示令牌无效",
+                        () -> assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "错误码应为 401"),
+                        () -> assertEquals(INVALID_MESSAGE, exception.getMessage(),
+                                "异常信息应为：" + INVALID_MESSAGE));
+            }
+        }
+
+        @Test
+        @DisplayName("accessToken 为 null / 空串 / 纯空白时统一按无效令牌处理")
+        void testNullAndBlankTokenAreRejected() {
+            // 源码新增的前置判断：空令牌在解码之前就应被拒绝，不再走到 Base64 解码分支
+            for (String token : new String[]{null, "", "   ", "\t\n "}) {
+                ServiceException exception = assertThrows(ServiceException.class,
+                        () -> AccessTokenUtil.create().verify(token, SECRET),
+                        "令牌为[" + token + "]时应在解码前直接抛出 ServiceException");
+                assertAll("空令牌应报 401 且提示令牌无效",
+                        () -> assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "错误码应为 401"),
+                        () -> assertEquals(INVALID_MESSAGE, exception.getMessage(),
+                                "异常信息应为：" + INVALID_MESSAGE));
             }
         }
 
@@ -606,50 +625,62 @@ class AccessTokenUtilTest {
     }
 
     @Nested
-    @DisplayName("7. 源码行为记录（边界与已知缺陷）")
+    @DisplayName("7. 畸形令牌的处理（统一按无效令牌拒绝）")
     class KnownBehavior {
 
         @Test
-        @DisplayName("过期时间戳为 0 的令牌永不过期（源码显式放行 0）")
+        @DisplayName("过期时间戳为 0 的令牌按已过期拒绝（不再表示永不过期）")
         void testNeverExpireToken() {
+            // 安全修复：源码已移除 `expire != 0` 的短路判断，0 不再代表永不过期
             String token = buildRawToken(SECRET, "0", "{\"id\":1,\"name\":\"永久令牌\"}");
-            AccessTokenUtil.VerifiedToken verified = AccessTokenUtil.create().verify(token, SECRET);
-            assertAll("过期时间为 0 的令牌应通过校验（源码中 != 0 的短路判断）",
-                    () -> assertEquals(0L, verified.getExpireTimestamps(), "过期时间戳应为 0"),
-                    () -> assertEquals(1L, verified.getPayloadId(), "负载应正常解析"));
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> AccessTokenUtil.create().verify(token, SECRET),
+                    "过期时间戳为 0 的令牌应被判定为已过期，不应再被放行");
+            assertAll("过期时间为 0 的令牌应报 401 且提示令牌无效",
+                    () -> assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "错误码应为 401"),
+                    () -> assertEquals(INVALID_MESSAGE, exception.getMessage(), "异常信息应为：" + INVALID_MESSAGE));
         }
 
         @Test
-        @DisplayName("过期时间戳为非数字时抛出 NumberFormatException（源码未包装为 ServiceException）")
+        @DisplayName("过期时间戳为非数字时抛出 401 ServiceException（不再泄漏 NumberFormatException）")
         void testNonNumericExpire() {
             String token = buildRawToken(SECRET, "not-a-number", "{\"id\":1}");
-            assertThrows(NumberFormatException.class,
+            ServiceException exception = assertThrows(ServiceException.class,
                     () -> AccessTokenUtil.create().verify(token, SECRET),
-                    "过期时间戳非数字时应抛出 NumberFormatException");
+                    "过期时间戳非数字时应统一包装为 ServiceException，而不是 NumberFormatException");
+            assertAll("异常应为 401 且提示令牌无效",
+                    () -> assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "错误码应为 401"),
+                    () -> assertEquals(INVALID_MESSAGE, exception.getMessage(), "异常信息应为：" + INVALID_MESSAGE));
         }
 
         @Test
-        @DisplayName("负载段不是合法 Base64 时抛出 IllegalArgumentException（源码未包装）")
+        @DisplayName("负载段不是合法 Base64 时抛出 401 ServiceException（不再泄漏 IllegalArgumentException）")
         void testIllegalPayloadBase64() {
             // 拼接一个签名正确但负载段非 Base64 的令牌
             String expire = String.valueOf(System.currentTimeMillis() + 60_000);
             String badPayload = "***不是Base64***";
             String raw = expire + "." + hmacSha256(SECRET, expire + "." + badPayload) + "." + badPayload;
             String token = Base64.getUrlEncoder().encodeToString(raw.getBytes(UTF_8));
-            assertThrows(IllegalArgumentException.class,
+            ServiceException exception = assertThrows(ServiceException.class,
                     () -> AccessTokenUtil.create().verify(token, SECRET),
-                    "负载段非 Base64 时应抛出 IllegalArgumentException（未包装为 ServiceException）");
+                    "负载段非 Base64 时应统一包装为 ServiceException，而不是 IllegalArgumentException");
+            assertAll("异常应为 401 且提示令牌无效",
+                    () -> assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "错误码应为 401"),
+                    () -> assertEquals(INVALID_MESSAGE, exception.getMessage(), "异常信息应为：" + INVALID_MESSAGE));
         }
 
         @Test
-        @DisplayName("负载段是合法 Base64 但不是 JSON 时抛出 ServiceException")
+        @DisplayName("负载段是合法 Base64 但不是 JSON 时抛出 401 ServiceException")
         void testPayloadNotJson() {
             String token = buildRawToken(SECRET, String.valueOf(System.currentTimeMillis() + 60_000), "我不是一个JSON");
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> AccessTokenUtil.create().verify(token, SECRET),
                     "负载不是 JSON 时应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("JSON 反序列化失败，"),
-                    "异常信息应来自 Json.parse2Map，实际为：" + exception.getMessage());
+            assertAll("异常应为 401 且提示令牌无效",
+                    () -> assertEquals(Json.UNAUTHORIZED_CODE, exception.getCode(), "错误码应为 401"),
+                    () -> assertEquals(INVALID_MESSAGE, exception.getMessage(),
+                            "负载解析失败应统一提示令牌无效，而不是暴露 JSON 解析的原始信息，实际为："
+                                    + exception.getMessage()));
         }
     }
 }

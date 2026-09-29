@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,9 +30,10 @@ class ConstantTest {
         }
 
         @Test
-        @DisplayName("Constant 为 public 可实例化")
-        void testInstantiable() {
-            assertNotNull(new Constant(), "Constant 存在公有的无参构造器");
+        @DisplayName("Constant 禁止外部实例化（私有构造器）")
+        void testNotInstantiable() throws NoSuchMethodException {
+            Constructor<Constant> constructor = Constant.class.getDeclaredConstructor();
+            assertTrue(Modifier.isPrivate(constructor.getModifiers()), "Constant 的构造器应为私有");
         }
     }
 
@@ -108,15 +110,15 @@ class ConstantTest {
         }
 
         @Test
-        @DisplayName("HttpConstant 及内部常量类均可实例化")
-        void testInstantiable() {
-            assertNotNull(new HttpConstant(), "HttpConstant 存在公有的无参构造器");
-            assertNotNull(new HttpConstant.Status(), "HttpConstant.Status 存在公有的无参构造器");
-            assertNotNull(new HttpConstant.GrantType(), "HttpConstant.GrantType 存在公有的无参构造器");
-            assertNotNull(new HttpConstant.Header(), "HttpConstant.Header 存在公有的无参构造器");
-            assertNotNull(new HttpConstant.ContentType(), "HttpConstant.ContentType 存在公有的无参构造器");
-            assertNotNull(new HttpConstant.Proxy(), "HttpConstant.Proxy 存在公有的无参构造器");
-            assertNotNull(new HttpConstant.Proxy.Header(), "HttpConstant.Proxy.Header 存在公有的无参构造器");
+        @DisplayName("HttpConstant 及内部常量类均禁止外部实例化")
+        void testNotInstantiable() throws NoSuchMethodException {
+            List<Class<?>> classes = List.of(HttpConstant.class, HttpConstant.Status.class,
+                    HttpConstant.GrantType.class, HttpConstant.Header.class, HttpConstant.ContentType.class,
+                    HttpConstant.Proxy.class, HttpConstant.Proxy.Header.class);
+            for (Class<?> clazz : classes) {
+                assertTrue(Modifier.isPrivate(clazz.getDeclaredConstructor().getModifiers()),
+                        clazz.getSimpleName() + " 的构造器应为私有");
+            }
         }
 
         @Test

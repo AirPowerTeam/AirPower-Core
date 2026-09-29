@@ -10,7 +10,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -53,9 +52,15 @@ public class RootModel<M extends RootModel<M>> {
 
     /**
      * 脱敏
+     *
+     * @apiNote 先排除非元数据字段，再对 {@link cn.hamm.airpower.core.annotation.Desensitize}
+     * 标记的字段脱敏；自身类自动加入白名单，保证本模型的字段不会被误排除
      */
     public final void desensitize() {
-        excludeNotMetaAndDesensitize(new ArrayList<>(), true);
+        excludeNotMeta();
+        //noinspection unchecked
+        Class<? extends RootModel<?>> selfClass = (Class<? extends RootModel<?>>) getClass();
+        excludeNotMetaAndDesensitize(List.of(selfClass), true);
     }
 
     /**
@@ -78,28 +83,30 @@ public class RootModel<M extends RootModel<M>> {
     /**
      * 模型字段值处理
      *
-     * @param whiteList     类白名单
+     * @param whiteList     类白名单，为 {@code null} 时按空名单处理
      * @param isDesensitize 是否需要脱敏
      * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
      */
     public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
+        List<Class<? extends RootModel<?>>> whiteNameList = Objects.isNull(whiteList) ? List.of() : whiteList;
         filterModelFieldValue((instance, field) -> {
             Object value = ReflectUtil.getFieldValue(instance, field);
             if (Objects.isNull(value)) {
                 return;
             }
-            if (whiteList.isEmpty() || !whiteList.contains(this.getClass())) {
+            if (whiteNameList.isEmpty() || !whiteNameList.contains(this.getClass())) {
                 excludeFieldValueNotMeta(instance, field);
                 return;
             }
             if (value instanceof Collection<?> valueList) {
                 // 是对象集合
                 valueList.forEach(item -> {
-                    if (RootModel.isModel(item.getClass())) {
-                        @SuppressWarnings("unchecked")
-                        M itemModel = (M) item;
-                        itemModel.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
+                    if (Objects.isNull(item) || !RootModel.isModel(item.getClass())) {
+                        return;
                     }
+                    @SuppressWarnings("unchecked")
+                    M itemModel = (M) item;
+                    itemModel.excludeNotMetaAndDesensitize(whiteNameList, isDesensitize);
                 });
                 return;
             }
@@ -107,11 +114,11 @@ public class RootModel<M extends RootModel<M>> {
                 // 如果是模型，则递归脱敏
                 @SuppressWarnings("unchecked")
                 M payload = ((M) value);
-                payload.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
+                payload.excludeNotMetaAndDesensitize(whiteNameList, isDesensitize);
                 return;
             }
             if (isDesensitize) {
-                desensitizeFieldValue(field, value);
+                desensitizeFieldValue(instance, field, value);
             }
         });
     }
@@ -126,6 +133,15 @@ public class RootModel<M extends RootModel<M>> {
         if (Objects.isNull(value)) {
             return;
         }
+        if (value instanceof Collection<?> valueList) {
+            // 是对象集合，逐个递归排除非元数据字段
+            valueList.forEach(item -> {
+                if (Objects.nonNull(item) && isModel(item.getClass())) {
+                    ((RootModel<?>) item).excludeNotMeta();
+                }
+            });
+            return;
+        }
         if (isModel(value.getClass())) {
             ((RootModel<?>) value).excludeNotMeta();
             return;
@@ -138,7 +154,7 @@ public class RootModel<M extends RootModel<M>> {
                 Method getter = instance.getClass().getMethod(fieldGetter);
                 meta = ReflectUtil.getAnnotation(Meta.class, getter);
                 if (Objects.isNull(meta)) {
-                    ReflectUtil.setFieldValue(this, field, null);
+                    ReflectUtil.setFieldValue(instance, field, null);
                 }
             } catch (NoSuchMethodException ignored) {
             }
@@ -148,21 +164,22 @@ public class RootModel<M extends RootModel<M>> {
     /**
      * 脱敏字段的值
      *
-     * @param field 字段
-     * @param value 值
+     * @param instance 模型实例
+     * @param field    字段
+     * @param value    值
      */
-    private void desensitizeFieldValue(Field field, @NotNull Object value) {
+    private void desensitizeFieldValue(M instance, @NotNull Field field, @NotNull Object value) {
         Desensitize desensitize = ReflectUtil.getAnnotation(Desensitize.class, field);
         if (Objects.isNull(desensitize)) {
             return;
         }
         if ((value instanceof String valueString)) {
             if (desensitize.replace()) {
-                ReflectUtil.setFieldValue(this, field, desensitize.symbol());
+                ReflectUtil.setFieldValue(instance, field, desensitize.symbol());
                 return;
             }
             // 如果不是字符串，则置空
-            ReflectUtil.setFieldValue(this, field,
+            ReflectUtil.setFieldValue(instance, field,
                     DesensitizeUtil.desensitize(
                             valueString,
                             desensitize.value(),
@@ -173,7 +190,7 @@ public class RootModel<M extends RootModel<M>> {
             );
             return;
         }
-        ReflectUtil.setFieldValue(this, field, null);
+        ReflectUtil.setFieldValue(instance, field, null);
     }
 
     /**

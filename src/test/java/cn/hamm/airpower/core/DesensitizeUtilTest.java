@@ -448,10 +448,19 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("正常路径：空符号会清空被隐藏部分")
+        @DisplayName("空值分支：空符号回退为默认符号")
         void testWithEmptySymbol() {
-            assertEquals("1388000", DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, ""),
-                    "符号为空串时中间部分被清空");
+            assertEquals("138****8000",
+                    DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, ""),
+                    "符号为空串时应回退为默认符号 *，手机号中间 4 位应被替换而不是被删除");
+        }
+
+        @Test
+        @DisplayName("空值分支：纯空白符号回退为默认符号")
+        void testWithBlankSymbol() {
+            assertEquals("138****8000",
+                    DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, "   "),
+                    "符号为纯空白时应回退为默认符号 *，手机号中间 4 位应被替换而不是被删除");
         }
 
         @Test
@@ -463,11 +472,14 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：非 IP 类型传 null 符号时抛出空指针异常")
+        @DisplayName("空值分支：非 IP 类型传 null 符号时回退到默认符号")
         void testNullSymbolForNonIpType() {
-            assertThrows(NullPointerException.class,
-                    () -> DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, null),
-                    "非 IP 类型没有 null 兜底，应抛出 NullPointerException");
+            assertEquals("138****8000",
+                    DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, null),
+                    "非 IP 类型传 null 符号时同样应回退为默认符号 *，与显式传 * 的结果一致");
+            assertEquals(DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, "*"),
+                    DesensitizeUtil.desensitize("13800138000", DesensitizeType.MOBILE, 0, 0, null),
+                    "null 符号与显式传 * 的脱敏结果应完全相同");
         }
 
         @Test

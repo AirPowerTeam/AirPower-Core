@@ -12,7 +12,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.Comparator;
+import java.util.Locale;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -75,7 +77,8 @@ public class FileUtil {
             throw new ServiceException(String.format(UNKNOWN_FILE_SIZE, size));
         }
         double fileSize = size;
-        DecimalFormat decimalFormat = new DecimalFormat("#.00");
+        // 固定使用 ROOT Locale，避免德语等环境下输出 1,00KB 导致调用方解析失败
+        DecimalFormat decimalFormat = new DecimalFormat("#.00", DecimalFormatSymbols.getInstance(Locale.ROOT));
         for (String unit : UNITS) {
             if (fileSize < FILE_SCALE) {
                 return decimalFormat.format(fileSize) + unit;
