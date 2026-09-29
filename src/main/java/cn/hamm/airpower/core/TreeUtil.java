@@ -163,14 +163,14 @@ public class TreeUtil {
     public static <
             E extends IEntity<E> & ITree<E>
             > @NotNull List<E> findByParentId(@Nullable Long parentId, @NotNull Function<Long, List<E>> function) {
-        if (Objects.isNull(parentId)) {
-            parentId = ROOT_ID;
-        }
-        List<E> apply = function.apply(parentId);
-        if (Objects.isNull(apply)) {
+        Long targetId = Objects.isNull(parentId) ? ROOT_ID : parentId;
+        List<E> children = function.apply(targetId);
+        if (Objects.isNull(children) || children.isEmpty()) {
+            // 返回不可变空列表，与 buildTreeList 的不可变约定保持一致
             return List.of();
         }
-        return apply;
+        // 复制一份，调用方对返回值的修改不应影响数据源
+        return new ArrayList<>(children);
     }
 
     /**

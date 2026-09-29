@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 
@@ -11,6 +12,7 @@ import java.net.UnknownHostException;
  *
  * @author Hamm.cn
  */
+@Slf4j
 public class HostUtil {
     /**
      * 获取服务器主机名的完整方法
@@ -22,7 +24,11 @@ public class HostUtil {
                 return hostname;
             }
         } catch (UnknownHostException e) {
-            // 忽略异常，继续尝试其他方法
+            // 解析失败不代表没有主机名，继续尝试其他来源
+            log.debug("通过 InetAddress 获取主机名失败, {}", e.getMessage());
+        } catch (SecurityException e) {
+            // 安全策略可能禁止读取网络配置，同样降级到后续来源
+            log.debug("读取主机名被安全策略拦截, {}", e.getMessage());
         }
 
         // 尝试系统属性

@@ -307,11 +307,27 @@ class TreeUtilTest {
         }
 
         @Test
-        @DisplayName("正常:直接返回取值函数给出的同一个列表引用")
-        void returnsSameReferenceFromFunction() {
-            List<DemoTree> children = List.of(node(2L, 1L, "子"));
+        @DisplayName("正常:返回取值函数结果的副本，调用方改动不影响数据源")
+        void returnsDefensiveCopy() {
+            List<DemoTree> children = new ArrayList<>(List.of(node(2L, 1L, "子")));
+
             List<DemoTree> result = TreeUtil.findByParentId(1L, parentId -> children);
-            assertSame(children, result, "函数返回非 null 时应原样返回该列表");
+            assertEquals(1, result.size(), "元素个数应与数据源一致");
+            assertSame(children.get(0), result.get(0), "元素本身应是同一实例");
+
+            // 原实现直接返回数据源引用，调用方一改就污染数据源
+            result.add(node(3L, 1L, "调用方新增"));
+            assertEquals(1, children.size(), "修改结果列表不应影响数据源");
+        }
+
+        @Test
+        @DisplayName("正常:函数返回不可变列表时结果同样可修改")
+        void returnsMutableCopyOfImmutableSource() {
+            List<DemoTree> children = List.of(node(2L, 1L, "子"));
+
+            List<DemoTree> result = TreeUtil.findByParentId(1L, parentId -> children);
+            assertDoesNotThrow(() -> result.add(node(3L, 1L, "新增")),
+                    "返回的是副本，调用方应可自由修改");
         }
 
         @Test
