@@ -234,7 +234,6 @@ public class FileUtil {
         zos.putNextEntry(dirEntry);
         zos.closeEntry();
 
-        // 遍历目录中的所有文件和子目录
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path path : stream) {
                 if (Files.isSymbolicLink(path)) {
@@ -267,7 +266,6 @@ public class FileUtil {
      * @param directory 文件夹路径
      */
     public static void deleteDirectory(String directory) {
-        // 判断文件夹是否存在
         directory = formatDirectory(directory);
         Path path = Paths.get(directory);
         if (!Files.exists(path)) {

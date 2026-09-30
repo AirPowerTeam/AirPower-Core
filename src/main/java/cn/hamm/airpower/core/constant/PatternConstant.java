@@ -13,7 +13,7 @@ import static java.util.regex.Pattern.compile;
  */
 public class PatternConstant {
     /**
-     * 数字
+     * 数字（可带负号与小数）
      */
     public static final Pattern NUMBER = compile("^-?\\d+(\\.\\d+)?$");
 
@@ -29,6 +29,8 @@ public class PatternConstant {
 
     /**
      * 邮箱
+     *
+     * @apiNote 开头的负向前瞻禁止出现连续两个点，且域名至少两段
      */
     public static final Pattern EMAIL = compile(
             "^(?!.*\\.\\.)[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
@@ -58,6 +60,8 @@ public class PatternConstant {
 
     /**
      * 普通字符
+     *
+     * @apiNote 允许 {@code @ # % - _ + \ /}、a-z A-Z 0-9 与汉字
      */
     public static final Pattern NORMAL_CODE = compile("^[@#%a-zA-Z0-9\\u4e00-\\u9fa5_\\-\\\\/+]+$");
 
@@ -68,6 +72,8 @@ public class PatternConstant {
 
     /**
      * 自然数
+     *
+     * @apiNote 允许小数（{@code 1.5} 也算），需要纯数字请用 {@link #NATURAL_INTEGER}
      */
     public static final Pattern NATURAL_NUMBER = compile("^[0-9]+(\\.[0-9]+)?$");
 

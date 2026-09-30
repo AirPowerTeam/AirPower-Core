@@ -6,7 +6,7 @@ import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * <h1>格式化模板</h1>
+ * <h1>日期时间格式化模板</h1>
  *
  * @author Hamm.cn
  */
@@ -14,32 +14,32 @@ import org.jetbrains.annotations.NotNull;
 @AllArgsConstructor
 public enum DateTimeFormatter {
     /**
-     * 年
+     * 年，如 {@code 2026}
      */
     YEAR("yyyy"),
 
     /**
-     * 月
+     * 月，如 {@code 10}
      */
     MONTH("MM"),
 
     /**
-     * 日
+     * 日，如 {@code 01}
      */
     DAY("dd"),
 
     /**
-     * 时
+     * 24 小时制小时，如 {@code 23}
      */
     HOUR("HH"),
 
     /**
-     * 分
+     * 分，如 {@code 59}
      */
     MINUTE("mm"),
 
     /**
-     * 秒
+     * 秒，如 {@code 59}
      */
     SECOND("ss"),
 
@@ -59,11 +59,14 @@ public enum DateTimeFormatter {
     FULL_DATETIME("yyyy-MM-dd HH:mm:ss"),
 
     /**
-     * 月日时分
+     * 月日时分（<b>不含年份</b>，跨年数据会丢失年份信息）
      */
     SHORT_DATETIME("MM-dd HH:mm"),
     ;
 
+    /**
+     * 格式化模板
+     */
     private final String value;
 
     /**

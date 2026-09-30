@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.annotation.Description;
 import cn.hamm.airpower.core.annotation.Dictionary;
 import cn.hamm.airpower.core.annotation.Export;
 import cn.hamm.airpower.core.exception.ServiceException;
@@ -26,6 +27,8 @@ import java.util.function.Function;
  * <h1>内置的集合工具类</h1>
  *
  * @author Hamm.cn
+ * @apiNote 主要负责 CSV 导出：列由 {@link Export} 注解决定，列值转换失败会回退为
+ * 原始文本，不中断整表导出
  */
 @Slf4j
 public class CollectionUtil {
@@ -110,7 +113,8 @@ public class CollectionUtil {
      * @param list      集合
      * @param itemClass 元素的类名
      * @param <M>       元素类型
-     * @return InputStream
+     * @return CSV 文件流
+     * @apiNote 首行是表头，取自字段的 {@link Description}
      */
     @Contract("_, _ -> new")
     public static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(List<M> list, Class<M> itemClass) {
@@ -123,7 +127,7 @@ public class CollectionUtil {
      * @param itemClass         元素的类名
      * @param valueListFunction 列数据列表函数
      * @param <M>               元素类型
-     * @return InputStream
+     * @return CSV 文件流
      */
     @Contract("_, _ -> new")
     private static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(Class<M> itemClass, @NotNull Function<List<Field>, List<String>> valueListFunction) {
@@ -167,6 +171,7 @@ public class CollectionUtil {
      *
      * @param cell 单元格内容
      * @return 转义后的内容
+     * @apiNote 直接用空格替换，不加引号包裹，表格软件读取时不会出现多余引号
      */
     private static @NotNull String escapeCell(@NotNull String cell) {
         return cell
@@ -208,7 +213,6 @@ public class CollectionUtil {
             throw new ServiceException("字段列表不能为空");
         }
         List<String> rowList = new ArrayList<>();
-        // 添加表头
         rowList.add(String.join(CSV_COLUMN_DELIMITER, fieldList.stream().map(ReflectUtil::getDescription).toList()));
         return rowList;
     }
@@ -218,18 +222,28 @@ public class CollectionUtil {
      *
      * @param itemClass 类
      * @param <M>       元素类型
-     * @return 字段列表
+     * @return 字段列表（不可修改）
+     * @apiNote 结果按类缓存，同一个类重复导出不重复扫描字段
      */
     public static <M extends RootModel<M>> @Unmodifiable @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
         //noinspection unchecked
         return EXPORT_FIELD_CACHE.computeIfAbsent(itemClass, clazz -> buildExportFieldList((Class<M>) clazz));
     }
 
+    /**
+     * 扫描并排序导出字段
+     *
+     * @param itemClass 类
+     * @param <M>       元素类型
+     * @return 字段列表（不可修改）
+     * @apiNote {@code @Export} 优先取 Getter 上的，其次取字段上的；两者都没标记或
+     * 标记了 {@code remove} 的字段被排除。排序是<b>降序</b>，{@code sort} 值大的列排在前面
+     */
     private static <M extends RootModel<M>> @UnmodifiableView @NotNull List<Field> buildExportFieldList(Class<M> itemClass) {
         List<CsvField> fieldList = new ArrayList<>();
         for (Field field : ReflectUtil.getFieldList(itemClass)) {
             Export export = null;
-            // 判断 Getter 是否被标记
+            // Getter 上的 @Export 优先于字段上的
             String fieldGetter = ReflectUtil.getFieldGetter(field);
             try {
                 Method getter = itemClass.getMethod(fieldGetter);
@@ -255,6 +269,8 @@ public class CollectionUtil {
      * @param model 数据
      * @param field 字段
      * @return 处理后的值
+     * @apiNote 空值统一写成 {@code -} 占位；按 {@link Export.Type} 转换失败时
+     * 回退为原始文本并告警，一列坏数据不会让整次导出失败
      */
     private static <M extends RootModel<M>> @NotNull Object getCsvColumnValue(@NotNull M model, @NotNull Field field) {
         Object value = ReflectUtil.getFieldValue(model, field);
@@ -306,7 +322,7 @@ public class CollectionUtil {
     }
 
     /**
-     * CSV列
+     * CSV 导出列
      */
     @Accessors(chain = true)
     @Data

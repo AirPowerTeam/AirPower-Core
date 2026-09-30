@@ -15,7 +15,12 @@ import java.net.UnknownHostException;
 @Slf4j
 public class HostUtil {
     /**
-     * 获取服务器主机名的完整方法
+     * 获取服务器主机名
+     *
+     * @return 主机名，所有来源都取不到时为 {@code null}
+     * @apiNote 容器里 {@code InetAddress} 常解析不出主机名，因此按
+     * {@code InetAddress} → {@code hostname} 系统属性 → 环境变量的顺序逐级降级，
+     * 任何一级失败都不算错误
      */
     public static @Nullable String getHostName() {
         try {
@@ -31,7 +36,6 @@ public class HostUtil {
             log.debug("读取主机名被安全策略拦截, {}", e.getMessage());
         }
 
-        // 尝试系统属性
         String hostname = System.getProperty("hostname");
         if (isValidHostname(hostname)) {
             return hostname;
@@ -41,6 +45,8 @@ public class HostUtil {
 
     /**
      * 从环境变量获取主机名
+     *
+     * @return 主机名，两个环境变量都没有时为 {@code null}
      */
     private static @Nullable String getHostnameFromEnvironment() {
         // Windows
@@ -48,7 +54,7 @@ public class HostUtil {
         if (isValidHostname(hostname)) {
             return hostname;
         }
-        // Linux/Unix/Mac Docker
+        // Linux/Unix/Mac/Docker
         hostname = System.getenv("HOSTNAME");
         if (isValidHostname(hostname)) {
             return hostname;
@@ -58,6 +64,9 @@ public class HostUtil {
 
     /**
      * 验证主机名是否有效
+     *
+     * @param hostname 主机名
+     * @return 非 {@code null} 且非空白字符串
      */
     @Contract("null -> false")
     private static boolean isValidHostname(@Nullable String hostname) {

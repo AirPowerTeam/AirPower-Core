@@ -19,5 +19,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @Inherited
 public @interface ExposeAll {
+    /**
+     * 需要整体暴露的类
+     */
     Class<? extends RootModel<?>>[] value();
 }

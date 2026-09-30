@@ -10,12 +10,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiConsumer;
 
 /**
@@ -26,7 +21,6 @@ import java.util.function.BiConsumer;
 @Getter
 @Slf4j
 @EqualsAndHashCode
-@SuppressWarnings("unchecked")
 public class RootModel<M extends RootModel<M>> {
     /**
      * 是否是继承自 RootModel
@@ -42,17 +36,6 @@ public class RootModel<M extends RootModel<M>> {
             return true;
         }
         return isModel(clazz.getSuperclass());
-    }
-
-    /**
-     * 排除只读字段
-     *
-     * @apiNote 递归处理嵌套模型与模型集合，与 {@link #excludeNotMeta()} / {@link #desensitize()}
-     * 保持一致；否则嵌套模型里的只读字段（如创建时间）仍会返回给前端，
-     * 客户端可据此覆盖服务端数据
-     */
-    public final void excludeReadOnly() {
-        excludeReadOnlyAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
     }
 
     /**
@@ -86,80 +69,6 @@ public class RootModel<M extends RootModel<M>> {
             }
             if (RootModel.isModel(value.getClass())) {
                 excludeReadOnlyAll((RootModel<?>) value, visited);
-            }
-        });
-    }
-
-    /**
-     * 脱敏
-     *
-     * @apiNote 先排除非元数据字段，再对所有可达模型中
-     * {@link cn.hamm.airpower.core.annotation.Desensitize} 标记的字段脱敏。
-     * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
-     * 避免"订单 → 收货人"这类结构泄露明文敏感数据
-     */
-    public final void desensitize() {
-        // 先排除非元数据字段：每个模型实例都会走排除分支，自引用由已访问集合拦下
-        excludeNotMetaAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
-        // 再对所有可达模型（含类型不同的嵌套模型）递归脱敏
-        desensitizeAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
-    }
-
-    /**
-     * 排除非元数据字段
-     */
-    public final void excludeNotMeta() {
-        excludeNotMeta(List.of());
-    }
-
-    /**
-     * 模型字段值处理
-     *
-     * @param whiteList 类白名单
-     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
-     */
-    public final void excludeNotMeta(@NotNull List<Class<? extends RootModel<?>>> whiteList) {
-        excludeNotMetaAndDesensitize(whiteList, false);
-    }
-
-    /**
-     * 模型字段值处理
-     *
-     * @param whiteList     类白名单，为 {@code null} 时按空名单处理
-     * @param isDesensitize 是否需要脱敏
-     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
-     */
-    public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
-        List<Class<? extends RootModel<?>>> whiteNameList = Objects.isNull(whiteList) ? List.of() : whiteList;
-        filterModelFieldValue((instance, field) -> {
-            Object value = ReflectUtil.getFieldValue(instance, field);
-            if (Objects.isNull(value)) {
-                return;
-            }
-            if (whiteNameList.isEmpty() || !whiteNameList.contains(this.getClass())) {
-                // 当前类不在白名单中：只做非元数据排除，不触发脱敏
-                excludeFieldValueNotMeta(instance, field);
-                return;
-            }
-            if (value instanceof Collection<?> valueList) {
-                // 是对象集合
-                valueList.forEach(item -> {
-                    if (Objects.isNull(item) || !RootModel.isModel(item.getClass())) {
-                        return;
-                    }
-                    // 集合元素按自身类重新判定白名单：
-                    // 在白名单内则继续递归（脱敏），否则只排除非元数据
-                    handleNested((RootModel<?>) item, whiteNameList, isDesensitize);
-                });
-                return;
-            }
-            if (RootModel.isModel(value.getClass())) {
-                // 如果是模型，则递归处理
-                handleNested((RootModel<?>) value, whiteNameList, isDesensitize);
-                return;
-            }
-            if (isDesensitize) {
-                desensitizeFieldValue(instance, field, value);
             }
         });
     }
@@ -245,7 +154,7 @@ public class RootModel<M extends RootModel<M>> {
         }
         Meta meta = ReflectUtil.getAnnotation(Meta.class, field);
         if (Objects.isNull(meta)) {
-            // 判断 Getter 是否被标记
+            // 字段上没标 @Meta 时，回退到看 getter 上是否标了
             String fieldGetter = ReflectUtil.getFieldGetter(field);
             try {
                 Method getter = instance.getClass().getMethod(fieldGetter);
@@ -307,7 +216,6 @@ public class RootModel<M extends RootModel<M>> {
                 ReflectUtil.setFieldValue(instance, field, desensitize.symbol());
                 return;
             }
-            // 如果不是字符串，则置空
             ReflectUtil.setFieldValue(instance, field,
                     DesensitizeUtil.desensitize(
                             valueString,
@@ -320,6 +228,90 @@ public class RootModel<M extends RootModel<M>> {
             return;
         }
         ReflectUtil.setFieldValue(instance, field, null);
+    }
+
+    /**
+     * 排除只读字段
+     *
+     * @apiNote 递归处理嵌套模型与模型集合，与 {@link #excludeNotMeta()} / {@link #desensitize()}
+     * 保持一致；否则嵌套模型里的只读字段（如创建时间）仍会返回给前端，
+     * 客户端可据此覆盖服务端数据
+     */
+    public final void excludeReadOnly() {
+        excludeReadOnlyAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 脱敏
+     *
+     * @apiNote 先排除非元数据字段，再对所有可达模型中
+     * {@link cn.hamm.airpower.core.annotation.Desensitize} 标记的字段脱敏。
+     * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
+     * 避免"订单 → 收货人"这类结构泄露明文敏感数据
+     */
+    public final void desensitize() {
+        // 先排除非元数据字段：每个模型实例都会走排除分支，自引用由已访问集合拦下
+        excludeNotMetaAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+        // 再对所有可达模型（含类型不同的嵌套模型）递归脱敏
+        desensitizeAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 排除非元数据字段
+     */
+    public final void excludeNotMeta() {
+        excludeNotMeta(List.of());
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param whiteList 类白名单
+     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
+     */
+    public final void excludeNotMeta(@NotNull List<Class<? extends RootModel<?>>> whiteList) {
+        excludeNotMetaAndDesensitize(whiteList, false);
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param whiteList     类白名单，为 {@code null} 时按空名单处理
+     * @param isDesensitize 是否需要脱敏
+     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
+     */
+    public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
+        List<Class<? extends RootModel<?>>> whiteNameList = Objects.isNull(whiteList) ? List.of() : whiteList;
+        filterModelFieldValue((instance, field) -> {
+            Object value = ReflectUtil.getFieldValue(instance, field);
+            if (Objects.isNull(value)) {
+                return;
+            }
+            if (whiteNameList.isEmpty() || !whiteNameList.contains(this.getClass())) {
+                // 当前类不在白名单中：只做非元数据排除，不触发脱敏
+                excludeFieldValueNotMeta(instance, field);
+                return;
+            }
+            if (value instanceof Collection<?> valueList) {
+                // 是对象集合
+                valueList.forEach(item -> {
+                    if (Objects.isNull(item) || !RootModel.isModel(item.getClass())) {
+                        return;
+                    }
+                    // 集合元素按自身类重新判定白名单：
+                    // 在白名单内则继续递归（脱敏），否则只排除非元数据
+                    handleNested((RootModel<?>) item, whiteNameList, isDesensitize);
+                });
+                return;
+            }
+            if (RootModel.isModel(value.getClass())) {
+                handleNested((RootModel<?>) value, whiteNameList, isDesensitize);
+                return;
+            }
+            if (isDesensitize) {
+                desensitizeFieldValue(instance, field, value);
+            }
+        });
     }
 
     /**

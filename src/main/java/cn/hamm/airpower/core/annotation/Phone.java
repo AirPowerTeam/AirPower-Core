@@ -72,22 +72,20 @@ public @interface Phone {
          */
         @Override
         public final boolean isValid(String value, ConstraintValidatorContext context) {
+            // 空值交给 @NotNull 一类的注解处理，本注解只管格式
             if (StringUtil.isEmpty(value)) {
                 return true;
             }
             if (!mobile && !tel) {
-                // 不允许座机也不允许手机 验证个鬼啊
+                // 两种格式都不允许时形同放弃校验，直接放行
                 return true;
             }
             if (!mobile) {
-                // 只允许座机
                 return ValidateUtil.isTelPhone(value);
             }
             if (!tel) {
-                // 只允许手机
                 return ValidateUtil.isMobilePhone(value);
             }
-            // 手机座机均可
             return ValidateUtil.isMobilePhone(value) || ValidateUtil.isTelPhone(value);
         }
 

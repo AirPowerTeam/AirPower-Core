@@ -15,9 +15,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
- * <h1>任务流程工具类</h1>
+ * <h1>异步任务工具类</h1>
  *
  * @author Hamm.cn
+ * @apiNote 内部线程池全进程共享，任务内的 TraceID 会自动从提交线程继承并在结束后清理
  */
 @Slf4j
 public class TaskUtil {
@@ -32,7 +33,7 @@ public class TaskUtil {
     private static final int MAX_POOL_SIZE = CORE_POOL_SIZE * 2;
 
     /**
-     * 线程池
+     * 共享线程池，队列满时由调用方线程执行（不丢任务、不抛拒绝异常）
      */
     @SuppressWarnings("AlibabaThreadShouldSetName")
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
@@ -55,12 +56,12 @@ public class TaskUtil {
     );
 
     /**
-     * 异步执行任务 {@code 不会抛出异常}
+     * 异步执行任务，异常只记录日志、不向调用方抛出
      *
      * @param runnable     任务
      * @param moreRunnable 更多任务
      * @apiNote 线程池使用 {@code CallerRunsPolicy}，队列满时任务会在<b>调用方线程</b>
-     * 同步执行，此时不再是异步
+     * 同步执行，此时不再是异步；每个任务各自提交到线程池，彼此不保证先后顺序
      */
     public static void run(Runnable runnable, Runnable... moreRunnable) {
         String traceId = TraceUtil.getTraceId();

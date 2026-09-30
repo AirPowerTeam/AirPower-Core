@@ -25,25 +25,26 @@ public class DictionaryUtil {
     }
 
     /**
-     * 查字典
+     * 按 Key 查找字典项
      *
      * @param enumClass 枚举字典类
      * @param key       枚举字典值
-     * @param <D>       [泛型] 字典类型
-     * @return 查到的字典
+     * @param <D>       字典类型
+     * @return 查到的字典项
+     * @apiNote 找不到时抛异常，并把该枚举的全部可选项作为错误数据带出，方便前端提示
      */
     public static <D extends IDictionary> @NotNull D getDictionary(Class<D> enumClass, int key) {
         return getDictionary(enumClass, IDictionary::getKey, key);
     }
 
     /**
-     * 查字典
+     * 按指定属性查找字典项
      *
      * @param enumClass 枚举字典类
-     * @param function  获取指定值的方法
+     * @param function  获取比较属性的方法
      * @param value     比较的值
      * @param <D>       字典类型
-     * @return 查到的字典
+     * @return 查到的字典项
      */
     public static <D extends IDictionary> @NotNull D getDictionary(
             Class<D> enumClass, Function<D, Object> function, Object value
@@ -97,17 +98,17 @@ public class DictionaryUtil {
      * @param lambdas 需要获取的方法表达式
      * @param <D>     字典类型
      * @return 枚举选项列表
+     * @apiNote 返回项的 key 是<b>方法名首字母小写</b>后的结果（{@code getKey()} → {@code key}），
+     * 顺序与传入的 {@code lambdas} 一致；某个方法取值失败只记日志，该字段直接缺失
      */
     @SafeVarargs
     public static <D extends IDictionary> @NotNull List<Map<String, Object>> getDictionaryList(
             Class<D> clazz, IFunction<D, Object>... lambdas
     ) {
         List<Map<String, Object>> mapList = new ArrayList<>();
-        //取出所有枚举类型
         Arrays.stream(getEnumConstants(clazz)).forEach(enumItem -> {
             // 容量按负载因子折算，否则 lambdas 较少时会立刻触发扩容
             Map<String, Object> item = new HashMap<>((int) (lambdas.length / 0.75f) + 1);
-            // 依次取出参数的值
             Arrays.stream(lambdas).forEach(lambda -> {
                 try {
                     item.put(StringUtil.uncapitalize(ReflectUtil.getLambdaFunctionName(lambda)), lambda.apply(enumItem));

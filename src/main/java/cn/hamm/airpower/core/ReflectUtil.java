@@ -14,11 +14,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -277,7 +273,7 @@ public class ReflectUtil {
      */
     @Contract(pure = true)
     public static Field @NotNull [] getDeclaredFields(@NotNull Class<?> clazz) {
-        return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz, key -> key.getDeclaredFields());
+        return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz, Class::getDeclaredFields);
     }
 
     /**

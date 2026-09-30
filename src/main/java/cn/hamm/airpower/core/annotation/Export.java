@@ -35,7 +35,7 @@ public @interface Export {
     boolean remove() default false;
 
     /**
-     * <h1>列数据类型</h1>
+     * <h1>导出列的数据类型</h1>
      *
      * @author Hamm.cn
      */

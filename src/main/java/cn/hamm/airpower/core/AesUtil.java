@@ -26,21 +26,18 @@ import static javax.crypto.Cipher.ENCRYPT_MODE;
 @Accessors(chain = true)
 public class AesUtil {
     /**
-     * 加密算法
-     */
-    @Setter(AccessLevel.NONE)
-    private String algorithm = "AES";
-
-    /**
      * 合法的 AES 密钥长度（字节）
      */
     private static final Set<Integer> VALID_KEY_LENGTHS = Set.of(16, 24, 32);
-
     /**
      * CBC 模式要求的 IV 长度（字节）
      */
     private static final int IV_LENGTH = 16;
-
+    /**
+     * 加密算法
+     */
+    @Setter(AccessLevel.NONE)
+    private String algorithm = "AES";
     /**
      * 密钥
      */
@@ -109,8 +106,7 @@ public class AesUtil {
      *
      * @param key 密钥
      * @return this
-     * @apiNote 长度必须为 {@code 16 / 24 / 32} 字节（AES-128/192/256），
-     * 在设置时就校验，避免错误延后到加密时才以"初始化密码器失败"暴露
+     * @apiNote 长度必须为 {@code 16 / 24 / 32} 字节（AES-128/192/256
      */
     public AesUtil setKey(byte[] key) {
         if (Objects.isNull(key)) {
@@ -127,7 +123,7 @@ public class AesUtil {
      * 加密
      *
      * @param source 待加密的内容
-     * @return 加密后的内容
+     * @return {@code Base64} 编码的密文
      */
     public final String encrypt(String source) {
         if (Objects.isNull(source)) {
@@ -146,7 +142,7 @@ public class AesUtil {
     /**
      * 解密
      *
-     * @param content 加密后的内容
+     * @param content {@code Base64} 编码的密文
      * @return 解密后的内容
      */
     @Contract("_ -> new")

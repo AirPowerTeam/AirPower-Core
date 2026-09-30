@@ -103,6 +103,8 @@ public class StringUtil {
      *
      * @param str 字符串
      * @return 去除空白后的字符串，入参为 null 时返回 null
+     * @apiNote 删的是<b>所有位置</b>的空白，不只是首尾，与 {@link String#trim()}
+     * 语义不同
      */
     public static CharSequence trimAllWhitespace(@Nullable CharSequence str) {
         if (isEmpty(str)) {
@@ -126,7 +128,7 @@ public class StringUtil {
      * 字符串首字母大写
      *
      * @param str 源字符串
-     * @return 目标字符串
+     * @return 首字母大写后的字符串，入参为空时原样返回
      */
     public static String capitalize(String str) {
         return changeFirstCharacterCase(str, true);
@@ -136,7 +138,7 @@ public class StringUtil {
      * 字符串首字母小写
      *
      * @param str 源字符串
-     * @return 目标字符串
+     * @return 首字母小写后的字符串，入参为空时原样返回
      */
     public static String uncapitalize(String str) {
         return changeFirstCharacterCase(str, false);
@@ -147,7 +149,8 @@ public class StringUtil {
      *
      * @param str        源字符串
      * @param capitalize 是否大写
-     * @return 目标字符串
+     * @return 转换后的字符串
+     * @apiNote 只处理第一个字符，其余字符原样保留
      */
     private static String changeFirstCharacterCase(String str, boolean capitalize) {
         if (isEmpty(str)) {

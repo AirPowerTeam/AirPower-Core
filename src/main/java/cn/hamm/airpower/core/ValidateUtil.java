@@ -130,13 +130,10 @@ public class ValidateUtil {
 
     /**
      * 是否是普通字符
-     * 允许字符:
-     * <p>
-     * {@code @ # % a-z A-Z 0-9 汉字 _ + /}
-     * </p>
      *
      * @param value 参数
      * @return 验证结果
+     * @apiNote 允许字符：{@code @ # % a-z A-Z 0-9 汉字 _ + /}
      */
     public static boolean isNormalCode(String value) {
         return validRegex(value, NORMAL_CODE);

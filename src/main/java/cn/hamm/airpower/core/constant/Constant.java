@@ -3,13 +3,13 @@ package cn.hamm.airpower.core.constant;
 import org.jetbrains.annotations.Contract;
 
 /**
- * <h1>常量</h1>
+ * <h1>通用常量</h1>
  *
  * @author Hamm.cn
  */
 public class Constant {
     /**
-     * ID
+     * 实体主键的字段名
      */
     public static final String ID = "id";
 

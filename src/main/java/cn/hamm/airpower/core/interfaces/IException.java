@@ -9,9 +9,12 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * <h1>异常接口</h1>
+ * <h1>异常断言接口</h1>
  *
  * @author Hamm.cn
+ * @param <T> 异常枚举自身类型
+ * @apiNote 实现类是<b>错误码枚举</b>，而不是异常实例：所有 {@code whenXxx} 方法
+ * 只在条件成立时抛出 {@link ServiceException}，条件不成立时静默返回
  */
 public interface IException<T extends IException<T>> extends Supplier<T> {
     /**
@@ -173,18 +176,18 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <b>两个字符串忽略大小写相同</b> 时抛出异常
+     * 抛出异常
      *
      * @param str1    被验证的数据
      * @param str2    被验证的数据
      * @param message 返回信息
+     * @apiNote 任一入参为 {@code null} 都会直接抛出（而不是跳过比较），
+     * 避免"空值不报错"被上层当成校验通过
      */
     default void whenEqualsIgnoreCase(String str1, String str2, String message) {
         if (Objects.isNull(str1) || Objects.isNull(str2)) {
             show(message);
         }
-        // 固定 Locale.ROOT：土耳其语环境下 "I".toLowerCase() 得到 "ı"，
-        // 会把 "I" 与 "i" 误判为不等
         when(Objects.equals(normalizeCase(str1), normalizeCase(str2)), message);
     }
 
@@ -201,7 +204,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两者不相同</b></s> 时抛出异常
+     * 当 <b>两者不相同</b> 时抛出异常
      *
      * @param obj1 被验证的数据
      * @param obj2 被验证的数据
@@ -211,7 +214,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两者不相同</b></s> 时抛出异常
+     * 当 <b>两者不相同</b> 时抛出异常
      *
      * @param obj1    被验证的数据
      * @param obj2    被验证的数据
@@ -222,7 +225,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串不相同</b> 时抛出异常
      *
      * @param str1 被验证的数据
      * @param str2 被验证的数据
@@ -232,7 +235,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串不相同</b> 时抛出异常
      *
      * @param str1    被验证的数据
      * @param str2    被验证的数据
@@ -243,7 +246,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串忽略大小写还不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串忽略大小写还不相同</b> 时抛出异常
      *
      * @param str1 被验证的数据
      * @param str2 被验证的数据
@@ -253,11 +256,12 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串忽略大小写还不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串忽略大小写还不相同</b> 时抛出异常
      *
      * @param str1    被验证的数据
      * @param str2    被验证的数据
      * @param message 返回信息
+     * @apiNote 任一入参为 {@code null} 都会直接抛出
      */
     default void whenNotEqualsIgnoreCase(String str1, String str2, String message) {
         if (Objects.isNull(str1) || Objects.isNull(str2)) {
@@ -288,7 +292,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>不为 null</b></s> 时抛出异常
+     * 当 <b>不为 null</b> 时抛出异常
      *
      * @param obj 被验证的数据
      */
@@ -297,7 +301,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>不为 null</b></s> 时抛出异常
+     * 当 <b>不为 null</b> 时抛出异常
      *
      * @param obj     被验证的数据
      * @param message 返回信息

@@ -13,6 +13,8 @@ import java.util.function.Function;
  * <h1>树结构处理工具类</h1>
  *
  * @author Hamm.cn
+ * @apiNote 约定根节点 {@link #ROOT_ID} 为 {@code 0}：父级为 {@code null} 或 {@code 0}
+ * 都视为顶级节点；数据不完整时（父级缺失、成环、ID 为空）只告警并剪枝，不抛异常
  */
 @Slf4j
 public class TreeUtil {
@@ -32,8 +34,10 @@ public class TreeUtil {
      * 生成树结构
      *
      * @param list 原始数据列表
-     * @param <E>  泛型
-     * @return 树结构数组
+     * @param <E>  树节点类型
+     * @return 树结构列表（不可修改）
+     * @apiNote 返回值只展开从 {@link #ROOT_ID} 可达的节点，父级不在 {@code list} 中的
+     * 孤儿节点会被排除
      */
     public static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeList(List<E> list) {
         if (Objects.isNull(list) || list.isEmpty()) {
@@ -43,12 +47,12 @@ public class TreeUtil {
     }
 
     /**
-     * 生成树结构（优化版 - O(n) 复杂度）
+     * 生成指定父级下的树结构
      *
      * @param list     原始数据列表
      * @param parentId 父级 ID
-     * @param <E>      泛型
-     * @return 树结构数组
+     * @param <E>      树节点类型
+     * @return 树结构列表
      * @apiNote 使用 Map 预构建 parentId -> children 映射，将时间复杂度从 O(n²) 优化到 O(n)
      */
     private static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeListOptimized(
@@ -73,9 +77,9 @@ public class TreeUtil {
     /**
      * 找出父级不存在于原始数据中的孤儿节点
      *
-     * @param list       原始数据
+     * @param list        原始数据
      * @param declaredIds 数据中出现过的 ID 集合
-     * @param <E>        泛型
+     * @param <E>         树节点类型
      * @apiNote 孤儿节点永远不会出现在构建结果中，调用方无任何提示，
      * 表现为"数据莫名少了一截"，因此这里显式告警
      */
@@ -106,8 +110,8 @@ public class TreeUtil {
      *
      * @param parentMap parentId -> children 映射
      * @param parentId  父级 ID
-     * @param <E>       泛型
-     * @return 树结构数组
+     * @param <E>       树节点类型
+     * @return 树结构列表
      */
     private static <E extends IEntity<E> & ITree<E>> @UnmodifiableView @NotNull List<E> buildTreeWithMap(
             @NotNull Map<Long, List<E>> parentMap, long parentId
@@ -120,9 +124,9 @@ public class TreeUtil {
      *
      * @param parentMap parentId -> children 映射
      * @param parentId  父级 ID
-     * @param visited   当前递归路径上的 ID，用于检测环形数据
-     * @param <E>       泛型
-     * @return 树结构数组
+     * @param visiting  当前递归路径上的 ID，用于检测环形数据
+     * @param <E>       树节点类型
+     * @return 树结构列表
      * @apiNote 父级 ID 构成环且从 {@link #ROOT_ID} 可达时，无环检测会一直递归到
      * {@code StackOverflowError}
      */
@@ -155,10 +159,14 @@ public class TreeUtil {
     }
 
     /**
-     * 根据父级 ID 获取所有子节点
+     * 根据父级 ID 获取直接子节点
      *
      * @param parentId 父级 ID
+     * @param function 以父级 ID 为键获取子节点的函数
+     * @param <E>      树节点类型
      * @return 子节点列表
+     * @apiNote {@code parentId} 为 {@code null} 时按根节点 {@link #ROOT_ID} 处理；
+     * 返回的是新集合，修改它不会影响数据源
      */
     public static <
             E extends IEntity<E> & ITree<E>
@@ -177,7 +185,9 @@ public class TreeUtil {
      * 删除前确认是否包含子节点数据
      *
      * @param id       待删除的 ID
-     * @param function 获取子节点的函数
+     * @param function 以父级 ID 为键获取子节点的函数
+     * @param <E>      树节点类型
+     * @apiNote 只判断<b>直接</b>子节点；存在子节点时抛异常
      */
     public static <
             E extends IEntity<E> & ITree<E>
@@ -192,9 +202,13 @@ public class TreeUtil {
     }
 
     /**
-     * 获取指定父ID下的所有子 ID
+     * 获取指定父 ID 下的所有后代 ID
      *
      * @param parentId 父 ID
+     * @param function 以父级 ID 为键获取子节点的函数
+     * @param <E>      树节点类型
+     * @return 所有后代的 ID 集合
+     * @apiNote 逐层递归展开，ID 为空的节点其子树无法继续收集，会告警并跳过
      */
     public static <
             E extends IEntity<E> & ITree<E>
@@ -211,9 +225,9 @@ public class TreeUtil {
      * 递归收集所有后代 {@code ID}
      *
      * @param parentId  父 ID
-     * @param function  获取子节点的函数
+     * @param function  以父级 ID 为键获取子节点的函数
      * @param collected 已收集的 ID 集合，用于过滤 {@code null} ID 与环形数据
-     * @param <E>       泛型
+     * @param <E>       树节点类型
      */
     private static <
             E extends IEntity<E> & ITree<E>
