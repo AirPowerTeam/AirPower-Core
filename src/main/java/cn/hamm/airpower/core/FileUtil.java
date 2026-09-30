@@ -159,6 +159,12 @@ public class FileUtil {
             if (!Files.exists(path)) {
                 Files.createFile(path);
             }
+            // 判断路径是否合法
+            Path basePath = Paths.get(absoluteDirectory).normalize().toAbsolutePath();
+            Path targetPath = path.normalize().toAbsolutePath();
+            if (!targetPath.startsWith(basePath)) {
+                throw new ServiceException("文件保存路径越界");
+            }
             Files.write(path, bytes, options);
         } catch (IOException | IllegalArgumentException e) {
             // IllegalArgumentException 来自非法的 OpenOption 组合（如只给 READ），
@@ -188,6 +194,9 @@ public class FileUtil {
      */
     public static void zip(String sourceDirPath, String zipFilePath) throws IOException {
         Path sourceDir = Paths.get(sourceDirPath);
+        if (Files.isSymbolicLink(sourceDir)) {
+            throw new IOException("源文件夹是符号链接: " + sourceDirPath);
+        }
         if (!Files.exists(sourceDir)) {
             throw new IOException("源文件夹不存在: " + sourceDirPath);
         }
@@ -226,6 +235,10 @@ public class FileUtil {
         // 遍历目录中的所有文件和子目录
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path path : stream) {
+                if (Files.isSymbolicLink(path)) {
+                    log.warn("跳过符号链接");
+                    continue;
+                }
                 String entryName = dirName + path.getFileName();
 
                 if (Files.isDirectory(path)) {

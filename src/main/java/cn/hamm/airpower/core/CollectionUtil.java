@@ -56,11 +56,9 @@ public class CollectionUtil {
 
     /**
      * 会被表格软件当作公式起始的字符
-     *
-     * @apiNote 不含 {@code \t}：TEXT / DATETIME 列会前置制表符做缩进，
-     * 那是本工具自身的标记，不应被当作公式防护对象
      */
-    private static final String FORMULA_PREFIXES = "=+-@";
+    private static final String FORMULA_PREFIXES = "=+-@\t\r";
+
     /**
      * 导出字段缓存
      */
@@ -185,7 +183,15 @@ public class CollectionUtil {
      * 恶意数据可借此触发外部链接访问或 DDE 命令执行
      */
     private static @NotNull String guardFormula(@NotNull String cell) {
-        if (!cell.isEmpty() && FORMULA_PREFIXES.indexOf(cell.charAt(0)) >= 0) {
+        if (cell.isEmpty()) {
+            return cell;
+        }
+        int i = 0;
+        // 先剥掉前导空白/控制字符再做判定，Excel 解析时同样会忽略它们
+        while (i < cell.length() && Character.isWhitespace(cell.charAt(i))) {
+            i++;
+        }
+        if (i < cell.length() && FORMULA_PREFIXES.indexOf(cell.charAt(i)) >= 0) {
             return CSV_FORMULA_GUARD + cell;
         }
         return cell;

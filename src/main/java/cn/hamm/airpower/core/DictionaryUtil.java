@@ -48,12 +48,13 @@ public class DictionaryUtil {
     public static <D extends IDictionary> @NotNull D getDictionary(
             Class<D> enumClass, Function<D, Object> function, Object value
     ) {
+        List<Map<String, Object>> dictionaryList = getDictionaryList(enumClass);
         return Arrays.stream(getEnumConstants(enumClass))
                 .filter(enumItem -> Objects.equals(function.apply(enumItem), value))
                 .findFirst()
                 .orElseThrow(new ServiceException(
                         "传入的值(" + enumClass.getSimpleName() + "=" + value + ")不在字典可选范围内",
-                        getDictionaryList(enumClass))
+                        dictionaryList)
                 );
     }
 

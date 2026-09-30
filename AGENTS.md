@@ -63,11 +63,15 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 
 - **业务失败统一抛 `cn.hamm.airpower.core.exception.ServiceException`**（继承 `RuntimeException` 实现
   `IException<ServiceException>`）；不允许直接抛 `IllegalArgumentException` 等
+- **null 入参契约**（`06fa23a` 重构起）：公共方法收到 null 时统一抛 `ServiceException`（带明确中文信息），
+  不再让 `NullPointerException` 泄漏给上层拦截器。配套约定： **公共方法的参数不再标 `@NotNull`**
+  （该注解只是文档、不产生运行时校验，写了反而与实际行为不符），需要判空的入口自己
+  `Objects.isNull(x) → throw new ServiceException(...)`；`@NotNull` 只保留在返回值和 **私有**内部方法上
 - `AccessTokenUtil` 的 secret **必须通过环境变量 `airpower.accessTokenSecret` 注入**，禁止硬编码
-- `AesUtil`：算法 `AES/CBC/PKCS5Padding`，`key` 必须是 16 / 24 / 32 字节；每次操作新建 `Cipher`（**不要缓存**，
+- `AesUtil`：算法 `AES/CBC/PKCS5Padding`，`key` 必须是 16 / 24 / 32 字节；每次操作新建 `Cipher`（ **不要缓存**，
   `Cipher` 非线程安全，缓存会在并发下出错）；`key` / `Base64` 密钥非法时统一抛 `ServiceException`
 - `RsaUtil`：RSA 2048 + `SHA256withRSA`，支持 PEM（Base64 字符串）密钥注入，分段加解密（`keySize/8 - 11` / `keySize/8`）；
-  私钥 PEM 头尾是 `PRIVATE KEY`（PKCS#8，与 `PKCS8EncodedKeySpec` 解析一致，**不要**改成 `RSA PRIVATE KEY`）
+  私钥 PEM 头尾是 `PRIVATE KEY`（PKCS#8，与 `PKCS8EncodedKeySpec` 解析一致， **不要**改成 `RSA PRIVATE KEY`）
 - `Json.parse*` 失败统一包装为 `ServiceException`（不是 Jackson 原生异常），便于上层拦截器统一处理；`parse*` /
   `toString` 均捕获 `Exception`，因此 `null` 入参也会被包装
 
@@ -89,35 +93,49 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 | `HttpClient`        | `HttpUtil.httpClient`                 | 单例       | volatile + DCL    |
 | `KeyFactory`        | `RsaUtil.cachedKeyFactory`            | 单例       | volatile + DCL    |
 
-新增工具如需缓存， **优先 `ConcurrentHashMap.computeIfAbsent`**；单例用 volatile + 双重检查。
-**不要缓存 `javax.crypto.Cipher`**（非线程安全）。
+新增工具如需缓存， **优先 `ConcurrentHashMap.computeIfAbsent`**；单例用 volatile + 双重检查。 **不要缓存
+`javax.crypto.Cipher`**（非线程安全）。
 
 ## 9. 已知陷阱
 
 - `RootModel.excludeNotMeta(whiteList)`：白名单必须含 `this.getClass()`，否则 `excludeFieldValueNotMeta` 会把非 `@Meta`
   字段清空；`desensitize()` 会先排除非元数据字段再脱敏（自身类自动进白名单）
-- `HttpUtil`：基于 JDK `java.net.http.HttpClient`，仅适合简单 REST，不支持 HTTP/2 流式 / 复杂重试；
-  **只有设置了 connectTimeout，没有请求级超时**，服务端不响应时会一直阻塞
+- `HttpUtil`：基于 JDK `java.net.http.HttpClient`，仅适合简单 REST，不支持 HTTP/2 流式 / 复杂重试； **只有设置了
+  connectTimeout，没有请求级超时**，服务端不响应时会一直阻塞
 - `RandomUtil` 使用 `ThreadLocalRandom`， **测试不要假设全局序列**
 - `TaskUtil`：守护线程池，`corePoolSize = max(2, availableProcessors())`，JVM 退出前无需 `shutdown`；
   任务结束会 `TraceUtil.clearTraceId()` 清理 MDC
 - `ReflectUtil.getFieldList(null)` 直接抛 `ServiceException`；其他 `getAnnotation` 重载对 `null` 行为不一，调用前自行判空
 - `ReflectUtil.getLambdaFunctionName` 只去掉方法名开头的 `get` 前缀，方法名中间的 `get` 会保留
 - `AesUtil` 的 `algorithm` / `mode` 不可变（写死 `AES` / `CBC`），仅 `key` / `iv` / `padding` 可变
-- `FileUtil.formatSize` 固定用 `Locale.ROOT`，**不受 JVM 默认 Locale 影响**（德语环境也输出 `1.00KB`）
+- `FileUtil.formatSize` 固定用 `Locale.ROOT`， **不受 JVM 默认 Locale 影响**（德语环境也输出 `1.00KB`）
 - `ValidateUtil.isXxx(null)` 一律返回 `false`（不会抛 NPE）；`isChina2Identity` 只认 15/18 位，15 位会抛
   `ServiceException`，校验位支持大小写 `X`
 - `AccessTokenUtil.verify` 对任何畸形令牌统一抛 401 `ServiceException`，过期时间为 0 同样判定为已过期
+- **不要在 IDEA 里开着 “Add runtime assertions for not-null-annotated methods and parameters” 编译**：
+  IDE 会给 `@NotNull` 参数注入 `$$$reportNull$$$0`（抛 `IllegalArgumentException` 而非 `ServiceException`），
+  且 IDE 直接写 `target/classes`，`maven-compiler-plugin` 会判定 "Nothing to compile" 复用被污染的 class
+  → 已在 `.idea/compiler.xml` 关闭（`ALLOW_NOT_NULL_ASSERTIONS=false`），若仍出现先 `mvn clean`
+- `RootModel.excludeNotMeta(@NotNull List whiteList)` 的 `whiteList` **合法接受 null**（按空名单处理），
+  但仍带 `@NotNull`：开启上述插桩时 IDEA 会抛 `IllegalArgumentException`，导致
+  `RootModelTest` 的 "whiteList 为 null" 用例失败 —— 该参数是当前仅剩的插桩暴露点
+- 仍会泄漏裸 `NullPointerException` 的入口（重构未覆盖，测试仍断言 NPE）：
+  `Json.error(IException)`、`ReflectUtil.getFieldValue(null, field)`、
+  `CollectionUtil.getExportFieldList(null)`、`DictionaryUtil.getDictionary(cls, null, value)`、
+  `DateTimeUtil.formatCurrent((String) null)` / `format(millis, (String) null)`
 
 ## 10. 改动流程
 
 1. 先读 `pom.xml` + `RootModel` + `Json` + `IException`，理解设计再下手
 2. 不要改 §4 列出的三个核心抽象的公共方法签名
 3. 改缓存结构 → 必回归 `RootModelTest` / `CollectionUtilTest`
-4. 完成 → `mvn -o test`，确保全部测试类通过（本机没有全局 `mvn`，用
-   `/Applications/IntelliJ IDEA.app/Contents/plugins/maven/lib/maven3/bin/mvn`）
+4. 完成 → `mvn -o test`，确保全部测试类通过（本机没有全局 `mvn`；`/Applications/IntelliJ IDEA.app/...`
+   路径已失效，IDEA 实际装在 `~/Applications/IntelliJ IDEA Ultimate.app`，推荐直接用 wrapper 缓存里的
+   `~/.m2/wrapper/dists/apache-maven-3.9.9-bin/*/apache-maven-3.9.9/bin/mvn`）
+    - 纯离线还需加 `-Dmaven.legacyLocalRepo=true`：本地仓库里 `surefire-junit-platform` 等构件的
+      `_remote.repositories` 记录的仓库 ID 已失效，否则 `-o` 会报 "present, but unavailable"
 5. 改了公共 API → 更新 Javadoc（含 `<h1>` 标题）
-6. 测试断言必须与**实际行为**一致；若断言的是缺陷行为，请在注释里写明原因
+6. 测试断言必须与 **实际行为**一致；若断言的是缺陷行为，请在注释里写明原因
 
 ## 11. 文件改动索引
 

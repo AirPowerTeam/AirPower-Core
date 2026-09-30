@@ -262,6 +262,9 @@ public class AccessTokenUtil {
         if (!StringUtil.hasText(secret)) {
             throwException(SET_ENV_TOKEN_SECRET_FIRST);
         }
+        if (secret.length() < 32) {
+            throwException("身份令牌创建失败，令牌最短限制为32位字符");
+        }
         if (!StringUtil.hasText(accessToken)) {
             throwException(ACCESS_TOKEN_INVALID);
         }
