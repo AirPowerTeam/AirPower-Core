@@ -157,15 +157,15 @@ public class FileUtil {
         Path target = base.resolve(fileName).normalize();
         // 1) 拒绝穿越：目标必须仍在 base 之下
         if (!target.startsWith(base)) {
-            throw new ServiceException("非法的文件名：" + fileName);
+            throw new ServiceException("文件保存失败，非法的文件名：" + fileName);
         }
         // 2) 拒绝符号链接
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(target)) {
-            throw new ServiceException("目标路径不允许为符号链接：" + fileName);
+            throw new ServiceException("文件保存失败，目标路径不允许为符号链接：" + fileName);
         }
         // 3) fileName 只允许安全字符
         if (!fileName.matches("[A-Za-z0-9._\\-]+") || fileName.contains("..")) {
-            throw new ServiceException("非法的文件名：" + fileName);
+            throw new ServiceException("文件保存失败，非法的文件名：" + fileName);
         }
         createDirectories(base.toString());
         try {
