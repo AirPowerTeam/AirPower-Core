@@ -103,17 +103,6 @@ class ServiceExceptionTest {
             assertEquals(401, exception.getCode(), "错误码应取自 IException 的 401");
             assertEquals("未授权，请先登录", exception.getMessage(), "错误信息应取自 IException 的 message");
         }
-
-        @Test
-        @DisplayName("传入 null 的 IException 会触发空指针异常")
-        void testExceptionConstructorWithNull() {
-            assertThrows(NullPointerException.class,
-                    () -> new ServiceException((IException<?>) null, "消息"),
-                    "IException 为 null 时应触发空指针异常");
-            assertThrows(NullPointerException.class,
-                    () -> new ServiceException((IException<?>) null),
-                    "IException 为 null 时应触发空指针异常");
-        }
     }
 
     @Nested

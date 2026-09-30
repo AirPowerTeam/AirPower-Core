@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Objects;
+
 /**
  * <h1>系统异常包装类</h1>
  *
@@ -81,9 +83,11 @@ public class ServiceException extends RuntimeException implements IException<Ser
      * @param exception 异常
      * @param message   错误信息
      */
-    public ServiceException(@NotNull IException<?> exception, String message) {
+    public ServiceException(IException<?> exception, String message) {
         super(message);
-        this.code = exception.getCode();
+        if (Objects.nonNull(exception)) {
+            this.code = exception.getCode();
+        }
     }
 
     /**

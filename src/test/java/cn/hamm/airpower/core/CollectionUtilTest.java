@@ -2,6 +2,7 @@ package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.annotation.Description;
 import cn.hamm.airpower.core.annotation.Export;
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.ExportDemoModel;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -343,11 +344,11 @@ class CollectionUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：传入 null 抛 NullPointerException")
+        @DisplayName("异常分支：传入 null 抛 ServiceException")
         void testNullFieldList() {
-            assertThrows(NullPointerException.class,
+            assertThrows(ServiceException.class,
                     () -> CollectionUtil.getCsvHeaderList(null),
-                    "源码未对 fieldList 判空，传入 null 应抛 NullPointerException");
+                    "源码未对 fieldList 判空，传入 null 应抛 ServiceException");
         }
     }
 
@@ -647,13 +648,13 @@ class CollectionUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：传入 null 集合抛 NullPointerException")
+        @DisplayName("异常分支：传入 null 集合抛 ServiceException")
         void testNullList() {
             List<Field> fieldList = CollectionUtil.getExportFieldList(ExportDemoModel.class);
 
-            assertThrows(NullPointerException.class,
+            assertThrows(ServiceException.class,
                     () -> CollectionUtil.getCsvValueList(null, fieldList),
-                    "源码未对 list 判空，传入 null 应抛 NullPointerException");
+                    "源码未对 list 判空，传入 null 应抛 ServiceException");
         }
     }
 

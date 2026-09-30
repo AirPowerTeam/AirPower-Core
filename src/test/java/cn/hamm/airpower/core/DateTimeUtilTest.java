@@ -165,10 +165,10 @@ class DateTimeUtilTest {
         }
 
         @Test
-        @DisplayName("传 null 枚举应抛出空指针异常")
+        @DisplayName("传 null 枚举应抛出 ServiceException")
         void formatCurrentWithNullEnum() {
-            assertThrows(NullPointerException.class, () -> DateTimeUtil.formatCurrent((DateTimeFormatter) null),
-                    "枚举模板为 null 时应抛出空指针异常");
+            assertThrows(ServiceException.class, () -> DateTimeUtil.formatCurrent((DateTimeFormatter) null),
+                    "枚举模板为 null 时应抛出 ServiceException");
         }
     }
 
@@ -257,10 +257,10 @@ class DateTimeUtilTest {
         }
 
         @Test
-        @DisplayName("传 null 枚举应抛出空指针异常")
+        @DisplayName("传 null 枚举应抛出 ServiceException")
         void formatWithNullEnum() {
-            assertThrows(NullPointerException.class, () -> DateTimeUtil.format(FIXED_MILLI, (DateTimeFormatter) null),
-                    "枚举模板为 null 时应抛出空指针异常");
+            assertThrows(ServiceException.class, () -> DateTimeUtil.format(FIXED_MILLI, (DateTimeFormatter) null),
+                    "枚举模板为 null 时应抛出 ServiceException");
         }
 
         @Test

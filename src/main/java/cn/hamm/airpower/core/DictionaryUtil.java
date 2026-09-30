@@ -32,7 +32,7 @@ public class DictionaryUtil {
      * @param <D>       [泛型] 字典类型
      * @return 查到的字典
      */
-    public static <D extends IDictionary> @NotNull D getDictionary(@NotNull Class<D> enumClass, int key) {
+    public static <D extends IDictionary> @NotNull D getDictionary(Class<D> enumClass, int key) {
         return getDictionary(enumClass, IDictionary::getKey, key);
     }
 
@@ -46,7 +46,7 @@ public class DictionaryUtil {
      * @return 查到的字典
      */
     public static <D extends IDictionary> @NotNull D getDictionary(
-            @NotNull Class<D> enumClass, Function<D, Object> function, Object value
+            Class<D> enumClass, Function<D, Object> function, Object value
     ) {
         return Arrays.stream(getEnumConstants(enumClass))
                 .filter(enumItem -> Objects.equals(function.apply(enumItem), value))
@@ -66,7 +66,10 @@ public class DictionaryUtil {
      * @apiNote {@link Class#getEnumConstants()} 对非枚举类返回 {@code null}，
      * 直接 {@code .stream()} 会抛 {@code NullPointerException}
      */
-    private static <D extends IDictionary> D @NotNull [] getEnumConstants(@NotNull Class<D> enumClass) {
+    private static <D extends IDictionary> D @NotNull [] getEnumConstants(Class<D> enumClass) {
+        if (Objects.isNull(enumClass)) {
+            throw new ServiceException("字典类不能为空");
+        }
         D[] constants = enumClass.getEnumConstants();
         if (Objects.isNull(constants)) {
             throw new ServiceException("字典类(" + enumClass.getName() + ")不是枚举，无法作为字典使用");
@@ -81,7 +84,7 @@ public class DictionaryUtil {
      * @return 枚举选项列表
      */
     public static <D extends IDictionary> @NotNull List<Map<String, Object>> getDictionaryList(
-            @NotNull Class<D> clazz
+            Class<D> clazz
     ) {
         return getDictionaryList(clazz, IDictionary::getKey, IDictionary::getLabel);
     }
@@ -96,7 +99,7 @@ public class DictionaryUtil {
      */
     @SafeVarargs
     public static <D extends IDictionary> @NotNull List<Map<String, Object>> getDictionaryList(
-            @NotNull Class<D> clazz, IFunction<D, Object>... lambdas
+            Class<D> clazz, IFunction<D, Object>... lambdas
     ) {
         List<Map<String, Object>> mapList = new ArrayList<>();
         //取出所有枚举类型

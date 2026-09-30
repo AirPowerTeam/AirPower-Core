@@ -115,10 +115,10 @@ class FileUtilTest {
         }
 
         @Test
-        @DisplayName("传 null 应抛出空指针异常")
+        @DisplayName("传 null 应抛出 ServiceException")
         void nullFileName() {
-            assertThrows(NullPointerException.class, () -> FileUtil.getExtension(null),
-                    "文件名为 null 时应抛出空指针异常");
+            assertThrows(ServiceException.class, () -> FileUtil.getExtension(null),
+                    "文件名为 null 时应抛出 ServiceException");
         }
     }
 

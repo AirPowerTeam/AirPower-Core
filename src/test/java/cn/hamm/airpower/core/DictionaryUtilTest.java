@@ -169,12 +169,12 @@ class DictionaryUtilTest {
         }
 
         @Test
-        @DisplayName("异常:枚举类为 null 时,应抛出 NullPointerException")
+        @DisplayName("异常:枚举类为 null 时,应抛出 ServiceException")
         void getDictionaryWithNullClass() {
             assertThrows(
-                    NullPointerException.class,
+                    ServiceException.class,
                     () -> DictionaryUtil.getDictionary(null, 1),
-                    "枚举类为 null 时源码会在 getEnumConstants() 处抛出 NullPointerException"
+                    "枚举类为 null 时源码会在 getEnumConstants() 处抛出 ServiceException"
             );
         }
     }
@@ -306,12 +306,12 @@ class DictionaryUtilTest {
         }
 
         @Test
-        @DisplayName("异常:枚举类为 null 时,应抛出 NullPointerException")
+        @DisplayName("异常:枚举类为 null 时,应抛出 ServiceException")
         void getDictionaryListWithNullClass() {
             assertThrows(
-                    NullPointerException.class,
+                    ServiceException.class,
                     () -> DictionaryUtil.getDictionaryList(null),
-                    "枚举类为 null 时源码会在 getEnumConstants() 处抛出 NullPointerException"
+                    "枚举类为 null 时源码会在 getEnumConstants() 处抛出 ServiceException"
             );
         }
     }

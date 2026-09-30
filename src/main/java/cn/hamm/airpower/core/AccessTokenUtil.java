@@ -102,6 +102,55 @@ public class AccessTokenUtil {
     }
 
     /**
+     * 解析令牌中的过期时间
+     *
+     * @param value 令牌中的过期时间字符串
+     * @return 过期时间（毫秒）
+     * @apiNote 非法内容按无效令牌处理；时间为 0 同样视为已过期
+     */
+    private static long parseExpireTimestamps(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throwException(ACCESS_TOKEN_INVALID);
+            return 0L;
+        }
+    }
+
+    /**
+     * 解析令牌中的负载数据
+     *
+     * @param value 令牌中的负载字符串
+     * @return 负载数据
+     * @apiNote 非法内容按无效令牌处理
+     */
+    private static @NotNull Map<String, Object> parsePayloads(String value) {
+        try {
+            return Json.parse2Map(new String(Base64.getUrlDecoder().decode(value.getBytes(UTF_8))));
+        } catch (Exception e) {
+            throwException(ACCESS_TOKEN_INVALID);
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * 字节数组转小写十六进制字符串
+     *
+     * @param bytes 字节数组
+     * @return 十六进制字符串，每个字节占两位
+     */
+    private static @NotNull String toHex(byte @NotNull [] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        char[] digits = "0123456789abcdef".toCharArray();
+        for (int i = 0; i < bytes.length; i++) {
+            int value = bytes[i] & 0xff;
+            hexChars[i * 2] = digits[value >>> 4];
+            hexChars[i * 2 + 1] = digits[value & 0x0f];
+        }
+        return new String(hexChars);
+    }
+
+    /**
      * 创建一个 AccessToken
      *
      * @param id TokenID
@@ -209,7 +258,7 @@ public class AccessTokenUtil {
      * @param secret      密钥
      * @return VerifiedToken
      */
-    public final VerifiedToken verify(@NotNull String accessToken, String secret) {
+    public final VerifiedToken verify(String accessToken, String secret) {
         if (!StringUtil.hasText(secret)) {
             throwException(SET_ENV_TOKEN_SECRET_FIRST);
         }
@@ -241,38 +290,6 @@ public class AccessTokenUtil {
     }
 
     /**
-     * 解析令牌中的过期时间
-     *
-     * @param value 令牌中的过期时间字符串
-     * @return 过期时间（毫秒）
-     * @apiNote 非法内容按无效令牌处理；时间为 0 同样视为已过期
-     */
-    private static long parseExpireTimestamps(String value) {
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException e) {
-            throwException(ACCESS_TOKEN_INVALID);
-            return 0L;
-        }
-    }
-
-    /**
-     * 解析令牌中的负载数据
-     *
-     * @param value 令牌中的负载字符串
-     * @return 负载数据
-     * @apiNote 非法内容按无效令牌处理
-     */
-    private static @NotNull Map<String, Object> parsePayloads(String value) {
-        try {
-            return Json.parse2Map(new String(Base64.getUrlDecoder().decode(value.getBytes(UTF_8))));
-        } catch (Exception e) {
-            throwException(ACCESS_TOKEN_INVALID);
-            return new HashMap<>();
-        }
-    }
-
-    /**
      * HMacSha256 签名
      *
      * @param secret  密钥
@@ -290,23 +307,6 @@ public class AccessTokenUtil {
         } catch (Exception e) {
             throw new ServiceException(HMAC_SHA_256_ERROR);
         }
-    }
-
-    /**
-     * 字节数组转小写十六进制字符串
-     *
-     * @param bytes 字节数组
-     * @return 十六进制字符串，每个字节占两位
-     */
-    private static @NotNull String toHex(byte @NotNull [] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        char[] digits = "0123456789abcdef".toCharArray();
-        for (int i = 0; i < bytes.length; i++) {
-            int value = bytes[i] & 0xff;
-            hexChars[i * 2] = digits[value >>> 4];
-            hexChars[i * 2 + 1] = digits[value & 0x0f];
-        }
-        return new String(hexChars);
     }
 
     /**

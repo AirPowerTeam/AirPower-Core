@@ -304,7 +304,7 @@ public class NumberUtil {
      * @param roundingMode 保留小数的模式 {@link RoundingMode}
      * @return 新值
      */
-    public static @NotNull BigDecimal round(double number, int scale, @NotNull RoundingMode roundingMode) {
+    public static @NotNull BigDecimal round(double number, int scale, RoundingMode roundingMode) {
         if (scale < 0) {
             // 负 scale 会被静默改成 0，调用方难以及时发现传参错误
             throw new ServiceException("保留位数不能小于0，" + scale);

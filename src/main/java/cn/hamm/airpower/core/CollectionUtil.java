@@ -2,6 +2,7 @@ package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.annotation.Dictionary;
 import cn.hamm.airpower.core.annotation.Export;
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.interfaces.IDictionary;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -143,7 +144,10 @@ public class CollectionUtil {
      * @param <M>       元素类型
      * @return 列表数据
      */
-    public static <M extends RootModel<M>> @NotNull List<String> getCsvValueList(@NotNull List<M> list, List<Field> fieldList) {
+    public static <M extends RootModel<M>> @NotNull List<String> getCsvValueList(List<M> list, List<Field> fieldList) {
+        if (Objects.isNull(list)) {
+            throw new ServiceException("集合不能为空");
+        }
         List<String> rowList = new ArrayList<>();
         for (M entity : list) {
             if (Objects.isNull(entity)) {
@@ -193,7 +197,10 @@ public class CollectionUtil {
      * @param fieldList 字段列表
      * @return 列数据
      */
-    public static @NotNull List<String> getCsvHeaderList(@NotNull List<Field> fieldList) {
+    public static @NotNull List<String> getCsvHeaderList(List<Field> fieldList) {
+        if (Objects.isNull(fieldList)) {
+            throw new ServiceException("字段列表不能为空");
+        }
         List<String> rowList = new ArrayList<>();
         // 添加表头
         rowList.add(String.join(CSV_COLUMN_DELIMITER, fieldList.stream().map(ReflectUtil::getDescription).toList()));

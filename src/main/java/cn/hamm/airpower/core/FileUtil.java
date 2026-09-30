@@ -5,20 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -71,7 +63,10 @@ public class FileUtil {
      * @param fileName 文件名
      * @return 后缀
      */
-    public static @NotNull String getExtension(@NotNull String fileName) {
+    public static @NotNull String getExtension(String fileName) {
+        if (Objects.isNull(fileName)) {
+            throw new ServiceException("文件名不能为空");
+        }
         int index = fileName.lastIndexOf(EXTENSION_SEPARATOR);
         if (index < 0 || index == fileName.length() - EXTENSION_SEPARATOR.length()) {
             // 无扩展名或以点结尾（如 "noext" / "archive."）时返回空串，

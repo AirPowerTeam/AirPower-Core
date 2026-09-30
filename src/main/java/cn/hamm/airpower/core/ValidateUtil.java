@@ -23,6 +23,10 @@ public class ValidateUtil {
      * 验证器实例
      */
     private static volatile Validator validator;
+    /**
+     * ValidatorFactory 实例（延迟初始化，应用关闭时统一关闭）
+     */
+    private static ValidatorFactory validatorFactory;
 
     /**
      * 禁止外部实例化
@@ -30,11 +34,6 @@ public class ValidateUtil {
     @Contract(pure = true)
     private ValidateUtil() {
     }
-
-    /**
-     * ValidatorFactory 实例（延迟初始化，应用关闭时统一关闭）
-     */
-    private static ValidatorFactory validatorFactory;
 
     /**
      * 初始化验证器
@@ -236,7 +235,7 @@ public class ValidateUtil {
      * @param pattern 正则
      * @return 验证结果
      */
-    public static boolean validRegex(String value, @NotNull Pattern pattern) {
+    public static boolean validRegex(String value, Pattern pattern) {
         if (Objects.isNull(value) || Objects.isNull(pattern)) {
             // 空值与空正则一律视为不匹配，避免抛出空指针
             return false;

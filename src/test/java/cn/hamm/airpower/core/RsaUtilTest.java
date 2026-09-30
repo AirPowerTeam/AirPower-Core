@@ -159,7 +159,7 @@ class RsaUtilTest {
 
         @Test
         @DisplayName("默认配置：keySize=2048、cryptAlgorithm=RSA、signAlgorithm=SHA256withRSA")
-        void testDefaultConfiguration() throws Exception {
+        void testDefaultConfiguration() {
             RsaUtil instance = RsaUtil.create();
             assertAll("默认配置应符合文档描述",
                     () -> assertEquals(2048, readField(instance, "keySize"), "默认密钥长度应为 2048"),
@@ -315,14 +315,14 @@ class RsaUtilTest {
         @Test
         @DisplayName("convertPublicKeyToPem 与 getPemPublicKey 结果一致")
         void testConvertPublicKeyToPem() {
-            assertEquals(rsaUtil.getPemPublicKey(keyPair), rsaUtil.convertPublicKeyToPem(keyPair.getPublic()),
+            assertEquals(rsaUtil.getPemPublicKey(keyPair), RsaUtil.convertPublicKeyToPem(keyPair.getPublic()),
                     "两个方法应产出相同的公钥 PEM");
         }
 
         @Test
         @DisplayName("convertPrivateKeyToPem 与 getPemPrivateKey 结果一致")
         void testConvertPrivateKeyToPem() {
-            assertEquals(rsaUtil.getPemPrivateKey(keyPair), rsaUtil.convertPrivateKeyToPem(keyPair.getPrivate()),
+            assertEquals(rsaUtil.getPemPrivateKey(keyPair), RsaUtil.convertPrivateKeyToPem(keyPair.getPrivate()),
                     "两个方法应产出相同的私钥 PEM");
         }
 
@@ -374,7 +374,7 @@ class RsaUtilTest {
         @Test
         @DisplayName("convertPrivateKeyToPem 的头尾同样是 PKCS#8 的 PRIVATE KEY")
         void testConvertPrivateKeyToPemHeader() {
-            String pem = rsaUtil.convertPrivateKeyToPem(keyPair.getPrivate());
+            String pem = RsaUtil.convertPrivateKeyToPem(keyPair.getPrivate());
             assertAll("转换私钥的 PEM 头尾应与内容一致",
                     () -> assertTrue(pem.startsWith("-----BEGIN PRIVATE KEY-----\n"), "应以 PKCS#8 私钥 BEGIN 头开始"),
                     () -> assertTrue(pem.endsWith("\n-----END PRIVATE KEY-----"), "应以 PKCS#8 私钥 END 尾结束"),
@@ -382,24 +382,24 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("convertPublicKeyToPem(null) 抛出 NullPointerException")
+        @DisplayName("convertPublicKeyToPem(null) 抛出 ServiceException")
         void testConvertPublicKeyToPemNull() {
-            assertThrows(NullPointerException.class, () -> rsaUtil.convertPublicKeyToPem(null),
-                    "公钥为 null 时应抛出 NullPointerException");
+            assertThrows(ServiceException.class, () -> RsaUtil.convertPublicKeyToPem(null),
+                    "公钥为 null 时应抛出 ServiceException");
         }
 
         @Test
-        @DisplayName("getPemPublicKey(null) 抛出 NullPointerException")
+        @DisplayName("getPemPublicKey(null) 抛出 ServiceException")
         void testGetPemPublicKeyNull() {
-            assertThrows(NullPointerException.class, () -> rsaUtil.getPemPublicKey(null),
-                    "密钥对为 null 时应抛出 NullPointerException");
+            assertThrows(ServiceException.class, () -> rsaUtil.getPemPublicKey(null),
+                    "密钥对为 null 时应抛出 ServiceException");
         }
 
         @Test
-        @DisplayName("getPemPrivateKey(null) 抛出 NullPointerException")
+        @DisplayName("getPemPrivateKey(null) 抛出 ServiceException")
         void testGetPemPrivateKeyNull() {
-            assertThrows(NullPointerException.class, () -> rsaUtil.getPemPrivateKey(null),
-                    "密钥对为 null 时应抛出 NullPointerException");
+            assertThrows(ServiceException.class, () -> rsaUtil.getPemPrivateKey(null),
+                    "密钥对为 null 时应抛出 ServiceException");
         }
     }
 
@@ -410,14 +410,14 @@ class RsaUtilTest {
         @Test
         @DisplayName("空字符串返回空字符串")
         void testEmptyText() {
-            assertEquals("", rsaUtil.wrapBase64Text(""), "空字符串换行后应仍为空字符串");
+            assertEquals("", RsaUtil.wrapBase64Text(""), "空字符串换行后应仍为空字符串");
         }
 
         @Test
         @DisplayName("不足 64 字符时保持一行并以换行结尾")
         void testLessThanSixtyFour() {
             String text = "abc";
-            String wrapped = rsaUtil.wrapBase64Text(text);
+            String wrapped = RsaUtil.wrapBase64Text(text);
             assertEquals("abc\n", wrapped, "不足 64 字符应输出为一行且以换行结尾");
         }
 
@@ -425,7 +425,7 @@ class RsaUtilTest {
         @DisplayName("恰好 64 字符时输出为一行 64 字符")
         void testExactlySixtyFour() {
             String text = ascii(64);
-            String wrapped = rsaUtil.wrapBase64Text(text);
+            String wrapped = RsaUtil.wrapBase64Text(text);
             assertEquals(text + "\n", wrapped, "恰好 64 字符应输出为一行 64 字符并以换行结尾");
         }
 
@@ -433,18 +433,18 @@ class RsaUtilTest {
         @DisplayName("65 字符时拆分为 64 + 1 两行")
         void testSixtyFive() {
             String text = ascii(65);
-            String[] lines = rsaUtil.wrapBase64Text(text).split("\n");
+            String[] lines = RsaUtil.wrapBase64Text(text).split("\n");
             assertAll("65 字符应拆分为两行",
                     () -> assertEquals(2, lines.length, "应拆分为两行"),
                     () -> assertEquals(64, lines[0].length(), "第一行应为 64 字符"),
                     () -> assertEquals(1, lines[1].length(), "第二行应为 1 字符"),
-                    () -> assertTrue(rsaUtil.wrapBase64Text(text).endsWith("\n"), "换行结果应以换行结尾"));
+                    () -> assertTrue(RsaUtil.wrapBase64Text(text).endsWith("\n"), "换行结果应以换行结尾"));
         }
 
         @Test
         @DisplayName("128 字符时拆分为两行 64 字符")
         void testOneHundredTwentyEight() {
-            String wrapped = rsaUtil.wrapBase64Text(ascii(128));
+            String wrapped = RsaUtil.wrapBase64Text(ascii(128));
             String[] lines = wrapped.split("\n");
             assertAll("128 字符应拆分为两行 64 字符",
                     () -> assertEquals(2, lines.length, "应拆分为两行"),
@@ -456,7 +456,7 @@ class RsaUtilTest {
         @DisplayName("换行后再去掉换行符应还原原文")
         void testRoundTripWithoutNewline() {
             String text = ascii(500);
-            String wrapped = rsaUtil.wrapBase64Text(text);
+            String wrapped = RsaUtil.wrapBase64Text(text);
             assertAll("换行不应丢失任何字符",
                     () -> assertEquals(text, wrapped.replace("\n", ""), "去掉换行符后应等于原文"),
                     () -> assertTrue(wrapped.endsWith("\n"), "换行结果应以换行结尾"),

@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static cn.hamm.airpower.core.enums.DateTimeFormatter.FULL_DATETIME;
@@ -115,7 +116,10 @@ public class DateTimeUtil {
      *
      * @return 格式化后的时间
      */
-    public static @NotNull String formatCurrent(@NotNull DateTimeFormatter formatter) {
+    public static @NotNull String formatCurrent(DateTimeFormatter formatter) {
+        if (Objects.isNull(formatter)) {
+            throw new ServiceException("时间格式不能为空");
+        }
         return formatCurrent(formatter.getValue());
     }
 
@@ -146,7 +150,10 @@ public class DateTimeUtil {
      * @param formatter   格式化模板
      * @return 格式化后的时间
      */
-    public static @NotNull String format(long milliSecond, @NotNull DateTimeFormatter formatter) {
+    public static @NotNull String format(long milliSecond, DateTimeFormatter formatter) {
+        if (Objects.isNull(formatter)) {
+            throw new ServiceException("时间格式不能为空");
+        }
         return format(milliSecond, formatter.getValue());
     }
 
