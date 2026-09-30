@@ -257,7 +257,9 @@ public class HttpUtil {
             return httpClient.send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
             // 保留原始异常，便于上层区分超时、连接失败或请求非法
-            throw new ServiceException("发起请求失败，" + e.getMessage(), e);
+            ServiceException serviceException = new ServiceException("发起请求失败，" + e.getMessage(), e);
+            serviceException.initCause(e);
+            throw serviceException;
         }
     }
 
