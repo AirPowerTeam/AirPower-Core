@@ -153,22 +153,24 @@ public class FileUtil {
      */
     public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName, byte @NotNull [] bytes, OpenOption @NotNull ... options) {
         absoluteDirectory = formatDirectory(absoluteDirectory);
-        createDirectories(absoluteDirectory);
+        Path base = Paths.get(absoluteDirectory).toAbsolutePath().normalize();
+        Path target = base.resolve(fileName).normalize();
+        // 1) 拒绝穿越：目标必须仍在 base 之下
+        if (!target.startsWith(base)) {
+            throw new ServiceException("非法的文件名：" + fileName);
+        }
+        // 2) 拒绝符号链接
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(target)) {
+            throw new ServiceException("目标路径不允许为符号链接：" + fileName);
+        }
+        // 3) fileName 只允许安全字符
+        if (!fileName.matches("[A-Za-z0-9._\\-]+") || fileName.contains("..")) {
+            throw new ServiceException("非法的文件名：" + fileName);
+        }
+        createDirectories(base.toString());
         try {
-            Path path = Paths.get(absoluteDirectory + fileName);
-            if (!Files.exists(path)) {
-                Files.createFile(path);
-            }
-            // 判断路径是否合法
-            Path basePath = Paths.get(absoluteDirectory).normalize().toAbsolutePath();
-            Path targetPath = path.normalize().toAbsolutePath();
-            if (!targetPath.startsWith(basePath)) {
-                throw new ServiceException("文件保存路径越界");
-            }
-            Files.write(path, bytes, options);
+            Files.write(target, bytes, options);
         } catch (IOException | IllegalArgumentException e) {
-            // IllegalArgumentException 来自非法的 OpenOption 组合（如只给 READ），
-            // 与 IOException 一样属于调用错误，统一包装避免泄漏 JDK 原生异常
             throw new ServiceException("文件保存失败，" + e.getMessage());
         }
     }
