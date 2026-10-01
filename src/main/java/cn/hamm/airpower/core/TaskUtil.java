@@ -103,6 +103,17 @@ public class TaskUtil {
     }
 
     /**
+     * 线程池是否空闲（无运行中任务且队列为空）
+     *
+     * @return 是否空闲
+     * @apiNote 供测试判定饱和与排空用。仅凭「提交一次成功」判断排空不可靠：
+     * 那一刻队列里可能还压着任务
+     */
+    static boolean isIdle() {
+        return EXECUTOR.getActiveCount() == 0 && EXECUTOR.getQueue().isEmpty();
+    }
+
+    /**
      * 获取任务列表
      *
      * @param runnable     任务

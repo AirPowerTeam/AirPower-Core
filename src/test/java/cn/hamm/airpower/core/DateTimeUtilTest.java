@@ -158,10 +158,12 @@ class DateTimeUtilTest {
         }
 
         @Test
-        @DisplayName("传 null 模板应抛出空指针异常")
+        @DisplayName("传 null 模板应抛业务异常")
         void formatCurrentWithNullPattern() {
-            assertThrows(NullPointerException.class, () -> DateTimeUtil.formatCurrent((String) null),
-                    "字符串模板为 null 时应抛出空指针异常");
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> DateTimeUtil.formatCurrent((String) null),
+                    "模板为 null 时应抛业务异常，而不是让 NullPointerException 泄漏给上层");
+            assertEquals("日期格式化模板不能为空", exception.getMessage(), "消息应明确指出是模板为空");
         }
 
         @Test
@@ -250,10 +252,12 @@ class DateTimeUtilTest {
         }
 
         @Test
-        @DisplayName("传 null 模板应抛出空指针异常")
+        @DisplayName("传 null 模板应抛业务异常")
         void formatWithNullPattern() {
-            assertThrows(NullPointerException.class, () -> DateTimeUtil.format(FIXED_MILLI, (String) null),
-                    "字符串模板为 null 时应抛出空指针异常");
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> DateTimeUtil.format(FIXED_MILLI, (String) null),
+                    "模板为 null 时应抛业务异常，而不是让 NullPointerException 泄漏给上层");
+            assertEquals("日期格式化模板不能为空", exception.getMessage(), "消息应明确指出是模板为空");
         }
 
         @Test
@@ -264,19 +268,33 @@ class DateTimeUtilTest {
         }
 
         @Test
-        @DisplayName("非法模板应抛出非法参数异常")
+        @DisplayName("非法模板应抛业务异常，消息里带出模板原文")
         void formatWithIllegalPattern() {
-            assertThrows(IllegalArgumentException.class, () -> DateTimeUtil.format(FIXED_MILLI, "yyyy-fff"),
-                    "出现未知模式字母时应抛出非法参数异常");
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> DateTimeUtil.format(FIXED_MILLI, "yyyy-fff"),
+                    "出现未知模式字母时应抛业务异常，而不是裸 JDK 异常");
+            assertTrue(exception.getMessage().contains("yyyy-fff"),
+                    "消息应带出模板原文，否则调用方无从判断哪个模板写错了：" + exception.getMessage());
         }
 
         @Test
-        @DisplayName("模板缓存应保证相同模板重复调用结果一致")
-        void formatCache() {
+        @DisplayName("相同模板重复调用结果一致")
+        void formatIsRepeatable() {
             String first = DateTimeUtil.format(FIXED_MILLI, "yyyy'年'MM'月'");
             String second = DateTimeUtil.format(FIXED_MILLI, "yyyy'年'MM'月'");
             assertEquals(first, second, "相同模板重复调用应返回相同结果");
             assertEquals("2024年01月", first, "带中文文字的模板应正确输出");
+        }
+
+        @Test
+        @DisplayName("不同模板互不干扰，且不留下跨调用的残留状态")
+        void differentPatternsDoNotInterfere() {
+            // 曾经的实现用一个无界静态 Map 按模板字符串缓存，
+            // 这里用「同一时间戳、多个互不相同的模板」确认它们不会互相污染
+            assertEquals("2024", DateTimeUtil.format(FIXED_MILLI, "yyyy"));
+            assertEquals("01", DateTimeUtil.format(FIXED_MILLI, "MM"));
+            assertEquals("2024-01-31", DateTimeUtil.format(FIXED_MILLI, "yyyy-MM-dd"));
+            assertEquals("2024", DateTimeUtil.format(FIXED_MILLI, "yyyy"), "重复调用仍应稳定");
         }
     }
 
@@ -323,6 +341,17 @@ class DateTimeUtilTest {
             String text = DateTimeUtil.format(FIXED_MILLI, FULL_DATETIME);
             assertEquals(FIXED_MILLI / 1000 * 1000, DateTimeUtil.parse(text).getTime(),
                     "秒级文本往返后应保留到秒");
+        }
+
+        @Test
+        @DisplayName("模板非法应报「模板不合法」而不是「日期格式错误」")
+        void parseWithIllegalPattern() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> DateTimeUtil.parse("2024-01-31 12:34:56", "yyyy-fff"),
+                    "模板非法时应抛业务异常");
+            assertTrue(exception.getMessage().contains("模板不合法"),
+                    "应明确指出是模板的问题：模板写错却报「时间日期格式错误」会把排查带偏。实际为："
+                            + exception.getMessage());
         }
 
         @Test

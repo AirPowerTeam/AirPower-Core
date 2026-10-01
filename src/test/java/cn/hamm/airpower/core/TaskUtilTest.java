@@ -342,12 +342,34 @@ class TaskUtilTest {
          */
         private void awaitDrain() throws InterruptedException {
             for (int i = 0; i < 400; i++) {
-                if (!isRejected()) {
+                if (TaskUtil.isIdle()) {
                     return;
                 }
                 Thread.sleep(50L);
             }
             fail("线程池在预期时间内没有排空，会影响后续用例");
+        }
+
+        /**
+         * 灌满线程池与队列
+         *
+         * @param release 解除阻塞的闸门
+         * @apiNote 循环中途被拒说明已经饱和，正是本用例要的前置条件，直接收手
+         */
+        private void fill(CountDownLatch release) {
+            for (int i = 0; i < SATURATION; i++) {
+                try {
+                    TaskUtil.run(() -> {
+                        try {
+                            release.await(BLOCK_SECONDS, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+                } catch (ServiceException e) {
+                    return;
+                }
+            }
         }
 
         /**
@@ -372,15 +394,7 @@ class TaskUtilTest {
             CountDownLatch release = new CountDownLatch(1);
             AtomicReference<Thread> executedOn = new AtomicReference<>();
             try {
-                for (int i = 0; i < SATURATION; i++) {
-                    TaskUtil.run(() -> {
-                        try {
-                            release.await(BLOCK_SECONDS, TimeUnit.SECONDS);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    });
-                }
+                fill(release);
                 awaitSaturation();
 
                 // 前置条件：确实已经饱和
@@ -406,15 +420,7 @@ class TaskUtilTest {
         void rejectionMustNotTouchCallerTraceId() throws InterruptedException {
             CountDownLatch release = new CountDownLatch(1);
             try {
-                for (int i = 0; i < SATURATION; i++) {
-                    TaskUtil.run(() -> {
-                        try {
-                            release.await(BLOCK_SECONDS, TimeUnit.SECONDS);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    });
-                }
+                fill(release);
                 awaitSaturation();
 
                 String expected = "调用方-TraceId";

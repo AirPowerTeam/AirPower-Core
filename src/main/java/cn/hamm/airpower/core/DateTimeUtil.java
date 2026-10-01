@@ -14,7 +14,6 @@ import java.time.ZonedDateTime;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static cn.hamm.airpower.core.enums.DateTimeFormatter.FULL_DATETIME;
 
@@ -77,11 +76,6 @@ public class DateTimeUtil {
             SECOND_PER_DAY * DAY_PER_MONTH,
             SECOND_PER_DAY * DAY_PER_YEAR
     };
-
-    /**
-     * DateTimeFormatter 缓存
-     */
-    private static final ConcurrentHashMap<String, java.time.format.DateTimeFormatter> FORMATTER_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 时间步长标签
@@ -185,13 +179,20 @@ public class DateTimeUtil {
     }
 
     /**
-     * 获取缓存的 DateTimeFormatter
+     * 构造 DateTimeFormatter
      *
      * @param pattern 格式化模式
      * @return DateTimeFormatter 实例
      */
-    private static java.time.format.DateTimeFormatter getFormatter(String pattern) {
-        return FORMATTER_CACHE.computeIfAbsent(pattern, java.time.format.DateTimeFormatter::ofPattern);
+    private static @NotNull java.time.format.DateTimeFormatter getFormatter(String pattern) {
+        if (Objects.isNull(pattern)) {
+            throw new ServiceException("日期格式化模板不能为空");
+        }
+        try {
+            return java.time.format.DateTimeFormatter.ofPattern(pattern);
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException("日期格式化模板不合法：" + pattern + "，" + e.getMessage());
+        }
     }
 
     /**
@@ -224,8 +225,10 @@ public class DateTimeUtil {
      * @return 时间戳对应的日期
      */
     public static @NotNull Date parse(String dateTime, String formatter) {
+        // 模板构造放在 try 外：模板非法与日期值非法要分开报错
+        java.time.format.DateTimeFormatter dateTimeFormatter = getFormatter(formatter);
         try {
-            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, getFormatter(formatter));
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, dateTimeFormatter);
             return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
         } catch (Exception e) {
             throw new ServiceException("时间日期格式错误，请检查输入格式");
@@ -427,6 +430,7 @@ public class DateTimeUtil {
     private static @NotNull Date add(Date date, int calendarField, int amount) {
         Calendar c = Calendar.getInstance();
         c.setTime(date);
+        //noinspection MagicConstant
         c.add(calendarField, amount);
         return c.getTime();
     }
