@@ -11,6 +11,8 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +36,11 @@ public class AccessTokenUtil {
      * 请先设置密钥环境变量
      */
     private static final String SET_ENV_TOKEN_SECRET_FIRST = "请在环境变量配置 airpower.accessTokenSecret";
+
+    /**
+     * 令牌密钥最短长度
+     */
+    private static final int MIN_SECRET_LENGTH = 32;
 
     /**
      * 算法
@@ -89,6 +96,82 @@ public class AccessTokenUtil {
     }
 
     /**
+     * 恒等比较
+     *
+     * @param a 第一个字符串
+     * @param b 第二个字符串
+     * @return 是否相等
+     */
+    private static boolean constantTimeEquals(@NotNull String a, @NotNull String b) {
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 解析令牌中的过期时间
+     *
+     * @param value 令牌中的过期时间字符串
+     * @return 过期时间（毫秒）
+     * @apiNote 非法内容按无效令牌处理；时间为 0 同样视为已过期
+     */
+    private static long parseExpireTimestamps(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throwException(ACCESS_TOKEN_INVALID);
+            return 0L;
+        }
+    }
+
+    /**
+     * 解析令牌中的负载数据
+     *
+     * @param value 令牌中的负载字符串
+     * @return 负载数据
+     * @apiNote 非法内容按无效令牌处理
+     */
+    private static @NotNull Map<String, Object> parsePayloads(String value) {
+        try {
+            return Json.parse2Map(new String(Base64.getUrlDecoder().decode(value.getBytes(UTF_8))));
+        } catch (Exception e) {
+            throwException(ACCESS_TOKEN_INVALID);
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * 字节数组转小写十六进制字符串
+     *
+     * @param bytes 字节数组
+     * @return 十六进制字符串，每个字节占两位
+     */
+    private static @NotNull String toHex(byte @NotNull [] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        char[] digits = "0123456789abcdef".toCharArray();
+        for (int i = 0; i < bytes.length; i++) {
+            int value = bytes[i] & 0xff;
+            hexChars[i * 2] = digits[value >>> 4];
+            hexChars[i * 2 + 1] = digits[value & 0x0f];
+        }
+        return new String(hexChars);
+    }
+
+    /**
+     * 校验令牌密钥
+     *
+     * @param secret  密钥
+     * @param isBuild 是否为签发场景（只影响错误文案）
+     */
+    private static void checkSecret(String secret, boolean isBuild) {
+        if (!StringUtil.hasText(secret)) {
+            throwException(isBuild ? "身份令牌创建失败，" + SET_ENV_TOKEN_SECRET_FIRST : SET_ENV_TOKEN_SECRET_FIRST);
+        }
+        if (secret.length() < MIN_SECRET_LENGTH) {
+            throwException((isBuild ? "身份令牌创建失败" : "身份令牌校验失败")
+                    + "，令牌密钥最短限制为 " + MIN_SECRET_LENGTH + " 位字符，当前为 " + secret.length() + " 位");
+        }
+    }
+
+    /**
      * 创建一个 AccessToken
      *
      * @param id TokenID
@@ -106,18 +189,20 @@ public class AccessTokenUtil {
      * @return AccessToken
      */
     public final String build(String secret) {
-        if (!StringUtil.hasText(secret)) {
-            throwException("身份令牌创建失败，" + SET_ENV_TOKEN_SECRET_FIRST);
-        }
+        checkSecret(secret, true);
         if (verifiedToken.getPayloads().isEmpty()) {
             throw new ServiceException("没有任何负载数据");
         }
         String payloadBase = Base64.getUrlEncoder().encodeToString(
                 Json.toString(verifiedToken.getPayloads()).getBytes(UTF_8)
         );
-        String content = verifiedToken.getExpireTimestamps() +
+        long expireTimestamps = verifiedToken.getExpireTimestamps();
+        if (expireTimestamps <= 0) {
+            throw new ServiceException("令牌必须设置过期时间");
+        }
+        String content = expireTimestamps +
                 TOKEN_DELIMITER +
-                hmacSha256(secret, verifiedToken.getExpireTimestamps() + TOKEN_DELIMITER + payloadBase) +
+                hmacSha256(secret, expireTimestamps + TOKEN_DELIMITER + payloadBase) +
                 TOKEN_DELIMITER +
                 payloadBase;
         return Base64.getUrlEncoder().encodeToString(content.getBytes(UTF_8));
@@ -159,7 +244,10 @@ public class AccessTokenUtil {
         if (millisecond <= 0) {
             throw new ServiceException("过期毫秒数必须大于0");
         }
-        verifiedToken.setExpireTimestamps(System.currentTimeMillis() + millisecond);
+        // 用 addExact 做溢出保护：当前时间约 1.78e12，传 Long.MAX_VALUE 时
+        // 普通加法会溢出成负数，令牌一签发就过期。
+        // setExpireSecond 早已用 multiplyExact 做了同类保护，这里漏了
+        verifiedToken.setExpireTimestamps(Math.addExact(System.currentTimeMillis(), millisecond));
         return this;
     }
 
@@ -174,7 +262,15 @@ public class AccessTokenUtil {
         if (second <= 0) {
             throw new ServiceException("过期秒数必须大于0");
         }
-        return setExpireMillisecond(second * DateTimeUtil.MILLISECONDS_PER_SECOND);
+        // 直接相乘溢出会变成负数，再传给毫秒重载会报"过期毫秒数必须大于0"，
+        // 调用方传的是秒却被告知毫秒有问题，排查方向会被带偏
+        final long millisecond;
+        try {
+            millisecond = Math.multiplyExact(second, DateTimeUtil.MILLISECONDS_PER_SECOND);
+        } catch (ArithmeticException e) {
+            throw new ServiceException("过期秒数过大，超出可表示范围：" + second);
+        }
+        return setExpireMillisecond(millisecond);
     }
 
     /**
@@ -184,9 +280,10 @@ public class AccessTokenUtil {
      * @param secret      密钥
      * @return VerifiedToken
      */
-    public final VerifiedToken verify(@NotNull String accessToken, String secret) {
-        if (!StringUtil.hasText(secret)) {
-            throwException(SET_ENV_TOKEN_SECRET_FIRST);
+    public final VerifiedToken verify(String accessToken, String secret) {
+        checkSecret(secret, false);
+        if (!StringUtil.hasText(accessToken)) {
+            throwException(ACCESS_TOKEN_INVALID);
         }
         String source = "";
         try {
@@ -202,17 +299,14 @@ public class AccessTokenUtil {
             throwException(ACCESS_TOKEN_INVALID);
         }
         //noinspection AlibabaUndefineMagicConstant
-        if (!hmacSha256(secret, list[0] + TOKEN_DELIMITER + list[2]).equals(list[1])) {
+        if (!constantTimeEquals(hmacSha256(secret, list[0] + TOKEN_DELIMITER + list[2]), list[1])) {
             throwException(ACCESS_TOKEN_INVALID);
         }
-        if (Long.parseLong(list[0]) < System.currentTimeMillis() &&
-                Long.parseLong(list[0]) != 0) {
+        long expireTimestamps = parseExpireTimestamps(list[0]);
+        if (expireTimestamps < System.currentTimeMillis()) {
             throwException(ACCESS_TOKEN_INVALID);
         }
-        Map<String, Object> payloads = Json.parse2Map(new String(
-                Base64.getUrlDecoder().decode(list[2].getBytes(UTF_8)))
-        );
-        return new VerifiedToken().setExpireTimestamps(Long.parseLong(list[0])).setPayloads(payloads);
+        return new VerifiedToken().setExpireTimestamps(expireTimestamps).setPayloads(parsePayloads(list[2]));
     }
 
     /**
@@ -227,11 +321,9 @@ public class AccessTokenUtil {
             Mac mac = Mac.getInstance(HMAC_SHA_256);
             SecretKeySpec secretKeySpec = new SecretKeySpec(secret.getBytes(UTF_8), HMAC_SHA_256);
             mac.init(secretKeySpec);
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : mac.doFinal(content.getBytes(UTF_8))) {
-                hexString.append(String.format("%02x", b & 0xff));
-            }
-            return hexString.toString();
+            // 手工转十六进制：String.format 每次调用都要解析格式串，
+            // 在令牌签发/校验这类热路径上开销明显
+            return toHex(mac.doFinal(content.getBytes(UTF_8)));
         } catch (Exception e) {
             throw new ServiceException(HMAC_SHA_256_ERROR);
         }
@@ -275,7 +367,14 @@ public class AccessTokenUtil {
             if (Objects.isNull(userId)) {
                 throwException(ACCESS_TOKEN_INVALID);
             }
-            return Long.parseLong(userId.toString());
+            try {
+                return Long.parseLong(userId.toString());
+            } catch (NumberFormatException e) {
+                // 负载被篡改或格式错误时按无效令牌处理，
+                // 否则上层按"未授权"统一拦截时会漏掉这种畸形令牌
+                throwException(ACCESS_TOKEN_INVALID);
+                return 0L;
+            }
         }
     }
 }

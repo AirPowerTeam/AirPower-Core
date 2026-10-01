@@ -14,10 +14,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -33,6 +30,11 @@ public class ReflectUtil {
     private static final String GET = "get";
 
     /**
+     * 布尔字段的常见前缀（Lombok 对基本类型 boolean 生成 {@code isXxx()}）
+     */
+    private static final String IS = "is";
+
+    /**
      * 缓存字段列表
      */
     private final static ConcurrentHashMap<Class<?>, List<Field>> FIELD_LIST_MAP = new ConcurrentHashMap<>();
@@ -40,9 +42,10 @@ public class ReflectUtil {
     /**
      * 缓存属性列表
      *
-     * @apiNote 声明属性列表
+     * @apiNote 声明属性列表。以 {@code Class} 为键而非类名，避免同名类在不同
+     * {@code ClassLoader} 下互相串号
      */
-    private final static ConcurrentHashMap<String, Field[]> DECLARED_FIELD_LIST_MAP = new ConcurrentHashMap<>();
+    private final static ConcurrentHashMap<Class<?>, Field[]> DECLARED_FIELD_LIST_MAP = new ConcurrentHashMap<>();
 
     /**
      * 获取字段的 Getter 方法名
@@ -51,8 +54,29 @@ public class ReflectUtil {
      * @return Getter 方法名
      */
     public static @NotNull String getFieldGetter(@NotNull Field field) {
+        return candidateGetterNames(field).get(0);
+    }
+
+    /**
+     * 获取字段的 Getter 方法名候选列表
+     *
+     * @param field 字段
+     * @return 候选 Getter 方法名，按可能性从高到低
+     */
+    public static @NotNull List<String> candidateGetterNames(@NotNull Field field) {
         final String fieldName = field.getName();
-        return GET + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+        // 固定 Locale.ROOT：土耳其语环境下 "i".toUpperCase() 得到 "İ"，
+        // 会把 getId 拼成 getİd，导不到方法、注解查找随之全部失效
+        final String capitalized = fieldName.substring(0, 1).toUpperCase(Locale.ROOT) + fieldName.substring(1);
+        List<String> names = new ArrayList<>(3);
+        names.add(GET + capitalized);
+        // 基本类型 boolean isHot → Lombok 生成 isHot()，也可能生成 getIsHot()
+        if (fieldName.length() > 2 && fieldName.startsWith(IS)) {
+            final String tail = fieldName.substring(IS.length());
+            names.add(GET + tail.substring(0, 1).toUpperCase(Locale.ROOT) + tail.substring(1));
+            names.add(fieldName);
+        }
+        return names;
     }
 
     /**
@@ -66,11 +90,9 @@ public class ReflectUtil {
         try {
             field.setAccessible(true);
             return field.get(object);
-        } catch (IllegalAccessException e) {
-            log.error("反射操作属性失败, {}", e.getMessage());
-            return null;
-        } finally {
-            field.setAccessible(false);
+        } catch (IllegalAccessException | IllegalArgumentException e) {
+            // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
+            throw new ServiceException("获取对象指定属性的值失败, " + e.getMessage());
         }
     }
 
@@ -84,12 +106,50 @@ public class ReflectUtil {
     public static void setFieldValue(Object object, @NotNull Field field, Object value) {
         try {
             field.setAccessible(true);
+            // 基本类型字段不接受 null：Field#set 会抛 IllegalArgumentException。
+            // 「排除该字段」的语义对基本类型就是清成它的零值，
+            // 不能因为字段是 primitive 就抛异常——那会让 @Meta 这类白名单
+            // 在遇到 private boolean isXxx 时直接失败
+            if (Objects.isNull(value) && field.getType().isPrimitive()) {
+                field.set(object, defaultPrimitiveValue(field.getType()));
+                return;
+            }
             field.set(object, value);
-        } catch (IllegalAccessException e) {
-            log.error("设置对象指定属性的值失败, {}", e.getMessage());
-        } finally {
-            field.setAccessible(false);
+        } catch (IllegalAccessException | IllegalArgumentException e) {
+            // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
+            throw new ServiceException("设置对象指定属性的值失败, " + e.getMessage());
         }
+    }
+
+    /**
+     * 获取基本类型的零值
+     *
+     * @param type 基本类型
+     * @return 零值装箱结果
+     */
+    private static @NotNull Object defaultPrimitiveValue(@NotNull Class<?> type) {
+        if (boolean.class == type) {
+            return Boolean.FALSE;
+        }
+        if (char.class == type) {
+            return (char) 0;
+        }
+        if (byte.class == type) {
+            return (byte) 0;
+        }
+        if (short.class == type) {
+            return (short) 0;
+        }
+        if (int.class == type) {
+            return 0;
+        }
+        if (long.class == type) {
+            return 0L;
+        }
+        if (float.class == type) {
+            return 0F;
+        }
+        return 0D;
     }
 
     /**
@@ -148,15 +208,21 @@ public class ReflectUtil {
      * @param <A>             泛型
      * @return 注解
      */
-    public static <A extends Annotation> @Nullable A getAnnotation(Class<A> annotationClass, @NotNull Class<?> clazz) {
+    public static <A extends Annotation> @Nullable A getAnnotation(Class<A> annotationClass, @Nullable Class<?> clazz) {
+        // clazz 为 null 与 clazz.getSuperclass() 为 null 都要挡住：
+        // 接口的 getSuperclass() 恒为 null（接口没有 superclass，只有 interfaces），
+        // 而递归的终止条件只判断了 Object.class，所以传任何接口进来第二轮就 NPE
+        if (Objects.isNull(annotationClass) || Objects.isNull(clazz)) {
+            return null;
+        }
         A annotation = clazz.getAnnotation(annotationClass);
         if (Objects.nonNull(annotation)) {
             return annotation;
         }
-        if (isTheRootClass(clazz)) {
+        Class<?> superClass = clazz.getSuperclass();
+        if (Objects.isNull(superClass) || isTheRootClass(clazz)) {
             return null;
         }
-        Class<?> superClass = clazz.getSuperclass();
         return getAnnotation(annotationClass, superClass);
     }
 
@@ -246,12 +312,17 @@ public class ReflectUtil {
         }
         // 收集当前类和所有父类的字段，避免递归中的多次列表创建和合并
         Class<?> currentClass = clazz;
-        while (!isTheRootClass(currentClass)) {
+        // 接口与基本类型的 getSuperclass() 返回 null，需显式判空，否则空判断自身会抛 NPE
+        while (Objects.nonNull(currentClass) && !isTheRootClass(currentClass)) {
             Field[] fields = getDeclaredFields(currentClass);
             for (Field field : fields) {
-                if (!Modifier.isStatic(field.getModifiers()) && !Modifier.isTransient(field.getModifiers())) {
-                    fieldList.add(field);
+                // 跳过静态、瞬态与编译器生成的字段（如内部类的 this$0）
+                int modifiers = field.getModifiers();
+                if (Modifier.isStatic(modifiers) || Modifier.isTransient(modifiers) || field.isSynthetic()) {
+                    continue;
                 }
+                field.setAccessible(true);
+                fieldList.add(field);
             }
             currentClass = currentClass.getSuperclass();
         }
@@ -266,7 +337,7 @@ public class ReflectUtil {
      */
     @Contract(pure = true)
     public static Field @NotNull [] getDeclaredFields(@NotNull Class<?> clazz) {
-        return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz.getName(), key -> clazz.getDeclaredFields());
+        return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz, Class::getDeclaredFields);
     }
 
     /**
@@ -274,11 +345,14 @@ public class ReflectUtil {
      *
      * @param lambda 表达式
      * @return 函数名
+     * @apiNote 仅去掉 {@code get} 前缀，方法名中间的 {@code get} 会被保留
      */
     public static @NotNull String getLambdaFunctionName(@NotNull IFunction<?, ?> lambda) {
-        return getSerializedLambda(lambda)
-                .getImplMethodName()
-                .replace(GET, "");
+        String methodName = getSerializedLambda(lambda).getImplMethodName();
+        if (methodName.length() > GET.length() && methodName.startsWith(GET)) {
+            return methodName.substring(GET.length());
+        }
+        return methodName;
     }
 
     /**
@@ -293,7 +367,7 @@ public class ReflectUtil {
             replaceMethod.setAccessible(true);
             return (SerializedLambda) replaceMethod.invoke(lambda);
         } catch (Exception e) {
-            throw new ServiceException("反射获取Lamba方法名失败，" + e.getMessage());
+            throw new ServiceException("反射获取 Lambda 方法名失败，" + e.getMessage());
         }
     }
 
@@ -308,28 +382,42 @@ public class ReflectUtil {
      */
     public static <T extends java.lang.annotation.Annotation> @Nullable T getAnnotation(
             Class<T> annotationClass,
-            @NotNull Class<?> currentClass,
+            @Nullable Class<?> currentClass,
             String methodName,
             Class<?>[] paramTypes
     ) {
+        // 接口的 getSuperclass() 恒为 null（接口只有 interfaces），必须显式判空
+        if (Objects.isNull(annotationClass) || Objects.isNull(currentClass)
+                || isTheRootClass(currentClass)) {
+            return null;
+        }
         try {
             // 获取当前类中的方法
             Method method = currentClass.getDeclaredMethod(methodName, paramTypes);
             // 获取注解，避免重复调用 getAnnotation
             T annotation = method.getAnnotation(annotationClass);
-            if (annotation != null) {
+            if (Objects.nonNull(annotation)) {
                 return annotation;
             }
         } catch (NoSuchMethodException ignored) {
-            // 忽略，继续查找父类或接口
+            // 本类没有这个方法，继续往上找
+        }
+
+        // 查找接口链：@Description / @Meta / @Export 常挂在接口上作为默认约定，
+        // 只查父类会让实现类「看起来没标注」
+        for (Class<?> itf : currentClass.getInterfaces()) {
+            T onInterface = getAnnotation(annotationClass, itf, methodName, paramTypes);
+            if (Objects.nonNull(onInterface)) {
+                return onInterface;
+            }
         }
 
         // 查找父类
         Class<?> superClass = currentClass.getSuperclass();
-        if (superClass != null) {
-            return getAnnotation(annotationClass, superClass, methodName, paramTypes);
+        if (Objects.isNull(superClass)) {
+            return null;
         }
-        return null;
+        return getAnnotation(annotationClass, superClass, methodName, paramTypes);
     }
 
     /**

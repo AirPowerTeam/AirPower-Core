@@ -3,9 +3,11 @@ package cn.hamm.airpower.core.interfaces;
 import java.util.List;
 
 /**
- * <h1>标准树接口</h1>
+ * <h1>树结构实体标准接口</h1>
  *
+ * @param <E> 树节点自身类型
  * @author Hamm.cn
+ * @apiNote 根节点的 {@code parentId} 约定为 {@code 0}，由 {@code TreeUtil} 统一处理
  */
 public interface ITree<E extends ITree<E>> extends IEntity<E> {
     /**
@@ -36,6 +38,5 @@ public interface ITree<E extends ITree<E>> extends IEntity<E> {
      * @param children 子集
      * @return 树实体
      */
-    @SuppressWarnings("UnusedReturnValue")
     E setChildren(List<E> children);
 }

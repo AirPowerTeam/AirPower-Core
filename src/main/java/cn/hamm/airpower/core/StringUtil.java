@@ -28,7 +28,7 @@ public class StringUtil {
      */
     @Contract("null -> true")
     public static boolean isEmpty(@Nullable String str) {
-        return str == null || str.isEmpty();
+        return isEmpty((CharSequence) str);
     }
 
     /**
@@ -61,14 +61,14 @@ public class StringUtil {
      */
     @Contract("null -> false")
     public static boolean hasText(@Nullable String str) {
-        return str != null && !str.isBlank();
+        return hasText((CharSequence) str);
     }
 
     /**
-     * 字符串是否包含空格
+     * 字符串是否包含空白字符
      *
      * @param str 字符串
-     * @return 字符串
+     * @return 是否包含空白字符
      */
     public static boolean containsWhitespace(@Nullable CharSequence str) {
         if (!isEmpty(str)) {
@@ -85,22 +85,23 @@ public class StringUtil {
     }
 
     /**
-     * 去除字符串中的空格
+     * 字符串是否包含空白字符
      *
      * @param str 字符串
-     * @return 字符串
+     * @return 是否包含空白字符
      */
     public static boolean containsWhitespace(@Nullable String str) {
         return containsWhitespace((CharSequence) str);
     }
 
     /**
-     * 去除字符串中的空格
+     * 去除字符串中的所有空白字符
      *
      * @param str 字符串
-     * @return 字符串
+     * @return 去除空白后的字符串，入参为 null 时返回 null
+     * @apiNote 删的是<b>所有位置</b>的空白，不只是首尾
      */
-    public static CharSequence trimAllWhitespace(CharSequence str) {
+    public static CharSequence trimAllWhitespace(@Nullable CharSequence str) {
         if (isEmpty(str)) {
             return str;
         } else {
@@ -122,7 +123,7 @@ public class StringUtil {
      * 字符串首字母大写
      *
      * @param str 源字符串
-     * @return 目标字符串
+     * @return 首字母大写后的字符串，入参为空时原样返回
      */
     public static String capitalize(String str) {
         return changeFirstCharacterCase(str, true);
@@ -132,7 +133,7 @@ public class StringUtil {
      * 字符串首字母小写
      *
      * @param str 源字符串
-     * @return 目标字符串
+     * @return 首字母小写后的字符串，入参为空时原样返回
      */
     public static String uncapitalize(String str) {
         return changeFirstCharacterCase(str, false);
@@ -143,7 +144,8 @@ public class StringUtil {
      *
      * @param str        源字符串
      * @param capitalize 是否大写
-     * @return 目标字符串
+     * @return 转换后的字符串
+     * @apiNote 只处理第一个字符，其余字符原样保留
      */
     private static String changeFirstCharacterCase(String str, boolean capitalize) {
         if (isEmpty(str)) {

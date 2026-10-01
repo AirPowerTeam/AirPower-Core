@@ -7,27 +7,27 @@ package cn.hamm.airpower.core.enums;
  */
 public enum HttpMethod {
     /**
-     * GET
+     * 查询
      */
     GET,
 
     /**
-     * POST
+     * 新增
      */
     POST,
 
     /**
-     * PUT
+     * 整体更新
      */
     PUT,
 
     /**
-     * DELETE
+     * 删除
      */
     DELETE,
 
     /**
-     * PATCH
+     * 局部更新
      */
     PATCH,
 }

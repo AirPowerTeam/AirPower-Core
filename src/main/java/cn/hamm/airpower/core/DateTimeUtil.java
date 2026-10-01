@@ -5,6 +5,7 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -12,7 +13,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 import static cn.hamm.airpower.core.enums.DateTimeFormatter.FULL_DATETIME;
 
@@ -56,7 +57,7 @@ public class DateTimeUtil {
     /**
      * 一小时的秒数
      */
-    public static final int SECOND_PER_HOUR = SECOND_PER_MINUTE * SECOND_PER_MINUTE;
+    public static final int SECOND_PER_HOUR = SECOND_PER_MINUTE * 60;
 
     /**
      * 一天的秒数
@@ -75,11 +76,6 @@ public class DateTimeUtil {
             SECOND_PER_DAY * DAY_PER_MONTH,
             SECOND_PER_DAY * DAY_PER_YEAR
     };
-
-    /**
-     * DateTimeFormatter 缓存
-     */
-    private static final ConcurrentHashMap<String, java.time.format.DateTimeFormatter> FORMATTER_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 时间步长标签
@@ -113,9 +109,13 @@ public class DateTimeUtil {
     /**
      * 格式化当前时间
      *
+     * @param formatter 时间格式
      * @return 格式化后的时间
      */
-    public static @NotNull String formatCurrent(@NotNull DateTimeFormatter formatter) {
+    public static @NotNull String formatCurrent(DateTimeFormatter formatter) {
+        if (Objects.isNull(formatter)) {
+            throw new ServiceException("时间格式不能为空");
+        }
         return formatCurrent(formatter.getValue());
     }
 
@@ -146,7 +146,10 @@ public class DateTimeUtil {
      * @param formatter   格式化模板
      * @return 格式化后的时间
      */
-    public static @NotNull String format(long milliSecond, @NotNull DateTimeFormatter formatter) {
+    public static @NotNull String format(long milliSecond, DateTimeFormatter formatter) {
+        if (Objects.isNull(formatter)) {
+            throw new ServiceException("时间格式不能为空");
+        }
         return format(milliSecond, formatter.getValue());
     }
 
@@ -176,13 +179,20 @@ public class DateTimeUtil {
     }
 
     /**
-     * 获取缓存的 DateTimeFormatter
+     * 构造 DateTimeFormatter
      *
      * @param pattern 格式化模式
      * @return DateTimeFormatter 实例
      */
-    private static java.time.format.DateTimeFormatter getFormatter(String pattern) {
-        return FORMATTER_CACHE.computeIfAbsent(pattern, java.time.format.DateTimeFormatter::ofPattern);
+    private static @NotNull java.time.format.DateTimeFormatter getFormatter(String pattern) {
+        if (Objects.isNull(pattern)) {
+            throw new ServiceException("日期格式化模板不能为空");
+        }
+        try {
+            return java.time.format.DateTimeFormatter.ofPattern(pattern);
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException("日期格式化模板不合法：" + pattern + "，" + e.getMessage());
+        }
     }
 
     /**
@@ -215,8 +225,10 @@ public class DateTimeUtil {
      * @return 时间戳对应的日期
      */
     public static @NotNull Date parse(String dateTime, String formatter) {
+        // 模板构造放在 try 外：模板非法与日期值非法要分开报错
+        java.time.format.DateTimeFormatter dateTimeFormatter = getFormatter(formatter);
         try {
-            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, getFormatter(formatter));
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, dateTimeFormatter);
             return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
         } catch (Exception e) {
             throw new ServiceException("时间日期格式错误，请检查输入格式");
@@ -278,7 +290,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 年份
      */
-    public static int getYear(@NotNull Date date) {
+    public static int getYear(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getYear();
     }
 
@@ -297,7 +312,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 月份
      */
-    public static int getMonth(@NotNull Date date) {
+    public static int getMonth(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getMonthValue();
     }
 
@@ -318,7 +336,8 @@ public class DateTimeUtil {
      * @return 日期
      */
     public static int getCurrentDay() {
-        return ZonedDateTime.now().getDayOfMonth();
+        // 与其余 getCurrentXxx() 保持一致，统一走 Date，避免两套时间源
+        return getDay(new Date());
     }
 
     /**
@@ -327,7 +346,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 日期
      */
-    public static int getDay(@NotNull Date date) {
+    public static int getDay(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getDayOfMonth();
     }
 
@@ -346,7 +368,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 小时
      */
-    public static int getHour(@NotNull Date date) {
+    public static int getHour(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getHour();
     }
 
@@ -365,7 +390,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 分钟
      */
-    public static int getMinute(@NotNull Date date) {
+    public static int getMinute(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getMinute();
     }
 
@@ -384,7 +412,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 秒
      */
-    public static int getSecond(@NotNull Date date) {
+    public static int getSecond(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getSecond();
     }
 

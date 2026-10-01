@@ -1,8 +1,10 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
@@ -37,8 +39,11 @@ public class RandomUtil {
 
     /**
      * 大写和小写字母
+     *
+     * @apiNote 固定 {@link Locale#ROOT}：土耳其语环境下 "i".toUpperCase() 得到
+     * 带点的 "İ"，产出的随机串会混入非 ASCII 字符
      */
-    private static final String BASE_CHAR_NUMBER = BASE_CHAR.toUpperCase() + BASE_CHAR_NUMBER_LOWER;
+    private static final String BASE_CHAR_NUMBER = BASE_CHAR.toUpperCase(Locale.ROOT) + BASE_CHAR_NUMBER_LOWER;
 
     /**
      * 禁止外部实例化
@@ -51,10 +56,13 @@ public class RandomUtil {
     /**
      * 获取随机字节数组
      *
-     * @param length 长度
+     * @param length 长度（字节）
      * @return 随机字节数组
      */
     public static byte @NotNull [] randomBytes(int length) {
+        if (length < 0) {
+            throw new ServiceException("随机字节数组长度不能小于0");
+        }
         byte[] bytes = new byte[length];
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for (int i = 0; i < length; i++) {
@@ -64,7 +72,7 @@ public class RandomUtil {
     }
 
     /**
-     * 获取 {@code 32} 位随机字节数组
+     * 获取 {@code 32} 字节的随机字节数组
      *
      * @return 随机字节数组
      */
@@ -73,7 +81,7 @@ public class RandomUtil {
     }
 
     /**
-     * 获取 {@code 32} 位随机字符串
+     * 获取 {@code 32} 个字符的随机字符串（大小写字母 + 数字）
      *
      * @return 随机字符串
      */
@@ -110,9 +118,12 @@ public class RandomUtil {
      */
     public static @NotNull String randomString(final String baseString, int length) {
         if (Objects.isNull(baseString) || baseString.isEmpty()) {
-            throw new IllegalArgumentException("baseString is empty");
+            throw new ServiceException("随机字符样本不能为空");
         }
-        length = Math.max(length, 1);
+        if (length <= 0) {
+            // 不做静默纠正：把负数当成 1 会让调用方的传参错误被彻底吞掉
+            throw new ServiceException("随机字符串长度必须大于0，当前为 " + length);
+        }
         final int baseLength = baseString.length();
         return IntStream.range(0, length)
                 .map(i -> randomInt(baseLength))
@@ -124,6 +135,7 @@ public class RandomUtil {
      * 获取一个随机整数
      *
      * @return 随机数
+     * @apiNote 无上界版本，<b>返回值可能为负数</b>，需要非负请用带下界的重载
      * @see Random#nextInt()
      */
     public static int randomInt() {
@@ -131,13 +143,13 @@ public class RandomUtil {
     }
 
     /**
-     * 获得指定范围内的随机数
+     * 获得 {@code [0, upperBound)} 范围内的随机数
      *
-     * @param exclude 排除的数字
+     * @param upperBound 上界（不包含）
      * @return 随机数
      */
-    public static int randomInt(final int exclude) {
-        return getRandom().nextInt(exclude);
+    public static int randomInt(final int upperBound) {
+        return getRandom().nextInt(upperBound);
     }
 
     /**
@@ -154,8 +166,8 @@ public class RandomUtil {
     /**
      * 获得指定范围内的随机数
      *
-     * @param min        最小数
-     * @param max        最大数
+     * @param min        最小值
+     * @param max        最大值
      * @param includeMin 是否包含最小值
      * @param includeMax 是否包含最大值
      * @return 随机数
@@ -171,9 +183,9 @@ public class RandomUtil {
     }
 
     /**
-     * 获得随机数种子
+     * 获取当前线程的随机数生成器
      *
-     * @return 随机种子
+     * @return 随机数生成器
      */
     private static ThreadLocalRandom getRandom() {
         return ThreadLocalRandom.current();

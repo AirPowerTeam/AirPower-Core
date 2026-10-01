@@ -14,6 +14,8 @@ import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Objects;
+import java.util.concurrent.Callable;
 
 /**
  * <h1>RSA 工具类</h1>
@@ -29,14 +31,25 @@ public class RsaUtil {
     private static final String RSA = "RSA";
 
     /**
+     * PKCS#1 v1.5 填充占用的字节数
+     */
+    private static final int PKCS1_PADDING_BYTES = 11;
+
+    /**
      * 加密算法 KEY 长度
      */
     @Setter
     private int keySize = 2048;
 
+    /**
+     * 加密算法
+     */
     @Setter
     private String cryptAlgorithm = RSA;
 
+    /**
+     * 签名算法
+     */
     @Setter
     private String signAlgorithm = "SHA256withRSA";
 
@@ -51,21 +64,6 @@ public class RsaUtil {
      */
     @Setter
     private String privateKey;
-
-    /**
-     * 缓存的公钥
-     */
-    private PublicKey cachedPublicKey;
-
-    /**
-     * 缓存的私钥
-     */
-    private PrivateKey cachedPrivateKey;
-
-    /**
-     * 缓存的 KeyFactory
-     */
-    private KeyFactory cachedKeyFactory;
 
     /**
      * 禁止外部实例化
@@ -85,6 +83,103 @@ public class RsaUtil {
     }
 
     /**
+     * 解析密钥字符串
+     *
+     * @param keyString 密钥字符串，可以是纯 Base64，也可以是带 PEM 头尾的完整文本
+     * @param label     密钥名称，用于错误提示
+     * @return 解码后的密钥字节
+     * @apiNote 剥离 {@code -----BEGIN/END ...-----} 头尾并去掉换行，使
+     * {@link #getPemPublicKey} / {@link #getPemPrivateKey} 的产出可以直接回填使用
+     */
+    private static byte @NotNull [] decodeKey(String keyString, @NotNull String label) {
+        if (Objects.isNull(keyString)) {
+            throw new ServiceException(label + "未设置");
+        }
+        String content = keyString
+                .replaceAll("-----BEGIN [^-]+-----", "")
+                .replaceAll("-----END [^-]+-----", "")
+                .replaceAll("\\s", "");
+        if (content.isEmpty()) {
+            throw new ServiceException(label + "内容为空");
+        }
+        return Base64.getDecoder().decode(content);
+    }
+
+    /**
+     * 将公钥转换为 PEM 格式
+     *
+     * @param publicKey 公钥
+     * @return PEM
+     */
+    public static @NotNull String convertPublicKeyToPem(PublicKey publicKey) {
+        if (Objects.isNull(publicKey)) {
+            throw new ServiceException("公钥不能为空");
+        }
+        String base64Encoded = Base64.getEncoder().encodeToString(publicKey.getEncoded());
+        return "-----BEGIN PUBLIC KEY-----\n" +
+                wrapBase64Text(base64Encoded) +
+                "-----END PUBLIC KEY-----";
+    }
+
+    /**
+     * 将私钥转换为 PEM 格式
+     *
+     * @param privateKey 私钥
+     * @return PEM
+     * @apiNote {@code getPrivateKey} 使用 {@link PKCS8EncodedKeySpec} 解析，
+     * 因此头尾使用 PKCS#8 的 {@code PRIVATE KEY}
+     */
+    public static @NotNull String convertPrivateKeyToPem(PrivateKey privateKey) {
+        if (Objects.isNull(privateKey)) {
+            throw new ServiceException("私钥不能为空");
+        }
+        String base64Encoded = Base64.getEncoder().encodeToString(privateKey.getEncoded());
+        return "-----BEGIN PRIVATE KEY-----\n" +
+                wrapBase64Text(base64Encoded) +
+                "-----END PRIVATE KEY-----";
+    }
+
+    /**
+     * 将 {@code Base64} 编码的文本换行
+     *
+     * @param base64Text 原始 {@code Base64}
+     * @return 换行后的
+     */
+    public static @NotNull String wrapBase64Text(@NotNull String base64Text) {
+        final int wrapLength = 64;
+        StringBuilder wrappedText = new StringBuilder();
+        int start = 0;
+        while (start < base64Text.length()) {
+            int end = Math.min(start + wrapLength, base64Text.length());
+            wrappedText.append(base64Text, start, end).append("\n");
+            start = end;
+        }
+        return wrappedText.toString();
+    }
+
+    /**
+     * 统一包装加解密异常
+     *
+     * @param prefix 错误前缀
+     * @param action 具体的加解密动作
+     * @param <T>    返回类型
+     * @return 动作结果
+     * @apiNote 统一在消息里拼一次前缀。注意这<b>并没有</b>避免「异常嵌套」：
+     * 内部若已抛 {@link ServiceException}，这里会把它重新包一层，消息变成
+     * "RSA 私钥加密失败，RSA 私钥未设置"。这是既有的重复文案行为，
+     * 修复需要改内部各处的抛异常方式，不在本次范围内
+     */
+    private static <T> T wrapException(@NotNull String prefix, @NotNull Callable<T> action) {
+        try {
+            return action.call();
+        } catch (Exception e) {
+            // 保留原始异常作为 cause，同时只在消息里拼一次前缀，避免嵌套重复文案
+            // 走 (String, Throwable) 重载：异常只进 cause，不会被当成 data 回传前端
+            throw new ServiceException(prefix + "，" + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 获取一个公钥
      *
      * @param publicKeyString 公钥字符串
@@ -92,30 +187,10 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public PublicKey getPublicKey(String publicKeyString) throws Exception {
-        if (java.util.Objects.isNull(publicKeyString)) {
-            throw new ServiceException("RSA 公钥未设置，请先调用 setPublicKey() 方法设置公钥");
-        }
-        if (cachedPublicKey != null) {
-            return cachedPublicKey;
-        }
-        KeyFactory keyFactory = getKeyFactory();
-        X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyString));
-        cachedPublicKey = keyFactory.generatePublic(x509EncodedKeySpec);
-        return cachedPublicKey;
-    }
-
-    /**
-     * 获取 KeyFactory（带缓存）
-     *
-     * @return KeyFactory
-     * @throws NoSuchAlgorithmException 异常
-     */
-    private KeyFactory getKeyFactory() throws NoSuchAlgorithmException {
-        if (cachedKeyFactory != null) {
-            return cachedKeyFactory;
-        }
-        cachedKeyFactory = KeyFactory.getInstance(cryptAlgorithm);
-        return cachedKeyFactory;
+        byte[] encoded = decodeKey(publicKeyString, "RSA 公钥");
+        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(encoded);
+        return keyFactory.generatePublic(x509EncodedKeySpec);
     }
 
     /**
@@ -130,39 +205,16 @@ public class RsaUtil {
     }
 
     /**
-     * 将公钥转换为 PEM 格式
-     *
-     * @param publicKey 公钥
-     * @return PEM
-     */
-    public @NotNull String convertPublicKeyToPem(@NotNull PublicKey publicKey) {
-        String base64Encoded = Base64.getEncoder().encodeToString(publicKey.getEncoded());
-        return "-----BEGIN PUBLIC KEY-----\n" +
-                wrapBase64Text(base64Encoded) +
-                "-----END PUBLIC KEY-----";
-    }
-
-    /**
      * 从密钥对获取 PEM 格式公钥
      *
      * @param keyPair 密钥对
      * @return PEM 公钥
      */
-    public @NotNull String getPemPublicKey(@NotNull KeyPair keyPair) {
+    public @NotNull String getPemPublicKey(KeyPair keyPair) {
+        if (Objects.isNull(keyPair)) {
+            throw new ServiceException("密钥对不能为空");
+        }
         return convertPublicKeyToPem(keyPair.getPublic());
-    }
-
-    /**
-     * 将私钥转换为 PEM 格式
-     *
-     * @param privateKey 私钥
-     * @return PEM
-     */
-    public @NotNull String convertPrivateKeyToPem(@NotNull PrivateKey privateKey) {
-        String base64Encoded = Base64.getEncoder().encodeToString(privateKey.getEncoded());
-        return "-----BEGIN RSA PRIVATE KEY-----\n" +
-                wrapBase64Text(base64Encoded) +
-                "-----END RSA PRIVATE KEY-----";
     }
 
     /**
@@ -171,26 +223,11 @@ public class RsaUtil {
      * @param keyPair 密钥对
      * @return PEM 私钥
      */
-    public @NotNull String getPemPrivateKey(@NotNull KeyPair keyPair) {
-        return convertPrivateKeyToPem(keyPair.getPrivate());
-    }
-
-    /**
-     * 将 {@code Base64} 编码的文本换行
-     *
-     * @param base64Text 原始 {@code Base64}
-     * @return 换行后的
-     */
-    public @NotNull String wrapBase64Text(@NotNull String base64Text) {
-        final int wrapLength = 64;
-        StringBuilder wrappedText = new StringBuilder();
-        int start = 0;
-        while (start < base64Text.length()) {
-            int end = Math.min(start + wrapLength, base64Text.length());
-            wrappedText.append(base64Text, start, end).append("\n");
-            start = end;
+    public @NotNull String getPemPrivateKey(KeyPair keyPair) {
+        if (Objects.isNull(keyPair)) {
+            throw new ServiceException("密钥对不能为空");
         }
-        return wrappedText.toString();
+        return convertPrivateKeyToPem(keyPair.getPrivate());
     }
 
     /**
@@ -201,17 +238,57 @@ public class RsaUtil {
      * @throws Exception 异常
      */
     public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
-        if (java.util.Objects.isNull(privateKeyString)) {
-            throw new ServiceException("RSA 私钥未设置，请先调用 setPrivateKey() 方法设置私钥");
+        byte[] encoded = decodeKey(privateKeyString, "RSA 私钥");
+        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        PKCS8EncodedKeySpec private8KeySpec = new PKCS8EncodedKeySpec(encoded);
+        return keyFactory.generatePrivate(private8KeySpec);
+    }
+
+    /**
+     * 从密钥对象取实际密钥长度
+     *
+     * @param key 密钥
+     * @return 比特数
+     */
+    private static int keySizeOf(@NotNull java.security.interfaces.RSAKey key) {
+        return key.getModulus().bitLength();
+    }
+
+    /**
+     * 计算单块可加密的明文长度
+     *
+     * @param key 密钥
+     * @return 字节数
+     * @apiNote 按<b>实际</b>密钥长度计算：PKCS#1 v1.5 填充固定占 11 字节，
+     * 分块大小与密钥长度强相关，用配置值推算会与实际密钥不符
+     */
+    private int encryptBlockSize(@NotNull Key key) {
+        return checkKeySizeMatchesConfig(key) / 8 - PKCS1_PADDING_BYTES;
+    }
+
+    /**
+     * 解密时的单块长度
+     *
+     * @param key 密钥
+     * @return 字节数
+     */
+    private int decryptBlockSize(@NotNull Key key) {
+        return checkKeySizeMatchesConfig(key) / 8;
+    }
+
+    /**
+     * 校验密钥实际长度与配置的 {@code keySize} 一致
+     *
+     * @param key 密钥
+     * @return 实际密钥长度
+     */
+    private int checkKeySizeMatchesConfig(@NotNull Key key) {
+        int actual = keySizeOf((java.security.interfaces.RSAKey) key);
+        if (actual != keySize) {
+            throw new ServiceException("RSA 密钥实际长度(" + actual + " 位)与配置的 keySize("
+                    + keySize + " 位)不一致，请修正配置或更换密钥");
         }
-        if (cachedPrivateKey != null) {
-            return cachedPrivateKey;
-        }
-        KeyFactory keyFactory = getKeyFactory();
-        PKCS8EncodedKeySpec private8KeySpec =
-                new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKeyString));
-        cachedPrivateKey = keyFactory.generatePrivate(private8KeySpec);
-        return cachedPrivateKey;
+        return actual;
     }
 
     /**
@@ -221,12 +298,10 @@ public class RsaUtil {
      * @return 密文
      */
     public final String publicKeyEncrypt(String sourceContent) {
-        try {
-            int blockSize = keySize / 8 - 11;
-            return encrypt(sourceContent, getPublicKey(publicKey), blockSize);
-        } catch (Exception e) {
-            throw new ServiceException("RSA 公钥加密失败，" + e.getMessage());
-        }
+        return wrapException("RSA 公钥加密失败", () -> {
+            PublicKey key = getPublicKey(publicKey);
+            return encrypt(sourceContent, key, encryptBlockSize(key));
+        });
     }
 
     /**
@@ -236,12 +311,10 @@ public class RsaUtil {
      * @return 原文
      */
     public final @NotNull String privateKeyDecrypt(String encryptedContent) {
-        try {
-            int blockSize = keySize / 8;
-            return decrypt(encryptedContent, getPrivateKey(privateKey), blockSize);
-        } catch (Exception e) {
-            throw new ServiceException("RSA 私钥解密失败，" + e.getMessage());
-        }
+        return wrapException("RSA 私钥解密失败", () -> {
+            PrivateKey key = getPrivateKey(privateKey);
+            return decrypt(encryptedContent, key, decryptBlockSize(key));
+        });
     }
 
     /**
@@ -251,12 +324,10 @@ public class RsaUtil {
      * @return 密文
      */
     public final String privateKeyEncrypt(String sourceContent) {
-        try {
-            int blockSize = keySize / 8 - 11;
-            return encrypt(sourceContent, getPrivateKey(privateKey), blockSize);
-        } catch (Exception e) {
-            throw new ServiceException("RSA 私钥加密失败，" + e.getMessage());
-        }
+        return wrapException("RSA 私钥加密失败", () -> {
+            PrivateKey key = getPrivateKey(privateKey);
+            return encrypt(sourceContent, key, encryptBlockSize(key));
+        });
     }
 
     /**
@@ -266,11 +337,7 @@ public class RsaUtil {
      * @return 签名
      */
     public final String privateKeySignature(String sourceContent) {
-        try {
-            return sign(sourceContent, getPrivateKey(privateKey));
-        } catch (Exception e) {
-            throw new ServiceException("RSA 私钥签名失败，" + e.getMessage());
-        }
+        return wrapException("RSA 私钥签名失败", () -> sign(sourceContent, getPrivateKey(privateKey)));
     }
 
     /**
@@ -281,11 +348,7 @@ public class RsaUtil {
      * @return 是否成功
      */
     public final boolean publicKeyVerifySignature(String sourceContent, String signature) {
-        try {
-            return verify(sourceContent, signature, getPublicKey(publicKey));
-        } catch (Exception e) {
-            throw new ServiceException("RSA 公钥验签失败，" + e.getMessage());
-        }
+        return wrapException("RSA 公钥验签失败", () -> verify(sourceContent, signature, getPublicKey(publicKey)));
     }
 
     /**
@@ -295,12 +358,10 @@ public class RsaUtil {
      * @return 原文
      */
     public final @NotNull String publicKeyDecrypt(String encryptedContent) {
-        try {
+        return wrapException("RSA 公钥解密失败", () -> {
             int blockSize = keySize / 8;
             return decrypt(encryptedContent, getPublicKey(publicKey), blockSize);
-        } catch (Exception e) {
-            throw new ServiceException("RSA 公钥解密失败，" + e.getMessage());
-        }
+        });
     }
 
     /**
@@ -313,10 +374,14 @@ public class RsaUtil {
      */
     @Contract("_, _, _ -> new")
     private @NotNull String decrypt(String encryptedContent, Key key, int blockSize) throws Exception {
+        if (Objects.isNull(encryptedContent)) {
+            throw new ServiceException("待解密的密文不能为 null");
+        }
         Cipher deCipher = Cipher.getInstance(cryptAlgorithm);
         deCipher.init(Cipher.DECRYPT_MODE, key);
         byte[] resultBytes = rsaDoFinal(deCipher, Base64.getDecoder().decode(encryptedContent), blockSize);
-        return new String(resultBytes);
+        // 固定 UTF-8：使用平台默认字符集会导致跨平台解密得到乱码
+        return new String(resultBytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -330,7 +395,8 @@ public class RsaUtil {
     private String encrypt(@NotNull String sourceContent, Key key, int blockSize) throws Exception {
         Cipher cipher = Cipher.getInstance(cryptAlgorithm);
         cipher.init(Cipher.ENCRYPT_MODE, key);
-        byte[] resultBytes = rsaDoFinal(cipher, sourceContent.getBytes(), blockSize);
+        // 固定 UTF-8：sign/verify 已固定 UTF-8，加解密也必须一致
+        byte[] resultBytes = rsaDoFinal(cipher, sourceContent.getBytes(StandardCharsets.UTF_8), blockSize);
         return Base64.getEncoder().encodeToString(resultBytes);
     }
 
@@ -341,7 +407,10 @@ public class RsaUtil {
      * @param privateKey    签名用的私钥
      * @return 签名结果字节数组
      */
-    private String sign(@NotNull String sourceContent, PrivateKey privateKey) throws Exception {
+    private String sign(String sourceContent, PrivateKey privateKey) throws Exception {
+        if (Objects.isNull(sourceContent)) {
+            throw new ServiceException("待签名的原文不能为 null");
+        }
         Signature signature = Signature.getInstance(signAlgorithm);
         signature.initSign(privateKey);
         signature.update(sourceContent.getBytes(StandardCharsets.UTF_8));

@@ -3,16 +3,57 @@ package cn.hamm.airpower.core.interfaces;
 import cn.hamm.airpower.core.StringUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
+import java.lang.reflect.Array;
+import java.util.Collection;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * <h1>异常接口</h1>
+ * <h1>异常断言接口</h1>
  *
+ * @param <T> 异常枚举自身类型
  * @author Hamm.cn
  */
 public interface IException<T extends IException<T>> extends Supplier<T> {
+    /**
+     * 归一化字符串用于忽略大小写比较
+     *
+     * @param value 字符串
+     * @return 归一化结果
+     * @apiNote 固定使用 {@link java.util.Locale#ROOT}，避免土耳其语环境下
+     * 大写 I 转成点无点 i 导致比较结果失真
+     */
+    @Contract(pure = true)
+    private static @NotNull String normalizeCase(@NotNull String value) {
+        return value.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 判断「空值」：{@code null}、无有效字符的文本、空集合、空数组
+     *
+     * @param obj 被判断的值
+     * @return 是否为空
+     */
+    private static boolean isEmptyValue(Object obj) {
+        if (Objects.isNull(obj)) {
+            return true;
+        }
+        if (obj instanceof Collection<?> collection) {
+            return collection.isEmpty();
+        }
+        if (obj.getClass().isArray()) {
+            return Array.getLength(obj) == 0;
+        }
+        if (obj instanceof Optional<?> optional) {
+            return optional.isEmpty();
+        }
+        return !StringUtil.hasText(obj.toString());
+    }
+
     /**
      * 获取错误代码
      *
@@ -172,21 +213,23 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <b>两个字符串忽略大小写相同</b> 时抛出异常
+     * 抛出异常
      *
      * @param str1    被验证的数据
      * @param str2    被验证的数据
      * @param message 返回信息
+     * @apiNote 任一入参为 {@code null} 都会直接抛出（而不是跳过比较），
+     * 避免"空值不报错"被上层当成校验通过
      */
     default void whenEqualsIgnoreCase(String str1, String str2, String message) {
         if (Objects.isNull(str1) || Objects.isNull(str2)) {
             show(message);
         }
-        when(Objects.equals(str1.toLowerCase(), str2.toLowerCase()), message);
+        when(Objects.equals(normalizeCase(str1), normalizeCase(str2)), message);
     }
 
     /**
-     * 当 <s><b>两者不相同</b></s> 时抛出异常
+     * 当 <b>两者不相同</b> 时抛出异常
      *
      * @param obj1 被验证的数据
      * @param obj2 被验证的数据
@@ -196,7 +239,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两者不相同</b></s> 时抛出异常
+     * 当 <b>两者不相同</b> 时抛出异常
      *
      * @param obj1    被验证的数据
      * @param obj2    被验证的数据
@@ -207,7 +250,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串不相同</b> 时抛出异常
      *
      * @param str1 被验证的数据
      * @param str2 被验证的数据
@@ -217,7 +260,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串不相同</b> 时抛出异常
      *
      * @param str1    被验证的数据
      * @param str2    被验证的数据
@@ -228,7 +271,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串忽略大小写还不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串忽略大小写还不相同</b> 时抛出异常
      *
      * @param str1 被验证的数据
      * @param str2 被验证的数据
@@ -238,21 +281,22 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>两个字符串忽略大小写还不相同</b></s> 时抛出异常
+     * 当 <b>两个字符串忽略大小写还不相同</b> 时抛出异常
      *
      * @param str1    被验证的数据
      * @param str2    被验证的数据
      * @param message 返回信息
+     * @apiNote 任一入参为 {@code null} 都会直接抛出
      */
     default void whenNotEqualsIgnoreCase(String str1, String str2, String message) {
         if (Objects.isNull(str1) || Objects.isNull(str2)) {
             show(message);
         }
-        when(!Objects.equals(str1.toLowerCase(), str2.toLowerCase()), message);
+        when(!Objects.equals(normalizeCase(str1), normalizeCase(str2)), message);
     }
 
     /**
-     * 当为 <b>null 或 空字符串</b> 时抛出异常
+     * 当为 <b>null、空字符串、空集合或空数组</b> 时抛出异常
      *
      * @param obj 被验证的数据
      */
@@ -269,11 +313,13 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
      */
     @Contract("null, _ -> fail")
     default void whenEmpty(Object obj, String message) {
-        when(Objects.isNull(obj) || !StringUtil.hasText(obj.toString()), message);
+        if (isEmptyValue(obj)) {
+            when(true, message);
+        }
     }
 
     /**
-     * 当 <s><b>不为 null</b></s> 时抛出异常
+     * 当 <b>不为 null</b> 时抛出异常
      *
      * @param obj 被验证的数据
      */
@@ -282,7 +328,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当 <s><b>不为 null</b></s> 时抛出异常
+     * 当 <b>不为 null</b> 时抛出异常
      *
      * @param obj     被验证的数据
      * @param message 返回信息

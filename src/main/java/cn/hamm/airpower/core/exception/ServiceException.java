@@ -4,16 +4,27 @@ import cn.hamm.airpower.core.Json;
 import cn.hamm.airpower.core.interfaces.IException;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.Serial;
+import java.util.Objects;
+
 /**
- * <h1>系统异常包装类</h1>
+ * <h1>业务异常</h1>
  *
  * @author Hamm.cn
+ * @apiNote 不传错误码时使用 {@link Json#SERVICE_ERROR}
  */
+@Slf4j
 @NoArgsConstructor
 @Getter
 public class ServiceException extends RuntimeException implements IException<ServiceException> {
+    /**
+     * 序列化版本号
+     */
+    @Serial
+    private static final long serialVersionUID = 1L;
     /**
      * 错误代码
      */
@@ -22,10 +33,10 @@ public class ServiceException extends RuntimeException implements IException<Ser
     /**
      * 错误数据
      */
-    private Object data = null;
+    private transient Object data = null;
 
     /**
-     * 抛出一个自定义错误信息的默认异常
+     * 抛出使用默认错误码的业务异常
      *
      * @param message 错误信息
      */
@@ -34,18 +45,51 @@ public class ServiceException extends RuntimeException implements IException<Ser
     }
 
     /**
-     * 抛出一个自定义错误信息的默认异常
+     * 抛出携带原始异常的业务异常
      *
      * @param message 错误信息
-     * @param data    错误数据
+     * @param cause   原始异常，只进 cause，<b>不会</b>回传前端
+     */
+    public ServiceException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    /**
+     * 抛出携带错误数据的业务异常
+     *
+     * @param message 错误信息
+     * @param data    错误数据，会随响应体返回给前端
      */
     public ServiceException(String message, Object data) {
         super(message);
+        if (data instanceof Throwable cause) {
+            // 兜底：即便调用方漏看了 javadoc 硬传了异常，也不能让它进 data
+            rejectThrowableData(cause);
+            return;
+        }
         this.data = data;
     }
 
     /**
-     * 抛出一个自定义错误信息的默认异常
+     * 抛出指定错误码并携带错误数据的业务异常
+     *
+     * @param code    错误代码
+     * @param message 错误信息
+     * @param data    错误数据，会随响应体返回给前端
+     * @apiNote 与 {@link #ServiceException(String, Object)} 同样禁止传入异常对象
+     */
+    public ServiceException(int code, String message, Object data) {
+        super(message);
+        this.code = code;
+        if (data instanceof Throwable cause) {
+            rejectThrowableData(cause);
+            return;
+        }
+        this.data = data;
+    }
+
+    /**
+     * 抛出指定错误码的业务异常
      *
      * @param code    错误代码
      * @param message 错误信息
@@ -56,36 +100,35 @@ public class ServiceException extends RuntimeException implements IException<Ser
     }
 
     /**
-     * 抛出一个自定义错误信息的默认异常
-     *
-     * @param code    错误代码
-     * @param message 错误信息
-     * @param data    错误数据
-     */
-    public ServiceException(int code, String message, Object data) {
-        super(message);
-        this.code = code;
-        this.data = data;
-    }
-
-    /**
-     * 直接抛出一个异常
+     * 复用已有异常的错误码，替换错误信息
      *
      * @param exception 异常
      * @param message   错误信息
      */
-    public ServiceException(@NotNull IException<?> exception, String message) {
+    public ServiceException(IException<?> exception, String message) {
         super(message);
-        this.code = exception.getCode();
+        if (Objects.nonNull(exception)) {
+            this.code = exception.getCode();
+        }
     }
 
     /**
-     * 直接抛出一个异常
+     * 按已有异常直接抛出业务异常
      *
      * @param exception 异常
      */
     public ServiceException(@NotNull IException<?> exception) {
         super(exception.getMessage());
         this.code = exception.getCode();
+    }
+
+    /**
+     * 拒绝把异常放进 {@code data}
+     *
+     * @param cause 被误当成 data 传入的异常
+     */
+    private void rejectThrowableData(@NotNull Throwable cause) {
+        log.error("异常: {}", cause.getMessage(), cause);
+        this.initCause(cause);
     }
 }

@@ -5,7 +5,7 @@
     <groupId>cn.hamm</groupId>
     <artifactId>airpower-core</artifactId>
     <name>airpower-core</name>
-    <version>7.0.0</version>
+    <version>8.0.0</version>
     <description>
         AirPower-Core.
     </description>
@@ -17,7 +17,6 @@
         <jackson.version>2.20.1</jackson.version>
         <lombok.version>1.18.42</lombok.version>
         <jakarta.validation.version>3.1.1</jakarta.validation.version>
-        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <jetbrains.annotations.version>26.0.2</jetbrains.annotations.version>
         <plugin.maven.publishing.version>0.9.0</plugin.maven.publishing.version>
         <plugin.maven.source.version>3.4.0</plugin.maven.source.version>
@@ -26,6 +25,9 @@
         <plugin.maven.gpg.version>3.2.8</plugin.maven.gpg.version>
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.23</logback.version>
+        <hibernate-validator.version>8.0.2.Final</hibernate-validator.version>
+        <jakarta-el-api.version>4.0.0</jakarta-el-api.version>
+        <jakarta-el.version>4.0.2</jakarta-el.version>
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -41,21 +43,50 @@
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
             <version>${jetbrains.annotations.version}</version>
-            <scope>compile</scope>
+            <!-- @NotNull / @Nullable / @Contract 都是 CLASS 保留期，编译期与 IDE 用，
+                 运行期不需要。留在 compile scope 会进下游 jar 的依赖树，
+                 既占体积又可能与下游的版本冲突 -->
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.validation</groupId>
             <artifactId>jakarta.validation-api</artifactId>
             <version>${jakarta.validation.version}</version>
         </dependency>
+        <!-- Bean Validation 的实现是 ValidateUtil 的运行期必需项，不是测试期依赖。
+             放在 test scope 时，本库自身编译通过，但任何只依赖 airpower-core 的
+             应用第一次调 ValidateUtil.valid() 就会抛
+             HV000183: Unable to initialize 'jakarta.el.ExpressionFactory'——
+             启动不报错、首次校验才炸。
+             版本与 jakarta.validation-api 3.1.1 对齐：8.0.x 才实现 Validation 3.1 -->
         <dependency>
-            <groupId>jakarta.servlet</groupId>
-            <artifactId>jakarta.servlet-api</artifactId>
-            <version>${jakarta.servlet.version}</version>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>${hibernate-validator.version}</version>
+        </dependency>
+        <!-- Hibernate Validator 的消息插值器依赖 jakarta.el.ExpressionFactory，
+             缺它同样是 HV000183 -->
+        <dependency>
+            <groupId>jakarta.el</groupId>
+            <artifactId>jakarta.el-api</artifactId>
+            <version>${jakarta-el-api.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>jakarta.el</artifactId>
+            <version>${jakarta-el.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <!-- Json 自建 ObjectMapper，不会继承 Spring Boot 的自动配置，
+             因此 JSR-310 必须由本库自己注册，否则含 LocalDate/LocalDateTime 的
+             实体被当成普通 POJO 序列化成 {"year":2026,"monthValue":10,...} 这种结构 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
             <version>${jackson.version}</version>
         </dependency>
         <dependency>
@@ -63,10 +94,14 @@
             <artifactId>slf4j-api</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
+        <!-- 日志实现只在测试期用：主源码只依赖 slf4j-api。
+             放在 compile 会把 binding 传递给下游，与下游自选的实现形成
+             "multiple bindings" 或版本打架 -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

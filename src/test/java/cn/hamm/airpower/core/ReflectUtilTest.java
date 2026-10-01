@@ -1,502 +1,1334 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.annotation.Description;
-import cn.hamm.airpower.core.annotation.ReadOnly;
+import cn.hamm.airpower.core.annotation.Meta;
 import cn.hamm.airpower.core.exception.ServiceException;
+import cn.hamm.airpower.core.fixture.AnnotatedImpl;
+import cn.hamm.airpower.core.fixture.AnnotatedInterface;
+import cn.hamm.airpower.core.fixture.DemoModel;
+import cn.hamm.airpower.core.fixture.DemoTree;
+import cn.hamm.airpower.core.fixture.Gender;
+import cn.hamm.airpower.core.fixture.InheritedImpl;
+import cn.hamm.airpower.core.fixture.SameNameProbe;
 import cn.hamm.airpower.core.interfaces.IFunction;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
+import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>ReflectUtil 单元测试</h1>
+ * <h1>{@link ReflectUtil} 的单元测试</h1>
+ *
+ * <p>覆盖：Getter 名推导、字段读写、实例化、根类判断、四个 {@code getAnnotation} 重载、
+ * 四个 {@code getDescription} 重载、字段列表缓存、声明字段缓存、Lambda 方法名、递归查找字段。</p>
  *
  * @author Hamm.cn
  */
+@DisplayName("ReflectUtil 反射工具类")
 class ReflectUtilTest {
 
-    // ==================== 测试用例模型 ====================
+    /**
+     * 反射测试用的方法签名
+     */
+    private static Method childMethod() throws NoSuchMethodException {
+        return Child.class.getDeclaredMethod("childMethod", String.class);
+    }
 
     /**
-     * 基础测试模型
+     * 反射测试用的字段
      */
-    public static class TestModel extends RootModel<TestModel> {
-        @Description("用户ID")
-        private Long id;
+    private static Field childField() throws NoSuchFieldException {
+        return Child.class.getDeclaredField("childField");
+    }
 
-        @ReadOnly
-        @Description("用户名")
-        private String username;
+    /**
+     * 带类级 {@code @Description} 的父类
+     */
+    @Description("父类")
+    static class Parent {
+        /**
+         * 父类静态字段
+         */
+        protected static String parentStaticField = "父类静态字段";
+        /**
+         * 父类字段
+         */
+        @Description("父类字段")
+        protected String parentField;
 
-        @Description("年龄")
-        private Integer age;
-
-        private String noDescriptionField;
-
-        public Long getId() {
-            return id;
+        /**
+         * 父类方法
+         */
+        @Description("父类方法")
+        public void parentMethod() {
         }
 
-        public void setId(Long id) {
-            this.id = id;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public Integer getAge() {
-            return age;
-        }
-
-        public void setAge(Integer age) {
-            this.age = age;
-        }
-
-        public String getNoDescriptionField() {
-            return noDescriptionField;
-        }
-
-        public void setNoDescriptionField(String noDescriptionField) {
-            this.noDescriptionField = noDescriptionField;
+        /**
+         * 父类无注解方法
+         */
+        public void parentPlainMethod() {
         }
     }
 
     /**
-     * 子类测试模型
+     * 子类，继承 {@link Parent}
      */
-    public static class ChildModel extends TestModel {
+    static class Child extends Parent {
+        /**
+         * 子类字段
+         */
         @Description("子类字段")
         private String childField;
 
-        public String getChildField() {
-            return childField;
+        /**
+         * 子类方法
+         *
+         * @param name 参数名
+         */
+        @Description("子类方法")
+        public void childMethod(@Description("参数名") String name) {
         }
 
-        public void setChildField(String childField) {
-            this.childField = childField;
+        /**
+         * 子类无注解方法
+         *
+         * @param age 年龄
+         */
+        public void childPlainMethod(int age) {
         }
     }
 
     /**
-     * 带注解的方法测试类
+     * 没有任何注解的类
      */
-    public static class MethodAnnotationClass {
-        @Description("测试方法")
-        public void annotatedMethod() {
-        }
+    static class Plain {
+    }
 
-        public void noAnnotationMethod() {
+    /**
+     * 用于测试字段读写的容器
+     */
+    static class FieldHolder {
+        /**
+         * 静态常量字段
+         */
+        static final int CONST = 5;
+        /**
+         * 静态字段
+         */
+        static String stat = "static";
+        /**
+         * 不可变字段
+         */
+        private final String finalField = "final";
+        /**
+         * 瞬态字段
+         */
+        transient String temp;
+        /**
+         * 普通字段
+         */
+        String mutable;
+        /**
+         * 大写首字母字段
+         */
+        String URL;
+        /**
+         * 单字符字段
+         */
+        String a;
+        /**
+         * 私有字段
+         */
+        private String hidden;
+
+        /**
+         * 读取私有字段
+         *
+         * @return 私有字段值
+         */
+        public String getHidden() {
+            return hidden;
         }
     }
 
-    // ==================== getFieldGetter 方法测试 ====================
-
-    @Test
-    void testGetFieldGetter() throws NoSuchFieldException {
-        Field field = TestModel.class.getDeclaredField("username");
-        String getter = ReflectUtil.getFieldGetter(field);
-        assertEquals("getUsername", getter);
+    /**
+     * 用于测试非 {@code String} 字段读写的容器
+     */
+    static class RefHolder {
+        /**
+         * 集合字段
+         */
+        List<String> list;
+        /**
+         * 基本类型字段
+         */
+        int number;
     }
 
-    @Test
-    void testGetFieldGetterSingleChar() throws NoSuchFieldException {
-        // 测试单字符字段名
-        class SingleCharModel {
-            private int x;
+    /**
+     * 内部类：编译器会生成 {@code this$0} 合成字段
+     */
+    class InnerHolder {
+        /**
+         * 名称
+         */
+        String name;
+    }
 
-            @SuppressWarnings("unused")
-            public int getX() {
-                return x;
+    /**
+     * 只有有参构造器的模型
+     */
+    static class WithArgsModel extends RootModel<WithArgsModel> {
+        /**
+         * 有参构造器
+         *
+         * @param name 名称
+         */
+        WithArgsModel(String name) {
+        }
+    }
+
+    /**
+     * 用于验证字段重载不递归的父类
+     */
+    static class ShadowParent {
+        /**
+         * 带注解的字段
+         */
+        @Description("被遮蔽的字段")
+        protected String name;
+    }
+
+    /**
+     * 用同名字段遮蔽父类字段的子类
+     */
+    static class ShadowChild extends ShadowParent {
+        /**
+         * 与父类同名的字段，自身没有注解
+         */
+        @SuppressWarnings("unused")
+        private String name;
+    }
+
+    /**
+     * 抽象模型
+     */
+    abstract static class AbstractModel extends RootModel<AbstractModel> {
+    }
+
+    /**
+     * 方法名中带有 "get" 的目标类，用于验证 Lambda 方法名只去掉 get 前缀
+     */
+    static class Targeter {
+        /**
+         * 以 get 为前缀的方法名
+         *
+         * @return 固定值
+         */
+        public String getTarget() {
+            return "target";
+        }
+
+        /**
+         * 去掉 get 前缀后，剩余部分仍含 get 字样的方法名
+         *
+         * @return 固定值
+         */
+        public String getForgetLabel() {
+            return "forgetLabel";
+        }
+    }
+
+    @Nested
+    @DisplayName("getFieldGetter 推导 Getter 名")
+    class GetFieldGetterTest {
+
+        @Test
+        @DisplayName("首字母小写的字段名首字母大写并加 get 前缀")
+        void normalFieldName() throws NoSuchFieldException {
+            assertEquals("getMutable", ReflectUtil.getFieldGetter(FieldHolder.class.getDeclaredField("mutable")),
+                    "普通字段名应转换为 get + 首字母大写");
+        }
+
+        @Test
+        @DisplayName("首字母已大写的字段名保持原样拼接")
+        void upperCaseFieldName() throws NoSuchFieldException {
+            assertEquals("getURL", ReflectUtil.getFieldGetter(FieldHolder.class.getDeclaredField("URL")),
+                    "首字母已大写的字段名不应重复大写");
+        }
+
+        @Test
+        @DisplayName("单字符字段名也能正确推导")
+        void singleCharFieldName() throws NoSuchFieldException {
+            assertEquals("getA", ReflectUtil.getFieldGetter(FieldHolder.class.getDeclaredField("a")),
+                    "单字符字段名应转换为 getA");
+        }
+
+        @Test
+        @DisplayName("静态字段同样可以推导 Getter 名")
+        void staticFieldName() throws NoSuchFieldException {
+            assertEquals("getStat", ReflectUtil.getFieldGetter(FieldHolder.class.getDeclaredField("stat")),
+                    "静态字段名同样按 Getter 规则推导");
+        }
+
+        @Test
+        @DisplayName("实际存在的 Getter 可与推导结果对应")
+        void getterMatchesRealMethod() throws NoSuchFieldException, NoSuchMethodException {
+            Field field = FieldHolder.class.getDeclaredField("hidden");
+            String getter = ReflectUtil.getFieldGetter(field);
+            assertNotNull(FieldHolder.class.getMethod(getter), "推导出的 Getter 名应能对应到真实方法");
+        }
+    }
+
+    @Nested
+    @DisplayName("getFieldValue 读取字段值")
+    class GetFieldValueTest {
+
+        @Test
+        @DisplayName("可读取私有字段的值")
+        void readPrivateField() throws NoSuchFieldException, IllegalAccessException {
+            FieldHolder holder = new FieldHolder();
+            Field field = FieldHolder.class.getDeclaredField("hidden");
+            field.setAccessible(true);
+            field.set(holder, "隐藏值");
+            assertEquals("隐藏值", ReflectUtil.getFieldValue(holder, field), "私有字段的值应能被读取");
+        }
+
+        @Test
+        @DisplayName("可读取继承自父类的字段")
+        void readInheritedField() throws NoSuchFieldException {
+            Child child = new Child();
+            Field field = Parent.class.getDeclaredField("parentField");
+            ReflectUtil.setFieldValue(child, field, "父类值");
+            assertEquals("父类值", ReflectUtil.getFieldValue(child, field), "子类实例上的父类字段应能读取");
+        }
+
+        @Test
+        @DisplayName("可读取静态字段且无需传入实例")
+        void readStaticField() throws NoSuchFieldException {
+            Field field = FieldHolder.class.getDeclaredField("stat");
+            assertEquals("static", ReflectUtil.getFieldValue(null, field), "静态字段传 null 实例也应能读取");
+            assertEquals("static", ReflectUtil.getFieldValue(new FieldHolder(), field), "静态字段传实例同样能读取");
+        }
+
+        @Test
+        @DisplayName("未赋值的字段返回 null")
+        void readNullValue() throws NoSuchFieldException {
+            assertNull(ReflectUtil.getFieldValue(new FieldHolder(), FieldHolder.class.getDeclaredField("mutable")),
+                    "未赋值的字段应返回 null");
+        }
+
+        @Test
+        @DisplayName("对象为 null 且字段是实例字段时抛空指针（源码未做判空）")
+        void readInstanceFieldOnNullObjectThrowsNpe() throws NoSuchFieldException {
+            Field field = FieldHolder.class.getDeclaredField("mutable");
+            assertThrows(NullPointerException.class, () -> ReflectUtil.getFieldValue(null, field),
+                    "实例字段传 null 对象时源码未做判空，应抛空指针而不是返回 null");
+        }
+    }
+
+    @Nested
+    @DisplayName("setFieldValue 与 clearFieldValue 写入字段值")
+    class SetFieldValueTest {
+
+        @Test
+        @DisplayName("写入私有字段后可读回")
+        void setPrivateField() throws NoSuchFieldException {
+            FieldHolder holder = new FieldHolder();
+            Field field = FieldHolder.class.getDeclaredField("hidden");
+            ReflectUtil.setFieldValue(holder, field, "新值");
+            assertEquals("新值", holder.getHidden(), "写入私有字段后应能通过真实 Getter 读到");
+        }
+
+        @Test
+        @DisplayName("可写入集合与基本类型字段")
+        void setObjectField() throws NoSuchFieldException {
+            RefHolder holder = new RefHolder();
+            Field listField = RefHolder.class.getDeclaredField("list");
+            Field numberField = RefHolder.class.getDeclaredField("number");
+            ReflectUtil.setFieldValue(holder, listField, List.of("a", "b"));
+            ReflectUtil.setFieldValue(holder, numberField, 7);
+            assertEquals(List.of("a", "b"), ReflectUtil.getFieldValue(holder, listField), "集合字段应被正确写入");
+            assertEquals(7, ReflectUtil.getFieldValue(holder, numberField), "基本类型字段应被正确写入");
+        }
+
+        @Test
+        @DisplayName("写入类型不匹配的值抛 ServiceException 而不是被静默吞掉")
+        void setWrongTypeThrows() throws NoSuchFieldException {
+            RefHolder holder = new RefHolder();
+            Field listField = RefHolder.class.getDeclaredField("list");
+            assertThrows(ServiceException.class, () -> ReflectUtil.setFieldValue(holder, listField, "不是集合"),
+                    "写入类型不匹配时必须让调用方感知，不能只记录日志");
+        }
+
+        @Test
+        @DisplayName("clearFieldValue 将字段置为 null")
+        void clearFieldValue() throws NoSuchFieldException {
+            FieldHolder holder = new FieldHolder();
+            Field field = FieldHolder.class.getDeclaredField("mutable");
+            ReflectUtil.setFieldValue(holder, field, "值");
+            ReflectUtil.clearFieldValue(holder, field);
+            assertNull(ReflectUtil.getFieldValue(holder, field), "clearFieldValue 后字段值应为 null");
+        }
+
+        @Test
+        @DisplayName("clearFieldValue 对静态字段同样生效")
+        void clearStaticField() throws NoSuchFieldException {
+            Field field = FieldHolder.class.getDeclaredField("stat");
+            ReflectUtil.setFieldValue(null, field, "待清空");
+            ReflectUtil.clearFieldValue(null, field);
+            assertNull(ReflectUtil.getFieldValue(null, field), "静态字段也应能被清空");
+            ReflectUtil.setFieldValue(null, field, "static");
+            assertEquals("static", ReflectUtil.getFieldValue(null, field), "测试结束后应恢复静态字段的原值");
+        }
+
+        @Test
+        @DisplayName("写入 static final 字段失败时抛 ServiceException，不再静默忽略")
+        void setStaticFinalFieldThrows() throws NoSuchFieldException {
+            Field field = FieldHolder.class.getDeclaredField("CONST");
+            assertThrows(ServiceException.class, () -> ReflectUtil.setFieldValue(null, field, 9),
+                    "写入失败必须让调用方感知，否则脱敏/字段过滤会静默失效");
+            assertEquals(5, ReflectUtil.getFieldValue(null, field), "写入失败后原值应保持不变");
+        }
+
+        @Test
+        @DisplayName("写入实例 final 字段在 setAccessible 后可成功")
+        void setInstanceFinalField() throws NoSuchFieldException {
+            FieldHolder holder = new FieldHolder();
+            Field field = FieldHolder.class.getDeclaredField("finalField");
+            ReflectUtil.setFieldValue(holder, field, "被修改");
+            assertEquals("被修改", ReflectUtil.getFieldValue(holder, field), "setAccessible 之后实例 final 字段可以被修改");
+        }
+    }
+
+    @Nested
+    @DisplayName("newInstance 创建实例")
+    class NewInstanceTest {
+
+        @Test
+        @DisplayName("无参构造的模型可正常创建")
+        void createNormalInstance() {
+            DemoModel model = ReflectUtil.newInstance(DemoModel.class);
+            assertNotNull(model, "无参构造的模型应能创建出实例");
+            assertEquals(DemoModel.class, model.getClass(), "创建出的实例类型应与传入的类一致");
+            assertNull(model.getId(), "新建实例的字段应为默认值 null");
+        }
+
+        @Test
+        @DisplayName("只有有参构造器的类创建失败并抛 ServiceException")
+        void createInstanceWithArgsCtorFails() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> ReflectUtil.newInstance(WithArgsModel.class),
+                    "没有无参构造器的类应抛出 ServiceException");
+            assertTrue(exception.getMessage().startsWith("创建新实例失败，"),
+                    "实例化失败异常信息应以「创建新实例失败，」开头");
+            assertTrue(exception.getMessage().contains(WithArgsModel.class.getName()),
+                    "实例化失败异常信息中应包含类名");
+        }
+
+        @Test
+        @DisplayName("抽象类创建失败并抛 ServiceException")
+        void createAbstractInstanceFails() {
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> ReflectUtil.newInstance(AbstractModel.class),
+                    "抽象类应抛出 ServiceException");
+            assertTrue(exception.getMessage().startsWith("创建新实例失败，"),
+                    "抽象类实例化失败异常信息应以「创建新实例失败，」开头");
+        }
+    }
+
+    @Nested
+    @DisplayName("isTheRootClass 判断根类")
+    class IsTheRootClassTest {
+
+        @Test
+        @DisplayName("Object 是根类")
+        void objectIsRootClass() {
+            assertTrue(ReflectUtil.isTheRootClass(Object.class), "Object 类应被判定为根类");
+        }
+
+        @Test
+        @DisplayName("其他类都不是根类")
+        void otherClassesAreNotRoot() {
+            assertFalse(ReflectUtil.isTheRootClass(String.class), "String 不应是根类");
+            assertFalse(ReflectUtil.isTheRootClass(DemoModel.class), "业务模型不应是根类");
+            assertFalse(ReflectUtil.isTheRootClass(Plain.class), "普通测试类不应是根类");
+        }
+
+        @Test
+        @DisplayName("传入 null 抛运行时异常（源码未做判空）")
+        void nullClassThrows() {
+            // 源码未显式判空，null 会在 clazz.equals(...) 处解引用抛 NPE。
+            // 但 IDE 开启 "Instrument code with @NotNull assertions" 重新编译后，
+            // 参数校验会先抛 IllegalArgumentException，两种都属于"未做判空"的正确表现，
+            // 因此这里只断言必然失败，不绑定具体异常类型
+            assertThrows(RuntimeException.class, () -> ReflectUtil.isTheRootClass(null),
+                    "isTheRootClass(null) 源码未做判空，应抛出运行时异常");
+        }
+    }
+
+    @Nested
+    @DisplayName("getAnnotation(注解, 方法)")
+    class GetAnnotationFromMethodTest {
+
+        @Test
+        @DisplayName("方法上有注解时可取到")
+        void annotationOnMethod() throws NoSuchMethodException {
+            Description description = ReflectUtil.getAnnotation(Description.class, childMethod());
+            assertNotNull(description, "带 @Description 的方法应能取到注解");
+            assertEquals("子类方法", description.value(), "取到的注解值应为「子类方法」");
+        }
+
+        @Test
+        @DisplayName("方法上没有注解时返回 null")
+        void noAnnotationOnMethod() throws NoSuchMethodException {
+            Method method = Child.class.getDeclaredMethod("childPlainMethod", int.class);
+            assertNull(ReflectUtil.getAnnotation(Description.class, method), "没有 @Description 的方法应返回 null");
+        }
+
+        @Test
+        @DisplayName("Object 的方法返回 null")
+        void objectMethodReturnsNull() throws NoSuchMethodException {
+            assertNull(ReflectUtil.getAnnotation(Description.class, Object.class.getDeclaredMethod("toString")),
+                    "Object 的方法不应取到任何注解");
+        }
+
+        @Test
+        @DisplayName("可以取到非 Description 类型的注解")
+        void otherAnnotationType() throws NoSuchMethodException {
+            assertNotNull(ReflectUtil.getAnnotation(Meta.class, DemoModel.class.getMethod("getTitle")),
+                    "Getter 上的 @Meta 应能通过方法重载取到");
+        }
+    }
+
+    @Nested
+    @DisplayName("getAnnotation(注解, 类)")
+    class GetAnnotationFromClassTest {
+
+        @Test
+        @DisplayName("类上有注解时可取到")
+        void annotationOnClass() {
+            Description description = ReflectUtil.getAnnotation(Description.class, Parent.class);
+            assertNotNull(description, "带 @Description 的类应能取到注解");
+            assertEquals("父类", description.value(), "取到的注解值应为「父类」");
+        }
+
+        @Test
+        @DisplayName("子类可沿继承链取到父类注解")
+        void annotationFromSuperClass() {
+            Description description = ReflectUtil.getAnnotation(Description.class, Child.class);
+            assertNotNull(description, "子类应能沿继承链取到父类的 @Description");
+            assertEquals("父类", description.value(), "子类取到的注解值应为父类的描述");
+        }
+
+        @Test
+        @DisplayName("未标注的类返回 null")
+        void noAnnotationOnClass() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, Plain.class), "没有 @Description 的类应返回 null");
+            assertNull(ReflectUtil.getAnnotation(Description.class, DemoTree.class), "DemoTree 没有 @Description，应返回 null");
+        }
+
+        @Test
+        @DisplayName("Object 类返回 null")
+        void objectClassReturnsNull() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, Object.class), "Object 类应返回 null");
+        }
+    }
+
+    @Nested
+    @DisplayName("getAnnotation(注解, 字段)")
+    class GetAnnotationFromFieldTest {
+
+        @Test
+        @DisplayName("字段上有注解时可取到")
+        void annotationOnField() throws NoSuchFieldException {
+            Description description = ReflectUtil.getAnnotation(Description.class, childField());
+            assertNotNull(description, "带 @Description 的字段应能取到注解");
+            assertEquals("子类字段", description.value(), "取到的注解值应为「子类字段」");
+        }
+
+        @Test
+        @DisplayName("字段上没有注解时返回 null")
+        void noAnnotationOnField() throws NoSuchFieldException {
+            assertNull(ReflectUtil.getAnnotation(Description.class, FieldHolder.class.getDeclaredField("mutable")),
+                    "没有 @Description 的字段应返回 null");
+        }
+
+        @Test
+        @DisplayName("字段重载不沿父类递归")
+        void fieldOverloadDoesNotRecurse() throws NoSuchFieldException {
+            Field shadowField = ShadowChild.class.getDeclaredField("name");
+            assertNull(ReflectUtil.getAnnotation(Description.class, shadowField),
+                    "字段重载只读本字段自身的注解，不应回溯到父类同名字段");
+            assertNotNull(ReflectUtil.getAnnotation(Description.class, ShadowParent.class.getDeclaredField("name")),
+                    "父类的同名字段自身带注解，应能直接取到");
+        }
+    }
+
+    @Nested
+    @DisplayName("getAnnotation(注解, 类, 方法名, 参数类型)")
+    class GetAnnotationByNameTest {
+
+        @Test
+        @DisplayName("本类方法上的注解可取到")
+        void ownMethod() {
+            Description description = ReflectUtil.getAnnotation(Description.class, Child.class,
+                    "childMethod", new Class<?>[]{String.class});
+            assertNotNull(description, "本类方法上的 @Description 应能通过方法名取到");
+            assertEquals("子类方法", description.value(), "取到的注解值应为「子类方法」");
+        }
+
+        @Test
+        @DisplayName("父类方法上的注解可沿继承链取到")
+        void parentMethod() {
+            Description description = ReflectUtil.getAnnotation(Description.class, Child.class,
+                    "parentMethod", new Class<?>[]{});
+            assertNotNull(description, "父类方法上的 @Description 应能沿继承链取到");
+            assertEquals("父类方法", description.value(), "取到的注解值应为「父类方法」");
+        }
+
+        @Test
+        @DisplayName("方法不存在时返回 null")
+        void methodNotFound() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, Child.class, "notExistMethod", new Class<?>[]{}),
+                    "不存在的方法应返回 null");
+        }
+
+        @Test
+        @DisplayName("方法存在但没有注解时返回 null")
+        void methodWithoutAnnotation() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, Child.class,
+                            "childPlainMethod", new Class<?>[]{int.class}),
+                    "存在但没有 @Description 的方法应返回 null");
+        }
+
+        @Test
+        @DisplayName("以 Object 为起点查找时返回 null")
+        void fromObjectClass() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, Object.class, "toString", new Class<?>[]{}),
+                    "从 Object 开始递归查找应安全返回 null");
+        }
+    }
+
+    @Nested
+    @DisplayName("getDescription 的四个重载")
+    class GetDescriptionTest {
+
+        @Test
+        @DisplayName("类：有注解取注解值，无注解取类名")
+        void describeClass() {
+            assertEquals("父类", ReflectUtil.getDescription(Parent.class), "有 @Description 的类应返回注解值");
+            assertEquals("父类", ReflectUtil.getDescription(Child.class), "子类应沿继承链取到父类注解值");
+            assertEquals("Plain", ReflectUtil.getDescription(Plain.class), "无 @Description 的类应返回简单类名");
+            assertEquals("Json", ReflectUtil.getDescription(Json.class), "Json 没有类级注解，应返回简单类名 Json");
+        }
+
+        @Test
+        @DisplayName("方法：有注解取注解值，无注解取方法名")
+        void describeMethod() throws NoSuchMethodException {
+            assertEquals("子类方法", ReflectUtil.getDescription(childMethod()), "有 @Description 的方法应返回注解值");
+            assertEquals("父类方法", ReflectUtil.getDescription(Parent.class.getDeclaredMethod("parentMethod")),
+                    "父类方法应返回其注解值");
+            assertEquals("childPlainMethod",
+                    ReflectUtil.getDescription(Child.class.getDeclaredMethod("childPlainMethod", int.class)),
+                    "无 @Description 的方法应返回方法名");
+        }
+
+        @Test
+        @DisplayName("字段：有注解取注解值，无注解取字段名")
+        void describeField() throws NoSuchFieldException {
+            assertEquals("子类字段", ReflectUtil.getDescription(childField()), "有 @Description 的字段应返回注解值");
+            assertEquals("mutable", ReflectUtil.getDescription(FieldHolder.class.getDeclaredField("mutable")),
+                    "无 @Description 的字段应返回字段名");
+            assertEquals("错误代码", ReflectUtil.getDescription(Json.class.getDeclaredField("code")),
+                    "Json 的 code 字段应返回其注解值「错误代码」");
+            assertEquals("key", ReflectUtil.getDescription(Gender.class.getDeclaredField("key")),
+                    "枚举未标注的字段应返回字段名");
+        }
+
+        @Test
+        @DisplayName("参数：有注解取注解值，无注解取参数名（依赖 -parameters）")
+        void describeParameter() throws NoSuchMethodException {
+            assertEquals("参数名", ReflectUtil.getDescription(childMethod().getParameters()[0]),
+                    "带 @Description 的参数应返回注解值");
+            assertEquals("age", ReflectUtil.getDescription(
+                            Child.class.getDeclaredMethod("childPlainMethod", int.class).getParameters()[0]),
+                    "未标注的参数应返回参数名（需开启 -parameters）");
+        }
+    }
+
+    /**
+     * 查找被测字段
+     *
+     * @param name 字段名
+     * @return 字段
+     * @throws NoSuchFieldException 字段不存在
+     */
+    static Field fieldOf(String name) throws NoSuchFieldException {
+        return DemoTree.class.getDeclaredField(name);
+    }
+
+    @Nested
+    @DisplayName("getFieldList 字段列表")
+    class GetFieldListTest {
+
+        @Test
+        @DisplayName("返回本类与父类的全部实例字段")
+        void containsInheritedFields() {
+            List<String> names = ReflectUtil.getFieldList(DemoModel.class).stream().map(Field::getName).toList();
+            assertEquals(16, names.size(), "DemoModel 应返回 16 个字段");
+            assertTrue(names.contains("id"), "字段列表应包含本类字段 id");
+            assertTrue(names.contains("children"), "字段列表应包含集合类型字段 children");
+        }
+
+        @Test
+        @DisplayName("排除 static 与 transient 字段")
+        void excludesStaticAndTransient() {
+            // 注意：Class#getDeclaredFields 不保证字段顺序，故按集合比较
+            Set<String> names = ReflectUtil.getFieldList(FieldHolder.class).stream()
+                    .map(Field::getName).collect(Collectors.toSet());
+            assertEquals(Set.of("mutable", "hidden", "finalField", "URL", "a"), names,
+                    "字段列表应排除 static 与 transient 字段，并保留 final 实例字段");
+        }
+
+        @Test
+        @DisplayName("子类的字段列表中同时包含父类字段")
+        void includesSuperClassFields() {
+            List<String> names = ReflectUtil.getFieldList(Child.class).stream().map(Field::getName).toList();
+            assertEquals(List.of("childField", "parentField"), names, "子类字段列表应按子类到父类的顺序包含两个字段");
+        }
+
+        @Test
+        @DisplayName("Object 类返回空列表")
+        void objectClassHasNoFields() {
+            assertTrue(ReflectUtil.getFieldList(Object.class).isEmpty(), "Object 类没有字段，应返回空列表");
+            assertTrue(ReflectUtil.getFieldList(RootModel.class).isEmpty(), "RootModel 自身没有实例字段，应返回空列表");
+        }
+
+        @Test
+        @DisplayName("数组类的字段列表为空")
+        void arrayClassHasNoFields() {
+            assertTrue(ReflectUtil.getFieldList(int[].class).isEmpty(), "数组类型的父类是 Object，应返回空列表");
+        }
+
+        @Test
+        @DisplayName("返回的列表不可修改")
+        void listIsUnmodifiable() {
+            List<Field> fieldList = ReflectUtil.getFieldList(DemoModel.class);
+            assertThrows(UnsupportedOperationException.class, () -> fieldList.add(null),
+                    "getFieldList 返回的列表是 unmodifiable，add 应抛 UnsupportedOperationException");
+        }
+
+        @Test
+        @DisplayName("同一类多次调用返回缓存的同一实例")
+        void listIsCached() {
+            assertSame(ReflectUtil.getFieldList(DemoModel.class), ReflectUtil.getFieldList(DemoModel.class),
+                    "同一 Class 应命中缓存，返回同一个 List 实例");
+        }
+
+        @Test
+        @DisplayName("传入 null 抛 ServiceException")
+        void nullClassThrows() {
+            ServiceException exception = assertThrows(ServiceException.class, () -> ReflectUtil.getFieldList(null),
+                    "getFieldList(null) 应抛出 ServiceException");
+            assertEquals("无法获取 null 的字段列表", exception.getMessage(), "null 字段列表异常信息应为固定文案");
+        }
+
+        @Test
+        @DisplayName("基本类型与接口不再抛空指针（已处理 getSuperClass() 为 null 的场景）")
+        void primitiveAndInterfaceReturnEmpty() {
+            assertDoesNotThrow(() -> ReflectUtil.getFieldList(int.class),
+                    "基本类型没有父类，getFieldList 不应抛空指针");
+            assertEquals(0, ReflectUtil.getFieldList(int.class).size(), "基本类型没有实例字段，应返回空列表");
+            assertDoesNotThrow(() -> ReflectUtil.getFieldList(List.class),
+                    "接口没有父类，getFieldList 不应抛空指针");
+            assertEquals(0, ReflectUtil.getFieldList(List.class).size(), "接口没有实例字段，应返回空列表");
+        }
+
+        @Test
+        @DisplayName("内部类的编译器生成字段 this$0 会被跳过")
+        void syntheticFieldsAreSkipped() {
+            List<String> names = ReflectUtil.getFieldList(InnerHolder.class).stream()
+                    .map(Field::getName).toList();
+            assertFalse(names.contains("this$0"), "编译器生成的内部类引用字段不应出现在字段列表中：" + names);
+        }
+    }
+
+    @Nested
+    @DisplayName("getDeclaredFields 声明字段")
+    class GetDeclaredFieldsTest {
+
+        @Test
+        @DisplayName("只返回本类声明的字段")
+        void onlyDeclaredFields() {
+            Field[] fields = ReflectUtil.getDeclaredFields(FieldHolder.class);
+            // 注意：Class#getDeclaredFields 不保证字段顺序，故按集合比较
+            Set<String> names = java.util.Arrays.stream(fields).map(Field::getName)
+                    .collect(Collectors.toSet());
+            assertEquals(Set.of("CONST", "stat", "temp", "mutable", "hidden", "finalField", "URL", "a"), names,
+                    "getDeclaredFields 应返回本类声明的全部字段，包含 static 与 transient");
+        }
+
+        @Test
+        @DisplayName("不包含父类字段")
+        void excludesSuperClassFields() {
+            List<String> names = java.util.Arrays.stream(ReflectUtil.getDeclaredFields(Child.class))
+                    .map(Field::getName).toList();
+            assertEquals(List.of("childField"), names, "getDeclaredFields 不应包含父类字段");
+        }
+
+        @Test
+        @DisplayName("Object 类返回空数组")
+        void objectClassHasNoDeclaredFields() {
+            assertEquals(0, ReflectUtil.getDeclaredFields(Object.class).length, "Object 没有声明字段，应返回空数组");
+        }
+
+        @Test
+        @DisplayName("同一类多次调用返回缓存的同一数组")
+        void fieldsAreCached() {
+            assertSame(ReflectUtil.getDeclaredFields(DemoModel.class), ReflectUtil.getDeclaredFields(DemoModel.class),
+                    "同一 Class 应命中缓存，返回同一个数组实例");
+        }
+
+        @Test
+        @DisplayName("传入 null 抛运行时异常（源码未做判空）")
+        void nullClassThrows() {
+            // 与 isTheRootClass 的 null 用例同理，IDE 插桩会把 NPE 换成 IAE
+            assertThrows(RuntimeException.class, () -> ReflectUtil.getDeclaredFields(null),
+                    "getDeclaredFields(null) 源码未做判空，应抛出运行时异常");
+        }
+
+        @Test
+        @DisplayName("缓存以 Class 为键，同名类不会被串号")
+        void cacheIsKeyedByClassNotName() throws Exception {
+            // 回归 P1-4：缓存 key 曾是 clazz.getName()，两个同名但由不同 ClassLoader
+            // 加载的类会互相命中对方的 Field[]，反射读到的是错误的类
+            String className = "cn.hamm.airpower.core.fixture.SameNameProbe";
+
+            // 从已加载类的 CodeSource 取字节码位置，避免依赖 surefire 的工作目录
+            URL bytecodeUrl = SameNameProbe.class.getProtectionDomain()
+                    .getCodeSource().getLocation();
+            assertNotNull(bytecodeUrl, "无法定位测试类字节码目录");
+
+            // 用一个全新的 ClassLoader 加载同名类，模拟不同部署单元的同名类
+            try (URLClassLoader isolated = new URLClassLoader(
+                    new URL[]{bytecodeUrl}, ClassLoader.getPlatformClassLoader())) {
+                Class<?> sameName = isolated.loadClass(className);
+                assertEquals(className, sameName.getName(), "两个类的全限定名应完全相同");
+                assertNotSame(SameNameProbe.class, sameName,
+                        "两次加载应得到不同的 Class 对象");
+
+                // 分别取字段列表：若缓存以类名为键，第二次会命中第一次的结果
+                Field[] first = ReflectUtil.getDeclaredFields(SameNameProbe.class);
+                Field[] second = ReflectUtil.getDeclaredFields(sameName);
+
+                assertNotSame(first, second,
+                        "同名但不同 Class 的字段数组不应是同一个实例");
+                assertTrue(Arrays.stream(second).anyMatch(f -> "probeField".equals(f.getName())),
+                        "隔离加载的类应能正确取到自身字段：" + Arrays.toString(second));
+                assertEquals(first.length, second.length,
+                        "两个同名类的字段数量应一致");
             }
         }
-        Field field = SingleCharModel.class.getDeclaredField("x");
-        String getter = ReflectUtil.getFieldGetter(field);
-        assertEquals("getX", getter);
     }
 
-    // ==================== getFieldValue / setFieldValue 方法测试 ====================
+    @Nested
+    @DisplayName("getLambdaFunctionName 解析 Lambda 方法名")
+    class GetLambdaFunctionNameTest {
 
-    @Test
-    void testGetFieldValue() throws NoSuchFieldException {
-        TestModel model = new TestModel();
-        model.setId(123L);
-
-        Field field = TestModel.class.getDeclaredField("id");
-        Object value = ReflectUtil.getFieldValue(model, field);
-        assertEquals(123L, value);
-    }
-
-    @Test
-    void testGetFieldValueWithNullObject() throws NoSuchFieldException {
-        // getFieldValue 传入 null 对象会抛出 NullPointerException
-        Field field = TestModel.class.getDeclaredField("id");
-        assertThrows(NullPointerException.class, () ->
-            ReflectUtil.getFieldValue(null, field)
-        );
-    }
-
-    @Test
-    void testSetFieldValue() throws NoSuchFieldException {
-        TestModel model = new TestModel();
-        Field field = TestModel.class.getDeclaredField("username");
-
-        ReflectUtil.setFieldValue(model, field, "testUser");
-        assertEquals("testUser", model.getUsername());
-    }
-
-    @Test
-    void testSetFieldValueWithNull() throws NoSuchFieldException {
-        TestModel model = new TestModel();
-        model.setUsername("original");
-
-        Field field = TestModel.class.getDeclaredField("username");
-        ReflectUtil.setFieldValue(model, field, null);
-        assertNull(model.getUsername());
-    }
-
-    // ==================== clearFieldValue 方法测试 ====================
-
-    @Test
-    void testClearFieldValue() throws NoSuchFieldException {
-        TestModel model = new TestModel();
-        model.setAge(25);
-
-        Field field = TestModel.class.getDeclaredField("age");
-        ReflectUtil.clearFieldValue(model, field);
-        assertNull(model.getAge());
-    }
-
-    // ==================== newInstance 方法测试 ====================
-
-    @Test
-    void testNewInstance() {
-        TestModel instance = ReflectUtil.newInstance(TestModel.class);
-        assertNotNull(instance);
-        assertTrue(instance instanceof TestModel);
-    }
-
-    @Test
-    void testNewInstanceWithNoDefaultConstructor() {
-        class NoDefaultConstructor extends RootModel<NoDefaultConstructor> {
-            public NoDefaultConstructor(String arg) {
-            }
-        }
-        assertThrows(ServiceException.class, () ->
-            ReflectUtil.newInstance(NoDefaultConstructor.class)
-        );
-    }
-
-    // ==================== isTheRootClass 方法测试 ====================
-
-    @Test
-    void testIsTheRootClass() {
-        assertTrue(ReflectUtil.isTheRootClass(Object.class));
-        assertFalse(ReflectUtil.isTheRootClass(TestModel.class));
-        assertFalse(ReflectUtil.isTheRootClass(String.class));
-    }
-
-    // ==================== getAnnotation (Class) 方法测试 ====================
-
-    @Test
-    void testGetAnnotationOnClass() {
-        @Description("测试类")
-        class AnnotatedClass {
+        @Test
+        @DisplayName("方法引用 getKey 去掉 get 前缀")
+        void keyMethodReference() {
+            IFunction<Gender, Integer> function = Gender::getKey;
+            assertEquals("Key", ReflectUtil.getLambdaFunctionName(function), "getKey 应被解析为「Key」");
         }
 
-        Description annotation = ReflectUtil.getAnnotation(Description.class, AnnotatedClass.class);
-        assertNotNull(annotation);
-        assertEquals("测试类", annotation.value());
-    }
-
-    @Test
-    void testGetAnnotationOnClassNotFound() {
-        class NotAnnotatedClass {
+        @Test
+        @DisplayName("方法引用 getLabel 去掉 get 前缀")
+        void labelMethodReference() {
+            IFunction<Gender, String> function = Gender::getLabel;
+            assertEquals("Label", ReflectUtil.getLambdaFunctionName(function), "getLabel 应被解析为「Label」");
         }
 
-        Description annotation = ReflectUtil.getAnnotation(Description.class, NotAnnotatedClass.class);
-        assertNull(annotation);
-    }
-
-    @Test
-    void testGetAnnotationOnClassInheritance() {
-        // 子类应该能获取父类的注解（递归查找）
-        Description annotation = ReflectUtil.getAnnotation(Description.class, ChildModel.class);
-        // ChildModel 本身没有 @Description，但它的父类 TestModel 也没有 @Description
-        // 所以这里应该是 null
-        assertNull(annotation);
-    }
-
-    // ==================== getAnnotation (Field) 方法测试 ====================
-
-    @Test
-    void testGetAnnotationOnField() throws NoSuchFieldException {
-        Field field = TestModel.class.getDeclaredField("username");
-        Description annotation = ReflectUtil.getAnnotation(Description.class, field);
-        assertNotNull(annotation);
-        assertEquals("用户名", annotation.value());
-    }
-
-    @Test
-    void testGetAnnotationOnFieldNotFound() throws NoSuchFieldException {
-        Field field = TestModel.class.getDeclaredField("noDescriptionField");
-        Description annotation = ReflectUtil.getAnnotation(Description.class, field);
-        assertNull(annotation);
-    }
-
-    // ==================== getAnnotation (Method) 方法测试 ====================
-
-    @Test
-    void testGetAnnotationOnMethod() throws NoSuchMethodException {
-        Method method = MethodAnnotationClass.class.getMethod("annotatedMethod");
-        Description annotation = ReflectUtil.getAnnotation(Description.class, method);
-        assertNotNull(annotation);
-        assertEquals("测试方法", annotation.value());
-    }
-
-    @Test
-    void testGetAnnotationOnMethodNotFound() throws NoSuchMethodException {
-        Method method = MethodAnnotationClass.class.getMethod("noAnnotationMethod");
-        Description annotation = ReflectUtil.getAnnotation(Description.class, method);
-        assertNull(annotation);
-    }
-
-    // ==================== getDescription 方法测试 ====================
-
-    @Test
-    void testGetDescriptionForClass() {
-        @Description("测试描述类")
-        class DescribedClass {
+        @Test
+        @DisplayName("不含 get 的方法名保持原样")
+        void methodWithoutGetPrefix() {
+            IFunction<String, Integer> function = String::length;
+            assertEquals("length", ReflectUtil.getLambdaFunctionName(function), "不含 get 的方法名应原样返回");
         }
 
-        String description = ReflectUtil.getDescription(DescribedClass.class);
-        assertEquals("测试描述类", description);
-    }
-
-    @Test
-    void testGetDescriptionForClassWithoutAnnotation() {
-        class NoDescribedClass {
+        @Test
+        @DisplayName("普通 Lambda 表达式返回编译器生成的方法名")
+        void plainLambda() {
+            IFunction<Gender, Integer> function = gender -> gender.getKey();
+            assertTrue(ReflectUtil.getLambdaFunctionName(function).startsWith("lambda$"),
+                    "普通 Lambda 应返回编译器生成的 lambda$ 前缀方法名");
         }
 
-        String description = ReflectUtil.getDescription(NoDescribedClass.class);
-        assertEquals("NoDescribedClass", description);
+        @Test
+        @DisplayName("只去掉方法名开头的 get 前缀")
+        void removesOnlyGetPrefix() {
+            IFunction<Targeter, String> function = Targeter::getTarget;
+            assertEquals("Target", ReflectUtil.getLambdaFunctionName(function),
+                    "getTarget 只应去掉开头的 get 前缀，剩余的 Target 应被完整保留");
+        }
+
+        @Test
+        @DisplayName("去掉 get 前缀后剩余部分仍含 get 时予以保留")
+        void keepsGetAfterPrefix() {
+            IFunction<Targeter, String> function = Targeter::getForgetLabel;
+            assertEquals("ForgetLabel", ReflectUtil.getLambdaFunctionName(function),
+                    "getForgetLabel 去掉前缀后应得到 ForgetLabel，中间位置的 get 不应被删除");
+        }
+
+        @Test
+        @DisplayName("非 Lambda 的匿名内部类实现抛 ServiceException")
+        void anonymousClassThrows() {
+            IFunction<Gender, Integer> function = new IFunction<>() {
+                @Override
+                public Integer apply(Gender gender) {
+                    return gender.getKey();
+                }
+            };
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> ReflectUtil.getLambdaFunctionName(function),
+                    "匿名内部类没有 writeReplace 方法，应抛出 ServiceException");
+            assertTrue(exception.getMessage().startsWith("反射获取 Lambda 方法名失败，"),
+                    "Lambda 解析失败异常信息应以「反射获取 Lambda 方法名失败，」开头，实际为 " + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("传入 null 抛运行时异常")
+        void nullLambdaThrows() {
+            // 与 nullClassThrows 同理：IDE 开启 @NotNull 运行时断言时，
+            // null 会在进入方法体前被拦下抛 IllegalArgumentException，
+            // 未开启插桩时则在反射调用处抛 ServiceException。两者都属于"未做判空"
+            assertThrows(RuntimeException.class,
+                    () -> ReflectUtil.getLambdaFunctionName(null),
+                    "getLambdaFunctionName(null) 源码未做判空，应抛出运行时异常");
+        }
     }
 
-    @Test
-    void testGetDescriptionForField() throws NoSuchFieldException {
-        Field field = TestModel.class.getDeclaredField("username");
-        String description = ReflectUtil.getDescription(field);
-        assertEquals("用户名", description);
+    @Nested
+    @DisplayName("getField 递归查找字段")
+    class GetFieldTest {
+
+        @Test
+        @DisplayName("本类字段可直接找到")
+        void findOwnField() {
+            Field field = ReflectUtil.getField("mutable", FieldHolder.class);
+            assertNotNull(field, "本类声明的字段应能直接找到");
+            assertEquals("mutable", field.getName(), "找到的字段名应为 mutable");
+        }
+
+        @Test
+        @DisplayName("父类字段可沿继承链找到")
+        void findFieldFromSuperClass() {
+            Field field = ReflectUtil.getField("parentField", Child.class);
+            assertNotNull(field, "子类中未声明时应能沿继承链找到父类字段");
+            assertEquals(Parent.class, field.getDeclaringClass(), "找到的字段应声明在父类上");
+        }
+
+        @Test
+        @DisplayName("字段名不存在时返回 null")
+        void fieldNotFound() {
+            assertNull(ReflectUtil.getField("notExistField", FieldHolder.class), "不存在的字段名应返回 null");
+            assertNull(ReflectUtil.getField("parentField", FieldHolder.class), "无关的类中不存在的字段应返回 null");
+        }
+
+        @Test
+        @DisplayName("类为 null 时返回 null")
+        void nullClassReturnsNull() {
+            assertNull(ReflectUtil.getField("mutable", null), "类为 null 时应直接返回 null");
+        }
+
+        @Test
+        @DisplayName("类为 Object 时返回 null")
+        void objectClassReturnsNull() {
+            assertNull(ReflectUtil.getField("mutable", Object.class), "Object 是根类，应直接返回 null");
+        }
+
+        @Test
+        @DisplayName("基本类型作为起点时安全返回 null")
+        void primitiveClassReturnsNull() {
+            assertNull(ReflectUtil.getField("value", int.class), "基本类型没有父类，递归时应安全返回 null");
+        }
     }
 
-    @Test
-    void testGetDescriptionForFieldWithoutAnnotation() throws NoSuchFieldException {
-        Field field = TestModel.class.getDeclaredField("noDescriptionField");
-        String description = ReflectUtil.getDescription(field);
-        assertEquals("noDescriptionField", description);
-    }
+    @Nested
+    @DisplayName("getDeclaredFields 与 getFieldList 的配合")
+    class CombinationTest {
 
-    @Test
-    void testGetDescriptionForMethod() throws NoSuchMethodException {
-        Method method = MethodAnnotationClass.class.getMethod("annotatedMethod");
-        String description = ReflectUtil.getDescription(method);
-        assertEquals("测试方法", description);
-    }
-
-    @Test
-    void testGetDescriptionForMethodWithoutAnnotation() throws NoSuchMethodException {
-        Method method = MethodAnnotationClass.class.getMethod("noAnnotationMethod");
-        String description = ReflectUtil.getDescription(method);
-        assertEquals("noAnnotationMethod", description);
-    }
-
-    @Test
-    void testGetDescriptionForParameter() throws NoSuchMethodException {
-        class ParameterClass {
-            public void method(@Description("参数描述") String param) {
+        @Test
+        @DisplayName("getFieldList 中的字段均可被 Modifier 正确判断")
+        void modifiersOfFieldList() {
+            for (Field field : ReflectUtil.getFieldList(FieldHolder.class)) {
+                assertFalse(Modifier.isStatic(field.getModifiers()),
+                        "getFieldList 中不应出现静态字段：" + field.getName());
+                assertFalse(Modifier.isTransient(field.getModifiers()),
+                        "getFieldList 中不应出现瞬态字段：" + field.getName());
             }
         }
 
-        Method method = ParameterClass.class.getMethod("method", String.class);
-        Parameter parameter = method.getParameters()[0];
-        String description = ReflectUtil.getDescription(parameter);
-        assertEquals("参数描述", description);
+        @Test
+        @DisplayName("getField 找到的字段与 getFieldList 中的字段一致")
+        void getFieldMatchesFieldList() {
+            Field found = ReflectUtil.getField("childField", Child.class);
+            assertNotNull(found, "getField 应能找到本类字段");
+            assertTrue(ReflectUtil.getFieldList(Child.class).contains(found),
+                    "getField 找到的字段应与 getFieldList 缓存中的字段相等");
+        }
     }
 
-    @Test
-    void testGetDescriptionForParameterWithoutAnnotation() throws NoSuchMethodException {
-        class ParameterClass {
-            public void method(String param) {
+    /**
+     * <h2>并发安全</h2>
+     *
+     * <p>回归 P0-2：{@code getFieldValue} / {@code setFieldValue} 曾在 {@code finally}
+     * 中把 {@code Field} 的 {@code accessible} 标志重置为 {@code false}。该标志是
+     * {@link Field} 的全局状态而非线程内状态，线程 A 设为 {@code true} 之后、
+     * 调用 {@code get} 之前被线程 B 的 finally 清掉，A 的读取就会抛
+     * {@code IllegalAccessException}。</p>
+     */
+    @Nested
+    @DisplayName("并发读写字段")
+    class ConcurrencyTest {
+
+        /**
+         * 并发线程数
+         */
+        private static final int THREADS = 8;
+
+        /**
+         * 每线程循环次数
+         */
+        private static final int LOOPS = 2000;
+
+        @Test
+        @DisplayName("多线程并发 getFieldValue 不应出现 IllegalAccessException")
+        @Timeout(60)
+        void concurrentGetFieldValueDoesNotFail() throws Exception {
+            DemoTree model = new DemoTree().setId(1L).setName("并发读取");
+            Field nameField = fieldOf("name");
+            Field idField = fieldOf("id");
+            Set<Throwable> errors = Collections.synchronizedSet(new HashSet<>());
+            List<Object> observed = Collections.synchronizedList(new ArrayList<>());
+
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+            try {
+                for (int i = 0; i < THREADS; i++) {
+                    pool.submit(() -> {
+                        try {
+                            start.await();
+                            for (int j = 0; j < LOOPS; j++) {
+                                observed.add(ReflectUtil.getFieldValue(model, nameField));
+                                ReflectUtil.getFieldValue(model, idField);
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                start.countDown();
+                pool.shutdown();
+                assertTrue(pool.awaitTermination(45, TimeUnit.SECONDS), "并发任务应在超时前完成");
+            } finally {
+                pool.shutdownNow();
+            }
+
+            assertTrue(errors.isEmpty(),
+                    "并发读取不应出现异常，实际捕获到：" + errors.stream().map(Throwable::getMessage).toList());
+            assertEquals(THREADS * LOOPS, observed.size(), "所有读取都应成功完成");
+            assertTrue(observed.stream().allMatch("并发读取"::equals),
+                    "并发读取的结果应全部正确，不能出现读到 null 或错值的情况");
+        }
+
+        @Test
+        @DisplayName("多线程并发 setFieldValue 与 getFieldValue 混用不应失败")
+        @Timeout(60)
+        void concurrentSetAndGetFieldValueDoNotInterfere() throws Exception {
+            // 写线程与读线程共用同一个 Field 对象，验证写路径也不再重置 accessible 标志
+            Field nameField = fieldOf("name");
+            Set<Throwable> errors = Collections.synchronizedSet(new HashSet<>());
+            int writers = THREADS / 2;
+            int readers = THREADS - writers;
+
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+            try {
+                for (int i = 0; i < writers; i++) {
+                    pool.submit(() -> {
+                        DemoTree model = new DemoTree().setId(1L);
+                        try {
+                            start.await();
+                            for (int j = 0; j < LOOPS; j++) {
+                                ReflectUtil.setFieldValue(model, nameField, "写入" + j);
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                for (int i = 0; i < readers; i++) {
+                    pool.submit(() -> {
+                        DemoTree model = new DemoTree().setId(1L).setName("读取");
+                        try {
+                            start.await();
+                            for (int j = 0; j < LOOPS; j++) {
+                                ReflectUtil.getFieldValue(model, nameField);
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                start.countDown();
+                pool.shutdown();
+                assertTrue(pool.awaitTermination(45, TimeUnit.SECONDS), "并发任务应在超时前完成");
+            } finally {
+                pool.shutdownNow();
+            }
+
+            assertTrue(errors.isEmpty(),
+                    "并发读写不应出现异常，实际捕获到：" + errors.stream().map(Throwable::getMessage).toList());
+        }
+
+        @Test
+        @DisplayName("读取后 Field 的 accessible 标志保持为 true（不再被 finally 重置）")
+        void accessibleFlagIsNotResetAfterRead() throws Exception {
+            Field nameField = fieldOf("name");
+            DemoTree model = new DemoTree().setId(1L).setName("值");
+
+            ReflectUtil.getFieldValue(model, nameField);
+
+            // getCacheFieldList 已把该字段设为可访问；若 finally 把它关掉，
+            // 每次读写都要重新触发 JDK 的访问检查，高并发下是实打实的热点
+            assertTrue(nameField.canAccess(model),
+                    "读取完成后 accessible 标志应保持为 true，不应被 finally 重置");
+        }
+
+        @Test
+        @DisplayName("多线程并发构建字段列表缓存结果一致")
+        @Timeout(30)
+        void concurrentGetFieldListIsConsistent() throws InterruptedException {
+            Set<List<String>> results = Collections.synchronizedSet(new HashSet<>());
+            Set<Throwable> errors = Collections.synchronizedSet(new HashSet<>());
+            int threads = 8;
+
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(threads);
+            try {
+                for (int i = 0; i < threads; i++) {
+                    pool.submit(() -> {
+                        try {
+                            start.await();
+                            for (int j = 0; j < 200; j++) {
+                                results.add(ReflectUtil.getFieldList(DemoModel.class).stream()
+                                        .map(Field::getName).sorted().toList());
+                            }
+                        } catch (Throwable e) {
+                            errors.add(e);
+                        }
+                    });
+                }
+                start.countDown();
+                pool.shutdown();
+                assertTrue(pool.awaitTermination(20, TimeUnit.SECONDS), "并发任务应在超时前完成");
+            } finally {
+                pool.shutdownNow();
+            }
+
+            assertTrue(errors.isEmpty(), "并发获取字段列表不应出现异常：" + errors);
+            assertEquals(1, results.size(), "同一类的字段列表在并发下应始终一致");
+        }
+    }
+
+    /**
+     * <h2>国际化无关性</h2>
+     *
+     * <p>回归多 Locale 扫描中发现的缺陷：{@link #getFieldGetter(Field)} 曾使用无
+     * {@link Locale} 的 {@code toUpperCase()}，土耳其语环境下 {@code "i"} 会变成
+     * 带点的 {@code "İ"}，把 {@code getId} 拼成 {@code getİd}，导致按 Getter 查找
+     * 注解（如 {@code @Export} / {@code @Meta}）全部失效。</p>
+     */
+    @Nested
+    @DisplayName("土耳其语环境下的行为")
+    class TurkishLocaleTest {
+
+        /**
+         * 在指定默认 Locale 下执行
+         *
+         * @param locale   目标 Locale
+         * @param consumer 待执行逻辑
+         */
+        private void withDefaultLocale(Locale locale, Runnable consumer) {
+            Locale previous = Locale.getDefault();
+            try {
+                Locale.setDefault(locale);
+                consumer.run();
+            } finally {
+                Locale.setDefault(previous);
             }
         }
 
-        Method method = ParameterClass.class.getMethod("method", String.class);
-        Parameter parameter = method.getParameters()[0];
-        String description = ReflectUtil.getDescription(parameter);
-        // 使用 -parameters 编译参数时参数名会保留，否则为 arg0
-        assertTrue(description.equals("param") || description.equals("arg0"));
-    }
+        @Test
+        @DisplayName("getFieldGetter 在土耳其语环境下仍生成 getId 而非 getİd")
+        void getFieldGetterIsTurkishSafe() {
+            Field idField = findField(DemoTree.class, "id");
+            Field mobileField = findField(DemoModel.class, "mobile");
 
-    // ==================== getFieldList 方法测试 ====================
+            withDefaultLocale(new Locale("tr", "TR"), () -> {
+                assertEquals("getId", ReflectUtil.getFieldGetter(idField),
+                        "土耳其语环境下 getId 不能被拼成 getİd");
+                assertEquals("getMobile", ReflectUtil.getFieldGetter(mobileField),
+                        "土耳其语环境下 getMobile 不能被拼成 getMobİle");
+            });
+        }
 
-    @Test
-    void testGetFieldList() {
-        List<Field> fields = ReflectUtil.getFieldList(TestModel.class);
-        assertNotNull(fields);
-        assertFalse(fields.isEmpty());
-
-        // 应该包含 id, username, age, noDescriptionField
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("id")));
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("username")));
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("age")));
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("noDescriptionField")));
-    }
-
-    @Test
-    void testGetFieldListWithInheritance() {
-        List<Field> fields = ReflectUtil.getFieldList(ChildModel.class);
-        assertNotNull(fields);
-
-        // 应该包含父类和子类的字段
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("id")));
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("childField")));
-    }
-
-    @Test
-    void testGetFieldListWithNull() {
-        ServiceException exception = assertThrows(ServiceException.class, () ->
-            ReflectUtil.getFieldList(null)
-        );
-        assertEquals("无法获取 null 的字段列表", exception.getMessage());
-    }
-
-    @Test
-    void testGetFieldListCache() {
-        // 测试缓存机制 - 两次获取应该是同一个列表
-        List<Field> fields1 = ReflectUtil.getFieldList(TestModel.class);
-        List<Field> fields2 = ReflectUtil.getFieldList(TestModel.class);
-        assertSame(fields1, fields2);
-    }
-
-    // ==================== getDeclaredFields 方法测试 ====================
-
-    @Test
-    void testGetDeclaredFields() {
-        Field[] fields = ReflectUtil.getDeclaredFields(TestModel.class);
-        assertNotNull(fields);
-        assertTrue(fields.length > 0);
-    }
-
-    @Test
-    void testGetDeclaredFieldsCache() {
-        Field[] fields1 = ReflectUtil.getDeclaredFields(TestModel.class);
-        Field[] fields2 = ReflectUtil.getDeclaredFields(TestModel.class);
-        assertSame(fields1, fields2);
-    }
-
-    // ==================== getLambdaFunctionName 方法测试 ====================
-
-    @Test
-    void testGetLambdaFunctionName() {
-        IFunction<TestModel, Long> lambda = TestModel::getId;
-        String functionName = ReflectUtil.getLambdaFunctionName(lambda);
-        assertEquals("Id", functionName);
-    }
-
-    @Test
-    void testGetLambdaFunctionNameWithBoolean() {
-        class BooleanModel {
-            private boolean active;
-
-            @SuppressWarnings("unused")
-            public boolean isActive() {
-                return active;
+        /**
+         * 查找字段并包装查找失败
+         *
+         * @param clazz 类
+         * @param name  字段名
+         * @return 字段
+         */
+        private static Field findField(Class<?> clazz, String name) {
+            try {
+                return clazz.getDeclaredField(name);
+            } catch (NoSuchFieldException e) {
+                throw new IllegalStateException("测试夹具缺少字段 " + clazz.getSimpleName() + "." + name, e);
             }
         }
 
-        IFunction<BooleanModel, Boolean> lambda = BooleanModel::isActive;
-        String functionName = ReflectUtil.getLambdaFunctionName(lambda);
-        // isActive 的 SerializedLambda 方法名是 isActive，替换 get 后变为 isActive（因为没有 get 前缀）
-        assertEquals("isActive", functionName);
-    }
-
-    // ==================== getField 方法测试 ====================
-
-    @Test
-    void testGetField() {
-        Field field = ReflectUtil.getField("username", TestModel.class);
-        assertNotNull(field);
-        assertEquals("username", field.getName());
-    }
-
-    @Test
-    void testGetFieldInheritance() {
-        Field field = ReflectUtil.getField("id", ChildModel.class);
-        assertNotNull(field);
-        assertEquals("id", field.getName());
-        // id 字段在 TestModel（父类）中定义
-        assertEquals(TestModel.class, field.getDeclaringClass());
-    }
-
-    @Test
-    void testGetFieldNotFound() {
-        Field field = ReflectUtil.getField("nonExistentField", TestModel.class);
-        assertNull(field);
-    }
-
-    @Test
-    void testGetFieldWithNullClass() {
-        Field field = ReflectUtil.getField("username", null);
-        assertNull(field);
-    }
-
-    @Test
-    void testGetFieldWithObjectClass() {
-        Field field = ReflectUtil.getField("username", Object.class);
-        assertNull(field);
-    }
-
-    // ==================== 边界条件测试 ====================
-
-    @Test
-    void testGetFieldValueWithPrivateField() throws NoSuchFieldException {
-        TestModel model = new TestModel();
-        model.setUsername("privateValue");
-
-        Field field = TestModel.class.getDeclaredField("username");
-        Object value = ReflectUtil.getFieldValue(model, field);
-        assertEquals("privateValue", value);
-    }
-
-    @Test
-    void testSetFieldValueWithPrivateField() throws NoSuchFieldException {
-        TestModel model = new TestModel();
-        Field field = TestModel.class.getDeclaredField("username");
-
-        ReflectUtil.setFieldValue(model, field, "newValue");
-        assertEquals("newValue", model.getUsername());
-    }
-
-    @Test
-    void testGetFieldListExcludesStaticAndTransient() {
-        class ModelWithStaticAndTransient {
-            private String normalField;
-            private static String staticField;
-            private transient String transientField;
+        @Test
+        @DisplayName("按 Getter 查找注解在土耳其语环境下仍然有效")
+        void getAnnotationByGetterWorksInTurkishLocale() throws Exception {
+            // @Export 标在字段上，getExportFieldList 会先按 Getter 名找注解再回退到字段。
+            // Getter 名一旦被土耳其语规则污染，这条查找链就断了
+            withDefaultLocale(new Locale("tr", "TR"), () -> {
+                assertNotNull(CollectionUtil.getExportFieldList(
+                                cn.hamm.airpower.core.fixture.ExportDemoModel.class).stream()
+                                .filter(field -> "id".equals(field.getName()))
+                                .findFirst().orElse(null),
+                        "土耳其语环境下 id 列仍应被识别为导出列");
+            });
         }
 
-        List<Field> fields = ReflectUtil.getFieldList(ModelWithStaticAndTransient.class);
-        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("normalField")));
-        assertFalse(fields.stream().anyMatch(f -> f.getName().equals("staticField")));
-        assertFalse(fields.stream().anyMatch(f -> f.getName().equals("transientField")));
+        @Test
+        @DisplayName("getFieldList 在土耳其语环境下字段名保持原样")
+        void getFieldListIsTurkishSafe() {
+            withDefaultLocale(new Locale("tr", "TR"), () -> {
+                List<String> names = ReflectUtil.getFieldList(DemoModel.class).stream()
+                        .map(Field::getName).toList();
+                assertTrue(names.contains("id"), "字段名不应被 Locale 影响：" + names);
+                assertTrue(names.contains("mobile"), "字段名不应被 Locale 影响：" + names);
+            });
+        }
+    }
+
+    @Nested
+    @DisplayName("getAnnotation 的入参健壮性（00140）")
+    class GetAnnotationArgumentTest {
+
+        @Test
+        @DisplayName("传接口时不得 NPE：接口的 getSuperclass() 恒为 null")
+        void interfaceArgumentDoesNotThrow() {
+            // 递归的终止条件只判断了 Object.class，而接口没有 superclass，
+            // 所以传任何接口进来第二轮就 NPE
+            assertDoesNotThrow(() -> ReflectUtil.getAnnotation(Description.class, Runnable.class),
+                    "接口的 getSuperclass() 恒为 null，递归必须以它为终止条件之一");
+            assertNull(ReflectUtil.getAnnotation(Description.class, Runnable.class),
+                    "接口上没有 @Description，应返回 null 而不是抛异常");
+        }
+
+        @Test
+        @DisplayName("传 null 类时应返回 null 而不是 NPE")
+        void nullClassReturnsNull() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, (Class<?>) null),
+                    "clazz 为 null 时应返回 null（需要显式转型：null 字面量在两个重载间有歧义）");
+        }
+
+        @Test
+        @DisplayName("传 null 注解类时应返回 null")
+        void nullAnnotationReturnsNull() {
+            assertNull(ReflectUtil.getAnnotation(null, DemoModel.class), "annotationClass 为 null 时应返回 null");
+        }
+
+        @Test
+        @DisplayName("正常场景仍能找到注解")
+        void stillFindsAnnotation() throws NoSuchFieldException {
+            Field field = DemoModel.class.getDeclaredField("id");
+            assertNotNull(ReflectUtil.getAnnotation(Description.class, field),
+                    "正常字段上的 @Description 必须仍能找到");
+        }
+    }
+
+    @Nested
+    @DisplayName("接口链查找")
+    class InterfaceChainTest {
+
+        @Test
+        @DisplayName("实现类未标注时能回溯到接口上的注解")
+        void findsAnnotationOnInterface() throws NoSuchMethodException {
+            Method method = AnnotatedImpl.class.getMethod("getName");
+            Description description = ReflectUtil.getAnnotation(Description.class, method);
+            assertNotNull(description, "实现类未重复标注，应回溯到接口上的 @Description");
+            assertEquals("接口上的中文描述", description.value(), "应取到接口上的文案");
+        }
+
+        @Test
+        @DisplayName("穿过子类与实现类两层链路")
+        void findsThroughTwoLevels() throws NoSuchMethodException {
+            Method method = InheritedImpl.class.getMethod("getName");
+            Description description = ReflectUtil.getAnnotation(Description.class, method);
+            assertNotNull(description, "应能穿过 InheritedImpl → AnnotatedImpl → 接口三层");
+            assertEquals("接口上的中文描述", description.value(), "应取到接口上的文案");
+        }
+
+        @Test
+        @DisplayName("直接传接口也能找到该方法上的注解")
+        void findsOnInterfaceItself() {
+            Description description = ReflectUtil.getAnnotation(Description.class,
+                    AnnotatedInterface.class, "getName", new Class<?>[0]);
+            assertNotNull(description, "直接传接口类应能取到其方法上的 @Description");
+            assertEquals("接口上的中文描述", description.value(), "应取到接口上的文案");
+        }
+
+        @Test
+        @DisplayName("接口上没有该注解时返回 null 而非 NPE")
+        void returnsNullWhenInterfaceHasNone() throws NoSuchMethodException {
+            Method method = DemoModel.class.getMethod("getName");
+            assertNull(ReflectUtil.getAnnotation(Description.class, method),
+                    "接口链上都没有该注解时应返回 null");
+        }
+
+        @Test
+        @DisplayName("接口的 getSuperclass() 为 null 也不应 NPE")
+        void interfaceSuperclassIsNull() {
+            // 接口没有 superclass，递归必须在此短路而不是继续往上找
+            assertDoesNotThrow(() -> ReflectUtil.getAnnotation(Description.class,
+                            AnnotatedInterface.class, "getName", new Class<?>[0]),
+                    "接口的 getSuperclass() 恒为 null，递归应在此短路");
+        }
     }
 }

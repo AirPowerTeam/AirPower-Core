@@ -2,7 +2,6 @@ package cn.hamm.airpower.core.annotation;
 
 import cn.hamm.airpower.core.RootModel;
 
-import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
@@ -17,7 +16,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  */
 @Target(METHOD)
 @Retention(RUNTIME)
-@Inherited
 public @interface ExposeAll {
+    /**
+     * 需要整体暴露的类
+     */
     Class<? extends RootModel<?>>[] value();
 }

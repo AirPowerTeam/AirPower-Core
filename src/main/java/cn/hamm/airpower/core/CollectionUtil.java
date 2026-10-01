@@ -1,7 +1,9 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.annotation.Description;
 import cn.hamm.airpower.core.annotation.Dictionary;
 import cn.hamm.airpower.core.annotation.Export;
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.interfaces.IDictionary;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -11,19 +13,19 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jetbrains.annotations.UnmodifiableView;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
+import java.io.*;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 /**
  * <h1>内置的集合工具类</h1>
  *
  * @author Hamm.cn
+ * @apiNote 主要负责 CSV 导出：列由 {@link Export} 注解决定，列值转换失败会回退为
+ * 原始文本，不中断整表导出
  */
 @Slf4j
 public class CollectionUtil {
@@ -38,13 +40,43 @@ public class CollectionUtil {
     public static final String CSV_ROW_DELIMITER = "\n";
 
     /**
+     * UTF-8 BOM
+     *
+     * @apiNote Excel / WPS 在 Windows 上打开无 BOM 的 UTF-8 CSV 时不会用 UTF-8 解码，而是退回
+     * 系统 ANSI 代码页，简体中文环境下整表中文乱码。以 {@code \uFEFF} 形式拼在内容最前，
+     * 经 {@code getBytes(UTF_8)} 之后就是 {@code EF BB BF} 三个字节
+     */
+    public static final String UTF8_BOM = "\uFEFF";
+
+    /**
      * CSV 缩进符号
      */
     private static final String INDENT = "\t";
+
+    /**
+     * CSV 公式注入防护前缀
+     */
+    private static final String CSV_FORMULA_GUARD = "'";
+
+    /**
+     * 空值占位符
+     */
+    private static final String EMPTY_VALUE_PLACEHOLDER = "-";
+
+    /**
+     * 会被表格软件当作公式起始的字符
+     */
+    private static final String FORMULA_PREFIXES = "=+-@";
+
+    /**
+     * CSV 流式写出的缓冲大小
+     */
+    private static final int WRITE_BUFFER_SIZE = 64 * 1024;
+
     /**
      * 导出字段缓存
      */
-    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 禁止外部实例化
@@ -62,10 +94,31 @@ public class CollectionUtil {
      * @return 处理后的集合
      */
     public static @NotNull <T> Collection<T> getCollectWithoutNull(Collection<T> list, Class<?> fieldClass) {
-        if (Objects.equals(Set.class, fieldClass)) {
-            return Objects.isNull(list) ? new HashSet<>() : list;
+        if (Objects.isNull(list) || list.isEmpty()) {
+            return newCollection(fieldClass);
         }
-        return Objects.isNull(list) ? new ArrayList<>() : list;
+        // 必须新建集合：直接返回原集合会让 null 元素原样保留，与方法名承诺不符
+        Collection<T> result = newCollection(fieldClass);
+        for (T item : list) {
+            if (Objects.nonNull(item)) {
+                result.add(item);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 按声明类型创建空集合
+     *
+     * @param fieldClass 数据类型
+     * @param <T>        数据类型
+     * @return 空集合
+     */
+    private static <T> @NotNull Collection<T> newCollection(Class<?> fieldClass) {
+        // 必须用 isAssignableFrom：调用方传的是运行时实际类（data.getClass()），
+        // HashSet / TreeSet / PersistentSet 都不等于 Set.class
+        return null != fieldClass && Set.class.isAssignableFrom(fieldClass)
+                ? new HashSet<>() : new ArrayList<>();
     }
 
     /**
@@ -74,28 +127,76 @@ public class CollectionUtil {
      * @param list      集合
      * @param itemClass 元素的类名
      * @param <M>       元素类型
-     * @return InputStream
+     * @return CSV 文件流
+     * @apiNote 首行是表头，取自字段的 {@link Description}。内容前置 {@link #UTF8_BOM}，
+     * 保证表格软件按 UTF-8 解码
      */
     @Contract("_, _ -> new")
     public static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(List<M> list, Class<M> itemClass) {
-        return toCsvInputStream(itemClass, (fieldList) -> getCsvValueList(list, fieldList));
+        List<Field> fieldList = getExportFieldList(itemClass);
+        List<String> rowList = getCsvHeaderList(fieldList);
+        rowList.addAll(getCsvValueList(list, fieldList));
+        // 预估总长直接建 StringBuilder：避免 String.join 的结果再被 BOM 拼接复制一遍
+        int total = UTF8_BOM.length();
+        for (int i = 0; i < rowList.size(); i++) {
+            total += rowList.get(i).length() + (i > 0 ? CSV_ROW_DELIMITER.length() : 0);
+        }
+        StringBuilder csv = new StringBuilder(total);
+        csv.append(UTF8_BOM);
+        for (int i = 0; i < rowList.size(); i++) {
+            if (i > 0) {
+                csv.append(CSV_ROW_DELIMITER);
+            }
+            csv.append(rowList.get(i));
+        }
+        return new ByteArrayInputStream(csv.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
-     * 将集合转换为 CSV 文件流
+     * 逐行写出 CSV
      *
-     * @param itemClass         元素的类名
-     * @param valueListFunction 列数据列表函数
-     * @param <M>               元素类型
-     * @return InputStream
+     * @param list      集合
+     * @param itemClass 元素的类名
+     * @param out       输出流，方法内部<b>不会</b>关闭它
+     * @param <M>       元素类型
+     * @throws IOException 写出异常
      */
-    @Contract("_, _ -> new")
-    private static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(Class<M> itemClass, @NotNull Function<List<Field>, List<String>> valueListFunction) {
+    public static <M extends RootModel<M>> void writeCsv(
+            List<M> list, Class<M> itemClass, @NotNull OutputStream out) throws IOException {
+        if (Objects.isNull(list)) {
+            throw new ServiceException("集合不能为空");
+        }
         List<Field> fieldList = getExportFieldList(itemClass);
-        List<String> rowList = getCsvHeaderList(fieldList);
-        List<String> valueList = valueListFunction.apply(fieldList);
-        rowList.addAll(valueList);
-        return new ByteArrayInputStream(String.join(CSV_ROW_DELIMITER, rowList).getBytes());
+        // 64KB 缓冲：行数多时避免每行都直接下探到文件系统
+        Writer writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8), WRITE_BUFFER_SIZE);
+        writer.write(UTF8_BOM);
+        writer.write(String.join(CSV_COLUMN_DELIMITER, getCsvHeaderList(fieldList)));
+        for (M entity : list) {
+            if (Objects.isNull(entity)) {
+                // 与 getCsvValueList 保持一致：null 元素跳过，不让整份导出因一条脏数据失败
+                continue;
+            }
+            // 分隔符写在每行数据「之前」：表头已经占了第一行，
+            // 若用「首行不写分隔符」的写法，第一行数据会直接粘在表头后面
+            writer.write(CSV_ROW_DELIMITER);
+            writer.write(getCsvRow(entity, fieldList));
+        }
+        writer.flush();
+    }
+
+    /**
+     * 生成单条记录的 CSV 行
+     *
+     * @param entity    记录
+     * @param fieldList 列数组
+     * @return 行内容
+     */
+    private static <M extends RootModel<M>> @NotNull String getCsvRow(@NotNull M entity, @NotNull List<Field> fieldList) {
+        List<String> columnList = new ArrayList<>(fieldList.size());
+        for (Field field : fieldList) {
+            columnList.add(getCsvColumnValue(entity, field).toString());
+        }
+        return String.join(CSV_COLUMN_DELIMITER, columnList);
     }
 
     /**
@@ -106,19 +207,60 @@ public class CollectionUtil {
      * @param <M>       元素类型
      * @return 列表数据
      */
-    public static <M extends RootModel<M>> @NotNull List<String> getCsvValueList(@NotNull List<M> list, List<Field> fieldList) {
-        List<String> rowList = new ArrayList<>();
-        list.forEach(entity -> {
-            List<String> columnList = new ArrayList<>();
-            fieldList.forEach(field -> {
-                Object value = getCsvColumnValue(entity, field);
-                columnList.add(value.toString()
-                        .replace(CSV_COLUMN_DELIMITER, " ")
-                        .replace(CSV_ROW_DELIMITER, " "));
-            });
-            rowList.add(String.join(CSV_COLUMN_DELIMITER, columnList));
-        });
+    public static <M extends RootModel<M>> @NotNull List<String> getCsvValueList(List<M> list, List<Field> fieldList) {
+        if (Objects.isNull(list)) {
+            throw new ServiceException("集合不能为空");
+        }
+        List<String> rowList = new ArrayList<>(list.size());
+        for (M entity : list) {
+            if (Objects.isNull(entity)) {
+                // 集合中的 null 元素直接跳过，不让整份导出因一条脏数据失败
+                continue;
+            }
+            rowList.add(getCsvRow(entity, fieldList));
+        }
         return rowList;
+    }
+
+    /**
+     * 转义 CSV 单元格中的分隔符与换行
+     *
+     * @param cell 单元格内容
+     * @return 转义后的内容
+     * @apiNote 直接用空格替换，不加引号包裹，表格软件读取时不会出现多余引号
+     */
+    private static @NotNull String escapeCell(@NotNull String cell) {
+        // 除了列/行分隔符，还必须处理双引号与 CR：
+        // \" 是 RFC 4180 的引用字符，CR 会被部分表格软件当作换行，两者都必须处理。
+        // 双引号直接删除而非替成空格：它是语法字符，替成空格反而像原文里真有一个空格
+        return cell
+                .replace(CSV_COLUMN_DELIMITER, " ")
+                .replace("\"", "")
+                .replace("\r", " ")
+                .replace("\n", " ");
+    }
+
+    /**
+     * 防护 CSV 公式注入
+     *
+     * @param cell 单元格内容
+     * @return 加了防护前缀的内容
+     * @apiNote 以 {@code = + - @} 开头的值在 Excel / WPS 中会被当作公式执行，
+     * 恶意数据可借此触发外部链接访问或 DDE 命令执行
+     */
+    private static @NotNull String guardFormula(@NotNull String cell) {
+        if (cell.isEmpty()) {
+            return cell;
+        }
+        int i = 0;
+        // 先剥掉前导空白/控制字符再做判定，Excel 解析时同样会忽略它们
+        while (i < cell.length() && Character.isWhitespace(cell.charAt(i))) {
+            i++;
+        }
+        if (i < cell.length() && FORMULA_PREFIXES.indexOf(cell.charAt(i)) >= 0) {
+            return CSV_FORMULA_GUARD + cell;
+        }
+        return cell;
     }
 
     /**
@@ -127,10 +269,17 @@ public class CollectionUtil {
      * @param fieldList 字段列表
      * @return 列数据
      */
-    public static @NotNull List<String> getCsvHeaderList(@NotNull List<Field> fieldList) {
+    public static @NotNull List<String> getCsvHeaderList(List<Field> fieldList) {
+        if (Objects.isNull(fieldList)) {
+            throw new ServiceException("字段列表不能为空");
+        }
         List<String> rowList = new ArrayList<>();
-        // 添加表头
-        rowList.add(String.join(CSV_COLUMN_DELIMITER, fieldList.stream().map(ReflectUtil::getDescription).toList()));
+        // 表头同样做公式注入防护：当前取自 @Description（开发者可控，风险很低），
+        // 但「数据列防了、表头没防」是不一致的，将来支持动态表头就会成为注入点
+        rowList.add(String.join(CSV_COLUMN_DELIMITER, fieldList.stream()
+                .map(ReflectUtil::getDescription)
+                .map(name -> guardFormula(escapeCell(name)))
+                .toList()));
         return rowList;
     }
 
@@ -139,33 +288,49 @@ public class CollectionUtil {
      *
      * @param itemClass 类
      * @param <M>       元素类型
-     * @return 字段列表
+     * @return 字段列表（不可修改）
+     * @apiNote 结果按类缓存，同一个类重复导出不重复扫描字段
      */
     public static <M extends RootModel<M>> @Unmodifiable @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
         //noinspection unchecked
         return EXPORT_FIELD_CACHE.computeIfAbsent(itemClass, clazz -> buildExportFieldList((Class<M>) clazz));
     }
 
+    /**
+     * 扫描并排序导出字段
+     *
+     * @param itemClass 类
+     * @param <M>       元素类型
+     * @return 字段列表（不可修改）
+     * @apiNote {@code @Export} 优先取 Getter 上的，其次取字段上的；两者都没标记或
+     * 标记了 {@code remove} 的字段被排除。排序是<b>降序</b>，{@code sort} 值大的列排在前面
+     */
     private static <M extends RootModel<M>> @UnmodifiableView @NotNull List<Field> buildExportFieldList(Class<M> itemClass) {
         List<CsvField> fieldList = new ArrayList<>();
         for (Field field : ReflectUtil.getFieldList(itemClass)) {
+            // Getter 上的 @Export 优先于字段上的；
+            // 但 getter 不存在（基本类型 boolean isXxx、非 public getter 等）时
+            // 仍必须回退检查字段上的注解——否则该列会静默从导出中消失
             Export export = null;
-            // 判断 Getter 是否被标记
-            String fieldGetter = ReflectUtil.getFieldGetter(field);
-            try {
-                Method getter = itemClass.getMethod(fieldGetter);
-                export = ReflectUtil.getAnnotation(Export.class, getter);
-                if (Objects.isNull(export)) {
-                    export = ReflectUtil.getAnnotation(Export.class, field);
+            for (String candidate : ReflectUtil.candidateGetterNames(field)) {
+                try {
+                    export = ReflectUtil.getAnnotation(Export.class, itemClass.getMethod(candidate));
+                } catch (NoSuchMethodException ignored) {
+                    // 试下一个候选名
                 }
-            } catch (NoSuchMethodException ignored) {
+                if (Objects.nonNull(export)) {
+                    break;
+                }
+            }
+            if (Objects.isNull(export)) {
+                export = ReflectUtil.getAnnotation(Export.class, field);
             }
             if (Objects.isNull(export) || export.remove()) {
                 continue;
             }
             fieldList.add(new CsvField().setField(field).setSort(export.sort()));
         }
-        // sort 排序 从小到大
+        // sort 排序，数值大的列排在前面
         fieldList.sort(Comparator.comparing(CsvField::getSort).reversed());
         return fieldList.stream().map(CsvField::getField).toList();
     }
@@ -176,30 +341,39 @@ public class CollectionUtil {
      * @param model 数据
      * @param field 字段
      * @return 处理后的值
+     * @apiNote 空值统一写成 {@code -} 占位；按 {@link Export.Type} 转换失败时
+     * 回退为原始文本并告警，一列坏数据不会让整次导出失败
      */
     private static <M extends RootModel<M>> @NotNull Object getCsvColumnValue(@NotNull M model, @NotNull Field field) {
         Object value = ReflectUtil.getFieldValue(model, field);
         if (Objects.isNull(value) || !StringUtil.hasText(value.toString())) {
-            value = "-";
+            // 空值占位符由本工具生成，仍需按列类型走一遍转换以保持既有输出格式
+            value = EMPTY_VALUE_PLACEHOLDER;
         }
+        // 空值占位符由本工具生成，不需要公式注入防护
+        boolean isPlaceholder = EMPTY_VALUE_PLACEHOLDER.equals(value);
+        // 原始文本先做分隔符替换与公式防护，再进入类型转换
+        String text = isPlaceholder ? (String) value : guardFormula(escapeCell(value.toString()));
         try {
             Export export = ReflectUtil.getAnnotation(Export.class, field);
             if (Objects.isNull(export)) {
-                return value;
+                return text;
             }
             return switch (export.value()) {
-                case DATETIME -> INDENT + DateTimeUtil.format(Long.parseLong(value.toString()));
-                case TEXT -> INDENT + value;
+                case DATETIME -> INDENT + DateTimeUtil.format(Long.parseLong(text));
+                case TEXT -> INDENT + text;
                 case BOOLEAN -> (boolean) value ? "是" : "否";
                 case DICTIONARY -> {
                     Dictionary dictionary = ReflectUtil.getAnnotation(Dictionary.class, field);
                     if (Objects.isNull(dictionary)) {
-                        yield value;
+                        yield text;
                     } else {
                         IDictionary dict = DictionaryUtil.getDictionary(
-                                dictionary.value(), Integer.parseInt(value.toString())
+                                dictionary.value(), Integer.parseInt(text)
                         );
-                        yield dict.getLabel();
+                        // IDictionary.getLabel() 没有非空约定，业务枚举漏填 label 就会返回 null。
+                        // 之前直接 yield 会让调用方 toString() 时 NPE，整个导出失败
+                        yield Objects.toString(dict.getLabel(), text);
                     }
                 }
                 case NUMBER -> {
@@ -212,16 +386,17 @@ public class CollectionUtil {
                     if (value instanceof Long longValue) {
                         yield BigDecimal.valueOf(longValue).toPlainString();
                     }
-                    yield value;
+                    yield text;
                 }
             };
         } catch (Exception e) {
-            return value;
+            log.warn("导出列({})的数据处理失败，已回退为原始值, {}", field.getName(), e.getMessage());
+            return text;
         }
     }
 
     /**
-     * CSV列
+     * CSV 导出列
      */
     @Accessors(chain = true)
     @Data

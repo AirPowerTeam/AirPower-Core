@@ -1,7 +1,6 @@
 package cn.hamm.airpower.core.annotation;
 
 import java.lang.annotation.Documented;
-import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
@@ -16,7 +15,6 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  */
 @Target({FIELD, METHOD})
 @Retention(RUNTIME)
-@Inherited
 @Documented
 public @interface Export {
     /**
@@ -35,7 +33,7 @@ public @interface Export {
     boolean remove() default false;
 
     /**
-     * <h1>列数据类型</h1>
+     * <h1>导出列的数据类型</h1>
      *
      * @author Hamm.cn
      */

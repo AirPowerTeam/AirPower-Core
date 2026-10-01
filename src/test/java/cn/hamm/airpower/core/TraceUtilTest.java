@@ -1,209 +1,204 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.constant.HttpConstant;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.slf4j.MDC;
 
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * <h1>TraceUtil 单元测试</h1>
  *
+ * <p>MDC 为线程本地存储，因此所有读写断言均在同一线程内完成，异步线程场景单独通过 CountDownLatch 等待结果。</p>
+ *
  * @author Hamm.cn
  */
+@DisplayName("TraceUtil 链路追踪工具类单元测试")
 class TraceUtilTest {
 
+    /**
+     * 等待异步线程的超时时间（秒）
+     */
+    private static final long AWAIT_SECONDS = 5L;
+
     @BeforeEach
-    void setUp() {
-        // 每个测试前清除 MDC
+    @DisplayName("用例执行前清空 MDC，避免用例间互相污染")
+    void clearMdcBefore() {
         MDC.clear();
     }
 
     @AfterEach
-    void tearDown() {
-        // 每个测试后清除 MDC
+    @DisplayName("用例执行后清理 MDC")
+    void clearMdcAfter() {
         MDC.clear();
     }
 
-    // ==================== getTraceId 方法测试 ====================
+    @Nested
+    @DisplayName("setTraceId 设置 TraceID")
+    class SetTraceIdTest {
 
-    @Test
-    void testGetTraceIdWithNoTraceIdSet() {
-        // 没有设置 TraceID 时，应该返回 null
-        assertNull(TraceUtil.getTraceId());
-    }
+        @Test
+        @DisplayName("正常路径：设置指定值后可原样读取")
+        void testSetSpecifiedTraceId() {
+            TraceUtil.setTraceId("abc");
+            assertEquals("abc", TraceUtil.getTraceId(), "应原样返回写入的 TraceID");
+        }
 
-    @Test
-    void testGetTraceIdAfterSet() {
-        String traceId = "test-trace-id-123";
-        TraceUtil.setTraceId(traceId);
-        assertEquals(traceId, TraceUtil.getTraceId());
-    }
+        @Test
+        @DisplayName("正常路径：重复设置时后写值覆盖先写值")
+        void testSetOverridePreviousValue() {
+            TraceUtil.setTraceId("first");
+            TraceUtil.setTraceId("second");
+            assertEquals("second", TraceUtil.getTraceId(), "重复设置应以后一次为准");
+        }
 
-    @Test
-    void testGetTraceIdAfterReset() {
-        // 先设置一个 TraceID
-        TraceUtil.setTraceId("original-trace-id");
-        // 重置
-        TraceUtil.resetTraceId();
-        // 重置后应该有一个新的 UUID 格式的 TraceID
-        String traceId = TraceUtil.getTraceId();
-        assertNotNull(traceId);
-        assertFalse(traceId.isEmpty());
-    }
+        @Test
+        @DisplayName("空值分支：传 null 时生成新的 UUID")
+        void testSetNullGeneratesUuid() {
+            TraceUtil.setTraceId(null);
+            String traceId = TraceUtil.getTraceId();
+            assertNotNull(traceId, "传 null 时应生成 UUID 而不是置空");
+            assertDoesNotThrow(() -> UUID.fromString(traceId), "生成的 TraceID 应为合法 UUID：" + traceId);
+        }
 
-    // ==================== setTraceId 方法测试 ====================
+        @Test
+        @DisplayName("空串分支：传空串时生成新的 UUID")
+        void testSetEmptyStringGeneratesUuid() {
+            TraceUtil.setTraceId("");
+            String traceId = TraceUtil.getTraceId();
+            assertNotNull(traceId, "传空串时按 hasText 判定应生成 UUID");
+            assertDoesNotThrow(() -> UUID.fromString(traceId), "生成的 TraceID 应为合法 UUID：" + traceId);
+        }
 
-    @Test
-    void testSetTraceIdWithValidValue() {
-        String traceId = "my-trace-id";
-        TraceUtil.setTraceId(traceId);
-        assertEquals(traceId, TraceUtil.getTraceId());
-    }
+        @Test
+        @DisplayName("空白分支：传纯空白时生成新的 UUID")
+        void testSetBlankStringGeneratesUuid() {
+            TraceUtil.setTraceId("   \t ");
+            String traceId = TraceUtil.getTraceId();
+            assertNotNull(traceId, "传纯空白时按 hasText 判定应生成 UUID");
+            assertDoesNotThrow(() -> UUID.fromString(traceId), "生成的 TraceID 应为合法 UUID：" + traceId);
+        }
 
-    @Test
-    void testSetTraceIdWithEmptyString() {
-        // 传入空字符串，应该生成一个 UUID
-        TraceUtil.setTraceId("");
-        String traceId = TraceUtil.getTraceId();
-        assertNotNull(traceId);
-        assertFalse(traceId.isEmpty());
-        // 验证是 UUID 格式
-        assertDoesNotThrow(() -> UUID.fromString(traceId));
-    }
-
-    @Test
-    void testSetTraceIdWithNull() {
-        // 传入 null，应该生成一个 UUID
-        TraceUtil.setTraceId(null);
-        String traceId = TraceUtil.getTraceId();
-        assertNotNull(traceId);
-        assertFalse(traceId.isEmpty());
-        // 验证是 UUID 格式
-        assertDoesNotThrow(() -> UUID.fromString(traceId));
-    }
-
-    @Test
-    void testSetTraceIdWithWhitespaceOnly() {
-        // 传入只有空格的字符串，应该生成一个 UUID
-        TraceUtil.setTraceId("   ");
-        String traceId = TraceUtil.getTraceId();
-        assertNotNull(traceId);
-        assertFalse(traceId.isEmpty());
-        // 验证是 UUID 格式
-        assertDoesNotThrow(() -> UUID.fromString(traceId));
-    }
-
-    @Test
-    void testSetTraceIdOverwritesPreviousValue() {
-        // 先设置一个值
-        TraceUtil.setTraceId("first-trace-id");
-        assertEquals("first-trace-id", TraceUtil.getTraceId());
-
-        // 再设置一个新值，应该覆盖旧的
-        TraceUtil.setTraceId("second-trace-id");
-        assertEquals("second-trace-id", TraceUtil.getTraceId());
-    }
-
-    // ==================== resetTraceId 方法测试 ====================
-
-    @Test
-    void testResetTraceIdWhenNoTraceIdSet() {
-        // 没有设置 TraceID 时重置
-        TraceUtil.resetTraceId();
-        String traceId = TraceUtil.getTraceId();
-        assertNotNull(traceId);
-        assertFalse(traceId.isEmpty());
-    }
-
-    @Test
-    void testResetTraceIdWhenTraceIdSet() {
-        // 先设置一个值
-        TraceUtil.setTraceId("old-trace-id");
-        assertEquals("old-trace-id", TraceUtil.getTraceId());
-
-        // 重置
-        TraceUtil.resetTraceId();
-        String traceId = TraceUtil.getTraceId();
-        assertNotNull(traceId);
-        assertFalse(traceId.isEmpty());
-        // 重置后应该不是原来的值了
-        assertNotEquals("old-trace-id", traceId);
-    }
-
-    @Test
-    void testResetTraceIdGeneratesUuid() {
-        TraceUtil.resetTraceId();
-        String traceId = TraceUtil.getTraceId();
-        // 验证是有效的 UUID
-        assertDoesNotThrow(() -> UUID.fromString(traceId));
-    }
-
-    // ==================== MDC 集成测试 ====================
-
-    @Test
-    void testTraceIdStoredInMdc() {
-        String traceId = "test-mdc-trace-id";
-        TraceUtil.setTraceId(traceId);
-
-        // 直接通过 MDC 获取应该能拿到相同的值
-        String mdcValue = MDC.get(HttpConstant.Header.TRACE_ID);
-        assertEquals(traceId, mdcValue);
-    }
-
-    @Test
-    void testMultipleSetAndGetOperations() {
-        // 多次设置和获取
-        for (int i = 0; i < 10; i++) {
-            String traceId = "trace-id-" + i;
-            TraceUtil.setTraceId(traceId);
-            assertEquals(traceId, TraceUtil.getTraceId());
+        @Test
+        @DisplayName("覆盖分支：null 入参会覆盖已有的显式值")
+        void testNullOverridesSpecifiedValue() {
+            TraceUtil.setTraceId("explicit");
+            TraceUtil.setTraceId(null);
+            String traceId = TraceUtil.getTraceId();
+            assertNotEquals("explicit", traceId, "传 null 后原有显式值应被新生成的 UUID 覆盖");
         }
     }
 
-    // ==================== 边界情况测试 ====================
+    @Nested
+    @DisplayName("getTraceId 读取 TraceID")
+    class GetTraceIdTest {
 
-    @Test
-    void testSetTraceIdWithLongValue() {
-        String longTraceId = "a".repeat(1000);
-        TraceUtil.setTraceId(longTraceId);
-        assertEquals(longTraceId, TraceUtil.getTraceId());
+        @Test
+        @DisplayName("边界值：MDC 未设置时返回 null")
+        void testGetWhenNotSet() {
+            assertNull(TraceUtil.getTraceId(), "MDC 中没有该键时应返回 null");
+        }
+
+        @Test
+        @DisplayName("正常路径：读取的键为 HttpConstant.Header.TRACE_ID")
+        void testGetFromMdcWithHeaderKey() {
+            TraceUtil.setTraceId("key-check");
+            assertEquals("X-Trace-ID", HttpConstant.Header.TRACE_ID, "MDC 使用的键名应为 X-Trace-ID");
+            assertEquals("key-check", MDC.get(HttpConstant.Header.TRACE_ID), "MDC 中应存放刚写入的 TraceID");
+        }
+
+        @Test
+        @DisplayName("线程隔离：其他线程读不到本线程的 TraceID")
+        void testTraceIdIsThreadLocal() throws InterruptedException {
+            TraceUtil.setTraceId("main-thread-trace");
+            AtomicReference<String> otherThreadTraceId = new AtomicReference<>("not-null");
+            CountDownLatch latch = new CountDownLatch(1);
+            Thread thread = new Thread(() -> {
+                otherThreadTraceId.set(TraceUtil.getTraceId());
+                latch.countDown();
+            }, "trace-util-test-other");
+            thread.setDaemon(true);
+            thread.start();
+            assertTrue(latch.await(AWAIT_SECONDS, TimeUnit.SECONDS), "等待其他线程读取 TraceID 超时");
+            assertNull(otherThreadTraceId.get(), "MDC 是线程本地的，其他线程不应读到本线程的 TraceID");
+            assertEquals("main-thread-trace", TraceUtil.getTraceId(), "本线程的 TraceID 不应被其他线程影响");
+        }
     }
 
-    @Test
-    void testSetTraceIdWithSpecialCharacters() {
-        String specialTraceId = "trace-id_123.test+value=special";
-        TraceUtil.setTraceId(specialTraceId);
-        assertEquals(specialTraceId, TraceUtil.getTraceId());
+    @Nested
+    @DisplayName("resetTraceId 重置 TraceID")
+    class ResetTraceIdTest {
+
+        @Test
+        @DisplayName("重置后仍为非空 UUID：内部等价于 setTraceId(null)")
+        void testResetGeneratesUuid() {
+            TraceUtil.setTraceId("before-reset");
+            TraceUtil.resetTraceId();
+            String traceId = TraceUtil.getTraceId();
+            assertNotNull(traceId, "resetTraceId 内部调用 setTraceId(null)，应生成 UUID 而不是清空");
+            assertDoesNotThrow(() -> UUID.fromString(traceId), "重置后生成的 TraceID 应为合法 UUID：" + traceId);
+        }
+
+        @Test
+        @DisplayName("重置覆盖原值：与重置前的值不相等")
+        void testResetOverridesPreviousValue() {
+            TraceUtil.setTraceId("before-reset");
+            TraceUtil.resetTraceId();
+            assertNotEquals("before-reset", TraceUtil.getTraceId(), "重置后应生成新值覆盖原值");
+        }
+
+        @Test
+        @DisplayName("连续两次重置：每次都会得到不同的新值")
+        void testResetTwiceGeneratesDifferentIds() {
+            TraceUtil.resetTraceId();
+            String first = TraceUtil.getTraceId();
+            TraceUtil.resetTraceId();
+            String second = TraceUtil.getTraceId();
+            assertNotEquals(first, second, "每次 resetTraceId 都应重新生成 UUID，两次结果不应相同");
+        }
     }
 
-    @Test
-    void testSetTraceIdWithUnicode() {
-        String unicodeTraceId = "跟踪ID-测试-123";
-        TraceUtil.setTraceId(unicodeTraceId);
-        assertEquals(unicodeTraceId, TraceUtil.getTraceId());
-    }
+    @Nested
+    @DisplayName("clearTraceId 清除 TraceID")
+    class ClearTraceIdTest {
 
-    @Test
-    void testConsecutiveResetsGenerateDifferentIds() {
-        TraceUtil.resetTraceId();
-        String firstId = TraceUtil.getTraceId();
+        @Test
+        @DisplayName("正常路径：清除后读取为 null")
+        void testClearRemovesValue() {
+            TraceUtil.setTraceId("to-be-cleared");
+            TraceUtil.clearTraceId();
+            assertNull(TraceUtil.getTraceId(), "清除后 MDC 中不应再保留 TraceID");
+        }
 
-        TraceUtil.resetTraceId();
-        String secondId = TraceUtil.getTraceId();
+        @Test
+        @DisplayName("未设置时重复清除不抛异常")
+        void testClearWhenNotSet() {
+            assertDoesNotThrow(TraceUtil::clearTraceId, "未设置 TraceID 时清除应安全无副作用");
+            assertNull(TraceUtil.getTraceId(), "清除后仍应为 null");
+        }
 
-        // 两次重置应该生成不同的 ID
-        assertNotEquals(firstId, secondId);
-    }
+        @Test
+        @DisplayName("只清除 TraceID，不影响 MDC 中的其他键")
+        void testClearOnlyRemovesTraceId() {
+            MDC.put("其他键", "其他值");
+            TraceUtil.setTraceId("only-trace");
+            TraceUtil.clearTraceId();
+            assertNull(TraceUtil.getTraceId(), "TraceID 应被清除");
+            assertEquals("其他值", MDC.get("其他键"), "其他 MDC 键不应受影响");
+        }
 
-    @Test
-    void testSetTraceIdWithSingleCharacter() {
-        String traceId = "x";
-        TraceUtil.setTraceId(traceId);
-        assertEquals(traceId, TraceUtil.getTraceId());
+        @Test
+        @DisplayName("与 resetTraceId 的区别：reset 生成新值，clear 才是真正清空")
+        void testDifferenceWithReset() {
+            TraceUtil.resetTraceId();
+            assertNotNull(TraceUtil.getTraceId(), "resetTraceId 会重新生成 UUID");
+            TraceUtil.clearTraceId();
+            assertNull(TraceUtil.getTraceId(), "clearTraceId 才是真正清空 MDC");
+        }
     }
 }
