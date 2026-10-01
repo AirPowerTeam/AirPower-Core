@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.*;
 import org.slf4j.MDC;
 
@@ -303,8 +304,8 @@ class TaskUtilTest {
     }
 
     @Nested
-    @DisplayName("CallerRunsPolicy 饱和路径")
-    class CallerRunsTest {
+    @DisplayName("饱和拒绝路径")
+    class SaturationTest {
 
         /**
          * 池与队列的总容量：最大线程数 + 有界队列长度，与 TaskUtil 的配置一致
@@ -317,18 +318,18 @@ class TaskUtilTest {
         private static final long BLOCK_SECONDS = 10L;
 
         /**
-         * 等待线程池进入饱和（探测任务开始跑在调用方线程上）
+         * 等待线程池进入饱和（探测任务被拒绝）
          *
          * @throws InterruptedException 中断异常
          */
         private void awaitSaturation() throws InterruptedException {
             for (int i = 0; i < 200; i++) {
-                if (isCallerRuns()) {
+                if (isRejected()) {
                     return;
                 }
                 Thread.sleep(50L);
             }
-            fail("线程池在预期时间内没有进入饱和状态，无法验证 CallerRuns 路径");
+            fail("线程池在预期时间内没有进入饱和状态，无法验证拒绝路径");
         }
 
         /**
@@ -336,12 +337,12 @@ class TaskUtilTest {
          *
          * @throws InterruptedException 中断异常
          * @apiNote 线程池是全进程共享的静态单例，本用例把它塞满后必须等它排空，
-         * 否则紧随其后的用例会撞上 CallerRuns，把「异步任务应跑在线程池线程上」
+         * 否则紧随其后的用例会撞上拒绝，把「异步任务应跑在线程池线程上」
          * 这类断言弄成偶发失败
          */
         private void awaitDrain() throws InterruptedException {
             for (int i = 0; i < 400; i++) {
-                if (!isCallerRuns()) {
+                if (!isRejected()) {
                     return;
                 }
                 Thread.sleep(50L);
@@ -350,23 +351,27 @@ class TaskUtilTest {
         }
 
         /**
-         * 判断当前是否处于 CallerRuns（任务跑在调用方线程上）
+         * 判断线程池当前是否已饱和（任务提交即被拒绝）
          *
-         * @return 是否为 CallerRuns
-         * @apiNote 探测任务不阻塞：即便 CallerRuns 生效也会立刻返回
+         * @return 是否已饱和
+         * @apiNote 探测任务不阻塞：即使被拒绝也只是抛异常，不会占用调用方线程
          */
-        private boolean isCallerRuns() {
-            AtomicReference<Thread> probe = new AtomicReference<>();
-            TaskUtil.run(() -> probe.set(Thread.currentThread()));
-            return probe.get() == Thread.currentThread();
+        private boolean isRejected() {
+            try {
+                TaskUtil.run(() -> {
+                });
+                return false;
+            } catch (ServiceException e) {
+                return true;
+            }
         }
 
         @Test
-        @DisplayName("队列打满时不得擦掉调用线程自己的 TraceID")
-        void mustNotClearCallerTraceId() throws InterruptedException {
+        @DisplayName("队列满时抛业务异常，而不是回退到调用方线程执行")
+        void mustRejectInsteadOfRunningOnCallerThread() throws InterruptedException {
             CountDownLatch release = new CountDownLatch(1);
+            AtomicReference<Thread> executedOn = new AtomicReference<>();
             try {
-                // 把池线程与队列全部占满：这些任务都阻塞在 release 上
                 for (int i = 0; i < SATURATION; i++) {
                     TaskUtil.run(() -> {
                         try {
@@ -378,16 +383,17 @@ class TaskUtilTest {
                 }
                 awaitSaturation();
 
-                // 饱和确认之后才设置 TraceID，避免被前面的探测任务影响
-                String expected = "调用方-TraceId";
-                TraceUtil.setTraceId(expected);
-                AtomicReference<Thread> executedOn = new AtomicReference<>();
-                TaskUtil.run(() -> executedOn.set(Thread.currentThread()));
+                // 前置条件：确实已经饱和
+                assertTrue(isRejected(), "前置条件不成立：线程池并未饱和，断言会空过");
 
-                assertSame(Thread.currentThread(), executedOn.get(),
-                        "前置条件不成立：这一步的任务没有跑在调用方线程上，断言会空过");
-                assertEquals(expected, TraceUtil.getTraceId(),
-                        "CallerRuns 下任务跑在调用方线程上，finally 里清 MDC 会擦掉该请求自己的 TraceID");
+                // 关键断言：调用方线程不得被执行任务
+                ServiceException e = assertThrows(ServiceException.class, () -> {
+                    TaskUtil.run(() -> executedOn.set(Thread.currentThread()));
+                }, "队列满时应抛业务异常，让调用方感知系统繁忙");
+                assertTrue(e.getMessage().contains("繁忙"), "异常消息应说明是繁忙导致，具体为：" + e.getMessage());
+                assertNull(executedOn.get(), "任务被拒绝，绝不能在调用方线程上执行");
+                assertNull(e.getData(), "data 不得携带异常（铁律 0.9）");
+                assertNull(e.getCause(), "拒绝不是异常场景，不应挂 cause");
             } finally {
                 release.countDown();
                 awaitDrain();
@@ -396,8 +402,8 @@ class TaskUtilTest {
         }
 
         @Test
-        @DisplayName("饱和路径不应影响非饱和路径的 TraceID 继承")
-        void stillPropagatesTraceIdUnderSaturation() throws InterruptedException {
+        @DisplayName("饱和拒绝不得改变调用方线程的 TraceID")
+        void rejectionMustNotTouchCallerTraceId() throws InterruptedException {
             CountDownLatch release = new CountDownLatch(1);
             try {
                 for (int i = 0; i < SATURATION; i++) {
@@ -411,13 +417,12 @@ class TaskUtilTest {
                 }
                 awaitSaturation();
 
-                String expected = "饱和时的-TraceId";
+                String expected = "调用方-TraceId";
                 TraceUtil.setTraceId(expected);
-                AtomicReference<String> seen = new AtomicReference<>("未执行");
-                TaskUtil.run(() -> seen.set(TraceUtil.getTraceId()));
-
-                assertEquals(expected, seen.get(), "即使走 CallerRuns，任务内部仍应读到调用方的 TraceID");
-                assertEquals(expected, TraceUtil.getTraceId(), "调用方线程的 TraceID 不应被改变");
+                assertThrows(ServiceException.class, () -> TaskUtil.run(() -> {
+                }), "饱和时任务应被拒绝");
+                assertEquals(expected, TraceUtil.getTraceId(),
+                        "拒绝路径不应动调用方线程的 MDC");
             } finally {
                 release.countDown();
                 awaitDrain();

@@ -3,9 +3,12 @@ package cn.hamm.airpower.core;
 import cn.hamm.airpower.core.annotation.Description;
 import cn.hamm.airpower.core.annotation.Meta;
 import cn.hamm.airpower.core.exception.ServiceException;
+import cn.hamm.airpower.core.fixture.AnnotatedImpl;
+import cn.hamm.airpower.core.fixture.AnnotatedInterface;
 import cn.hamm.airpower.core.fixture.DemoModel;
 import cn.hamm.airpower.core.fixture.DemoTree;
 import cn.hamm.airpower.core.fixture.Gender;
+import cn.hamm.airpower.core.fixture.InheritedImpl;
 import cn.hamm.airpower.core.fixture.SameNameProbe;
 import cn.hamm.airpower.core.interfaces.IFunction;
 import org.junit.jupiter.api.DisplayName;
@@ -1277,6 +1280,55 @@ class ReflectUtilTest {
             Field field = DemoModel.class.getDeclaredField("id");
             assertNotNull(ReflectUtil.getAnnotation(Description.class, field),
                     "正常字段上的 @Description 必须仍能找到");
+        }
+    }
+
+    @Nested
+    @DisplayName("接口链查找")
+    class InterfaceChainTest {
+
+        @Test
+        @DisplayName("实现类未标注时能回溯到接口上的注解")
+        void findsAnnotationOnInterface() throws NoSuchMethodException {
+            Method method = AnnotatedImpl.class.getMethod("getName");
+            Description description = ReflectUtil.getAnnotation(Description.class, method);
+            assertNotNull(description, "实现类未重复标注，应回溯到接口上的 @Description");
+            assertEquals("接口上的中文描述", description.value(), "应取到接口上的文案");
+        }
+
+        @Test
+        @DisplayName("穿过子类与实现类两层链路")
+        void findsThroughTwoLevels() throws NoSuchMethodException {
+            Method method = InheritedImpl.class.getMethod("getName");
+            Description description = ReflectUtil.getAnnotation(Description.class, method);
+            assertNotNull(description, "应能穿过 InheritedImpl → AnnotatedImpl → 接口三层");
+            assertEquals("接口上的中文描述", description.value(), "应取到接口上的文案");
+        }
+
+        @Test
+        @DisplayName("直接传接口也能找到该方法上的注解")
+        void findsOnInterfaceItself() {
+            Description description = ReflectUtil.getAnnotation(Description.class,
+                    AnnotatedInterface.class, "getName", new Class<?>[0]);
+            assertNotNull(description, "直接传接口类应能取到其方法上的 @Description");
+            assertEquals("接口上的中文描述", description.value(), "应取到接口上的文案");
+        }
+
+        @Test
+        @DisplayName("接口上没有该注解时返回 null 而非 NPE")
+        void returnsNullWhenInterfaceHasNone() throws NoSuchMethodException {
+            Method method = DemoModel.class.getMethod("getName");
+            assertNull(ReflectUtil.getAnnotation(Description.class, method),
+                    "接口链上都没有该注解时应返回 null");
+        }
+
+        @Test
+        @DisplayName("接口的 getSuperclass() 为 null 也不应 NPE")
+        void interfaceSuperclassIsNull() {
+            // 接口没有 superclass，递归必须在此短路而不是继续往上找
+            assertDoesNotThrow(() -> ReflectUtil.getAnnotation(Description.class,
+                            AnnotatedInterface.class, "getName", new Class<?>[0]),
+                    "接口的 getSuperclass() 恒为 null，递归应在此短路");
         }
     }
 }

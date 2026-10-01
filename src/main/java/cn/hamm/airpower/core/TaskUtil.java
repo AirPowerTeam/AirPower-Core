@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 
@@ -8,6 +9,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,14 +35,26 @@ public class TaskUtil {
     private static final int MAX_POOL_SIZE = CORE_POOL_SIZE * 2;
 
     /**
-     * 共享线程池，队列满时由调用方线程执行（不丢任务、不抛拒绝异常）
+     * 队列容量
+     */
+    private static final int QUEUE_CAPACITY = 1000;
+
+    /**
+     * 共享线程池
+     *
+     * @apiNote 队列满时<b>立即拒绝</b>而不是回退到调用方线程执行。
+     * 回退执行（{@code CallerRunsPolicy}）会把调用方的 Web 线程一起占住：
+     * 队列满 → 请求线程陪着执行 → 导出更慢 → 队列更难排空 → 更多请求进入回退，
+     * 这个正反馈会让 Tomcat 工作线程被逐个耗尽，最终全站接口一起卡住。
+     * 宁可让调用方收到「系统繁忙」，也不要拖垮整个 Web 层。
+     * 需要「绝不丢任务」的场景请自行持有队列，不要依赖本类
      */
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
             CORE_POOL_SIZE,
             MAX_POOL_SIZE,
             60L,
             SECONDS,
-            new LinkedBlockingQueue<>(1000),
+            new LinkedBlockingQueue<>(QUEUE_CAPACITY),
             new ThreadFactory() {
                 private final AtomicInteger counter = new AtomicInteger(0);
 
@@ -51,36 +65,41 @@ public class TaskUtil {
                     return thread;
                 }
             },
-            new ThreadPoolExecutor.CallerRunsPolicy()
+            new ThreadPoolExecutor.AbortPolicy()
     );
 
     /**
-     * 异步执行任务，异常只记录日志、不向调用方抛出
+     * 异步执行任务
      *
      * @param runnable     任务
      * @param moreRunnable 更多任务
+     * @apiNote 任务<b>内部</b>的异常只记录日志、不向调用方抛出；
+     * 但线程池与队列都满时任务<b>根本不会执行</b>，此时抛
+     * {@link ServiceException} 让调用方明确感知「系统繁忙」，
+     * 而不是让它以为任务已提交
      */
     public static void run(Runnable runnable, Runnable... moreRunnable) {
         String traceId = TraceUtil.getTraceId();
-        // 提交前记下调用方线程：CallerRunsPolicy 生效时任务就跑在这个线程上，
-        // 此时 finally 里不能动它的 MDC，否则会擦掉这个请求自己的 TraceID
-        Thread callerThread = Thread.currentThread();
-        getRunnableList(runnable, moreRunnable).forEach((run) -> EXECUTOR.submit(() -> {
+        for (Runnable run : getRunnableList(runnable, moreRunnable)) {
             try {
-                TraceUtil.setTraceId(traceId);
-                run.run();
-            } catch (Throwable e) {
-                // 任务由 submit 提交，异常不会传递给调用方，这里统一兜底记录（含 Error）。
-                // 必须传异常对象本身，只打印 getMessage() 会丢掉堆栈，线上问题无从定位
-                log.error("异步执行任务失败", e);
-            } finally {
-                // 池线程会被复用，清理 MDC 避免 TraceID 残留到下一个任务；
-                // 但跑在调用方线程上时不能清——那会连带清掉请求自己的 TraceID
-                if (Thread.currentThread() != callerThread) {
-                    TraceUtil.clearTraceId();
-                }
+                EXECUTOR.execute(() -> {
+                    try {
+                        TraceUtil.setTraceId(traceId);
+                        run.run();
+                    } catch (Throwable e) {
+                        // 必须传异常对象本身，只打印 getMessage() 会丢掉堆栈，线上问题无从定位
+                        log.error("异步执行任务失败", e);
+                    } finally {
+                        // 池线程会被复用，清理 MDC 避免 TraceID 残留到下一个任务
+                        TraceUtil.clearTraceId();
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                // 队列已满。不回退到调用方线程执行，否则会占住 Web 请求线程
+                log.warn("异步任务队列已满（容量 {}），任务被拒绝", QUEUE_CAPACITY);
+                throw new ServiceException("系统繁忙，请稍后重试");
             }
-        }));
+        }
     }
 
     /**

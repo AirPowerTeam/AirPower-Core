@@ -3,6 +3,7 @@ package cn.hamm.airpower.core;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.DemoError;
 import cn.hamm.airpower.core.fixture.DemoModel;
+import cn.hamm.airpower.core.fixture.TimeModel;
 import cn.hamm.airpower.core.interfaces.IException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Data;
@@ -12,6 +13,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -669,6 +673,61 @@ class JsonTest {
         void lombokToString() {
             assertEquals("Json(code=1, message=, data=null, traceId=null)", Json.create().setCode(1).toString(),
                     "Lombok 生成的 toString 应输出全部四个字段");
+        }
+    }
+
+    @Nested
+    @DisplayName("JSR-310 时间类型")
+    class JavaTimeTest {
+
+        @Test
+        @DisplayName("LocalDateTime 输出 ISO 字符串而非 bean 结构")
+        void localDateTimeIsIsoString() {
+            TimeModel model = new TimeModel().setDateTime(LocalDateTime.of(2026, 10, 2, 13, 45, 30));
+            String json = Json.toString(model);
+            assertTrue(json.contains("\"2026-10-02T13:45:30\""),
+                    "LocalDateTime 应序列化为 ISO 字符串，实际为：" + json);
+            assertFalse(json.contains("monthValue"), "不应出现 bean 序列化产物 monthValue：" + json);
+            assertFalse(json.contains("\"year\""), "不应出现 bean 序列化产物 year：" + json);
+        }
+
+        @Test
+        @DisplayName("LocalDate 输出 ISO 字符串")
+        void localDateIsIsoString() {
+            String json = Json.toString(new TimeModel().setDate(LocalDate.of(2026, 10, 2)));
+            assertTrue(json.contains("\"2026-10-02\""), "LocalDate 应序列化为 ISO 字符串：" + json);
+        }
+
+        @Test
+        @DisplayName("Instant 输出 ISO 字符串而非时间戳数字")
+        void instantIsIsoString() {
+            Instant instant = Instant.ofEpochSecond(1_700_000_000L);
+            String json = Json.toString(new TimeModel().setInstant(instant));
+            assertTrue(json.contains("T"), "Instant 应为 ISO 字符串：" + json);
+            assertFalse(json.matches(".*\\\"instant\\\":\\d+.*"),
+                    "Instant 不应输出为时间戳数字：" + json);
+        }
+
+        @Test
+        @DisplayName("含时间字段的实体可往返（Redis 缓存读回的关键）")
+        void roundTrip() {
+            TimeModel origin = new TimeModel()
+                    .setDateTime(LocalDateTime.of(2026, 10, 2, 13, 45, 30))
+                    .setDate(LocalDate.of(2026, 10, 2))
+                    .setInstant(Instant.ofEpochSecond(1_700_000_000L));
+            TimeModel back = Json.parse(Json.toString(origin), TimeModel.class);
+            assertNotNull(back, "反序列化不应返回 null");
+            assertEquals(origin.getDateTime(), back.getDateTime(), "LocalDateTime 往返应一致");
+            assertEquals(origin.getDate(), back.getDate(), "LocalDate 往返应一致");
+            assertEquals(origin.getInstant(), back.getInstant(), "Instant 往返应一致");
+        }
+
+        @Test
+        @DisplayName("Collection 里的时间字段同样正确")
+        void insideCollection() {
+            List<TimeModel> list = List.of(new TimeModel().setDate(LocalDate.of(2026, 10, 2)));
+            String json = Json.toString(list);
+            assertTrue(json.contains("2026-10-02"), "集合内的 LocalDate 也应为 ISO 字符串：" + json);
         }
     }
 }

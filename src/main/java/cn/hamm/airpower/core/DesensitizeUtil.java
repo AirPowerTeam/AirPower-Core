@@ -114,7 +114,7 @@ public class DesensitizeUtil {
      * @return 脱敏后的文本
      */
     @Contract(pure = true)
-    public static @NotNull String desensitize(@NotNull String text, DesensitizeType type, int head, int tail) {
+    public static @NotNull String desensitize(String text, DesensitizeType type, int head, int tail) {
         return desensitize(text, type, head, tail, DEFAULT_SYMBOL);
     }
 

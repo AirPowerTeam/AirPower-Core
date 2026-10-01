@@ -382,28 +382,42 @@ public class ReflectUtil {
      */
     public static <T extends java.lang.annotation.Annotation> @Nullable T getAnnotation(
             Class<T> annotationClass,
-            @NotNull Class<?> currentClass,
+            @Nullable Class<?> currentClass,
             String methodName,
             Class<?>[] paramTypes
     ) {
+        // 接口的 getSuperclass() 恒为 null（接口只有 interfaces），必须显式判空
+        if (Objects.isNull(annotationClass) || Objects.isNull(currentClass)
+                || isTheRootClass(currentClass)) {
+            return null;
+        }
         try {
             // 获取当前类中的方法
             Method method = currentClass.getDeclaredMethod(methodName, paramTypes);
             // 获取注解，避免重复调用 getAnnotation
             T annotation = method.getAnnotation(annotationClass);
-            if (annotation != null) {
+            if (Objects.nonNull(annotation)) {
                 return annotation;
             }
         } catch (NoSuchMethodException ignored) {
-            // 忽略，继续查找父类或接口
+            // 本类没有这个方法，继续往上找
+        }
+
+        // 查找接口链：@Description / @Meta / @Export 常挂在接口上作为默认约定，
+        // 只查父类会让实现类「看起来没标注」
+        for (Class<?> itf : currentClass.getInterfaces()) {
+            T onInterface = getAnnotation(annotationClass, itf, methodName, paramTypes);
+            if (Objects.nonNull(onInterface)) {
+                return onInterface;
+            }
         }
 
         // 查找父类
         Class<?> superClass = currentClass.getSuperclass();
-        if (superClass != null) {
-            return getAnnotation(annotationClass, superClass, methodName, paramTypes);
+        if (Objects.isNull(superClass)) {
+            return null;
         }
-        return null;
+        return getAnnotation(annotationClass, superClass, methodName, paramTypes);
     }
 
     /**
