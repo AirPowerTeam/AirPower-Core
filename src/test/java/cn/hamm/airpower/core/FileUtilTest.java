@@ -33,12 +33,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("文件工具类测试")
 class FileUtilTest {
     /**
-     * ZIP 累计大小上限的测试句柄
-     * <p>上限本身是 10GB，直接造 10GB 的目录不现实，
-     * 因此测试期间允许临时下调，结束后必须恢复</p>
-     */
-    private static final ThreadLocal<Long> zipTotalBytesLimit = FileUtil.ZIP_TOTAL_LIMIT;
-    /**
      * 测试用临时目录
      */
     @TempDir
@@ -210,16 +204,6 @@ class FileUtilTest {
             assertEquals("错误的文件大小: " + Long.MIN_VALUE, exception.getMessage(),
                     "异常信息应带上 long 下限的数值");
         }
-
-        @Test
-        @DisplayName("超出最大单位的分支在 long 范围内不可达")
-        void unreachableBranch() {
-            // 循环用尽 9 个单位后仍需 fileSize < 1024 才返回，
-            // 需要 size >= 1024^9 ≈ 1.24E27，超过 Long.MAX_VALUE ≈ 9.22E18，
-            // 因此 for 循环末尾的 ServiceException 分支在 long 范围内不可达，此处仅做说明。
-            assertTrue(Math.pow(1024, 9) > (double) Long.MAX_VALUE,
-                    "1024 的 9 次方超出 long 上限，说明末尾的异常分支不可达");
-        }
     }
 
     @Nested
@@ -240,7 +224,7 @@ class FileUtilTest {
             Path target = Files.createDirectories(tempDir.resolve("exists"));
             assertDoesNotThrow(() -> {
                 FileUtil.createDirectories(target.toString());
-                FileUtil.createDirectories(target.toString() + File.separator);
+                FileUtil.createDirectories(target + File.separator);
             }, "重复创建已存在目录不应抛出异常");
             assertTrue(Files.isDirectory(target), "重复创建后目录仍应存在");
         }
@@ -400,7 +384,7 @@ class FileUtilTest {
 
         @Test
         @DisplayName("输入流重载不应关闭调用方传入的流")
-        void inputStreamNotClosed() throws IOException {
+        void inputStreamNotClosed() {
             Path dir = tempDir.resolve("stream-not-closed");
             boolean[] closed = {false};
             InputStream source = new ByteArrayInputStream("中文内容".getBytes(StandardCharsets.UTF_8)) {
@@ -468,7 +452,7 @@ class FileUtilTest {
 
         @Test
         @DisplayName("目录末尾无分隔符也能正确拼接")
-        void directoryWithoutSeparator() throws IOException {
+        void directoryWithoutSeparator() {
             Path dir = tempDir.resolve("no-separator");
             FileUtil.saveFile(dir.toString(), "a.txt", "ok");
             assertTrue(Files.exists(dir.resolve("a.txt")), "目录末尾无分隔符时应自动补齐");
@@ -628,7 +612,7 @@ class FileUtilTest {
         @DisplayName("空目录也应被删除")
         void emptyDirectory() throws IOException {
             Path root = Files.createDirectories(tempDir.resolve("empty-dir"));
-            FileUtil.deleteDirectory(root.toString() + File.separator);
+            FileUtil.deleteDirectory(root + File.separator);
             assertFalse(Files.exists(root), "空目录应被删除");
         }
 
@@ -681,7 +665,7 @@ class FileUtilTest {
             Path file = Files.createTempFile("airpower-zip-", ".txt");
             try {
                 IOException exception = assertThrows(IOException.class,
-                        () -> FileUtil.zip(file.toString(), file.toString() + ".zip"),
+                        () -> FileUtil.zip(file.toString(), file + ".zip"),
                         "源路径是文件时应在入口处报错，而不是漏出 NotDirectoryException");
                 assertTrue(exception.getMessage().contains("不是文件夹"),
                         "异常信息应说明源路径不是文件夹：" + exception.getMessage());
