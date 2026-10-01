@@ -72,7 +72,7 @@ public class CollectionUtil {
     /**
      * 会被表格软件当作公式起始的字符
      */
-    private static final String FORMULA_PREFIXES = "=+-@\t\r";
+    private static final String FORMULA_PREFIXES = "=+-@";
 
     /**
      * CSV 流式写出的缓冲大小
@@ -121,7 +121,13 @@ public class CollectionUtil {
      * @return 空集合
      */
     private static <T> @NotNull Collection<T> newCollection(Class<?> fieldClass) {
-        return Objects.equals(Set.class, fieldClass) ? new HashSet<>() : new ArrayList<>();
+        // 必须用 isAssignableFrom 而不是 Objects.equals：
+        // 调用方传的是元素的运行时实际类（AirPower4J 传 data.getClass()），
+        // HashSet / TreeSet / LinkedHashSet / Hibernate 的 PersistentSet
+        // 都不等于 Set.class，严格相等会让它们全部落到 ArrayList 分支，
+        // Set 的去重语义就此丢失，而且没有任何告警
+        return null != fieldClass && Set.class.isAssignableFrom(fieldClass)
+                ? new HashSet<>() : new ArrayList<>();
     }
 
     /**
@@ -243,9 +249,17 @@ public class CollectionUtil {
      * @apiNote 直接用空格替换，不加引号包裹，表格软件读取时不会出现多余引号
      */
     private static @NotNull String escapeCell(@NotNull String cell) {
+        // 除了列/行分隔符，还必须处理双引号与 CR：
+        // 双引号是 RFC 4180 的引用字符，原样进入 CSV 会被标准解析器当成语法字符，
+        // 导致该行多切出列、后续所有列错位；
+        // 游离的 CR 在部分表格软件里会被当作换行，把一行拆成两行。
+        // 双引号选择<b>直接删除</b>而不是替成空格：它本身是语法字符，
+        // 用户极少有意在备注里打它，替成空格反而像原文里真有一个空格
         return cell
                 .replace(CSV_COLUMN_DELIMITER, " ")
-                .replace(CSV_ROW_DELIMITER, " ");
+                .replace("\"", "")
+                .replace("\r", " ")
+                .replace("\n", " ");
     }
 
     /**
@@ -282,7 +296,12 @@ public class CollectionUtil {
             throw new ServiceException("字段列表不能为空");
         }
         List<String> rowList = new ArrayList<>();
-        rowList.add(String.join(CSV_COLUMN_DELIMITER, fieldList.stream().map(ReflectUtil::getDescription).toList()));
+        // 表头同样做公式注入防护：当前取自 @Description（开发者可控，风险很低），
+        // 但「数据列防了、表头没防」是不一致的，将来支持动态表头就会成为注入点
+        rowList.add(String.join(CSV_COLUMN_DELIMITER, fieldList.stream()
+                .map(ReflectUtil::getDescription)
+                .map(name -> guardFormula(escapeCell(name)))
+                .toList()));
         return rowList;
     }
 
@@ -311,16 +330,22 @@ public class CollectionUtil {
     private static <M extends RootModel<M>> @UnmodifiableView @NotNull List<Field> buildExportFieldList(Class<M> itemClass) {
         List<CsvField> fieldList = new ArrayList<>();
         for (Field field : ReflectUtil.getFieldList(itemClass)) {
+            // Getter 上的 @Export 优先于字段上的；
+            // 但 getter 不存在（基本类型 boolean isXxx、非 public getter 等）时
+            // 仍必须回退检查字段上的注解——否则该列会静默从导出中消失
             Export export = null;
-            // Getter 上的 @Export 优先于字段上的
-            String fieldGetter = ReflectUtil.getFieldGetter(field);
-            try {
-                Method getter = itemClass.getMethod(fieldGetter);
-                export = ReflectUtil.getAnnotation(Export.class, getter);
-                if (Objects.isNull(export)) {
-                    export = ReflectUtil.getAnnotation(Export.class, field);
+            for (String candidate : ReflectUtil.candidateGetterNames(field)) {
+                try {
+                    export = ReflectUtil.getAnnotation(Export.class, itemClass.getMethod(candidate));
+                } catch (NoSuchMethodException ignored) {
+                    // 试下一个候选名
                 }
-            } catch (NoSuchMethodException ignored) {
+                if (Objects.nonNull(export)) {
+                    break;
+                }
+            }
+            if (Objects.isNull(export)) {
+                export = ReflectUtil.getAnnotation(Export.class, field);
             }
             if (Objects.isNull(export) || export.remove()) {
                 continue;
@@ -368,7 +393,9 @@ public class CollectionUtil {
                         IDictionary dict = DictionaryUtil.getDictionary(
                                 dictionary.value(), Integer.parseInt(text)
                         );
-                        yield dict.getLabel();
+                        // IDictionary.getLabel() 没有非空约定，业务枚举漏填 label 就会返回 null。
+                        // 之前直接 yield 会让调用方 toString() 时 NPE，整个导出失败
+                        yield Objects.toString(dict.getLabel(), text);
                     }
                 }
                 case NUMBER -> {

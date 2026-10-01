@@ -386,11 +386,35 @@ class CollectionUtilTest {
         }
 
         @Test
-        @DisplayName("当前缺陷：fieldClass 为 Set 的实现类时不走 Set 分支")
+        @DisplayName("fieldClass 为 Set 的实现类时也应走 Set 分支")
         void testSubClassOfSet() {
             Collection<String> result = CollectionUtil.getCollectWithoutNull(null, HashSet.class);
 
-            assertInstanceOf(ArrayList.class, result, "仅严格等于 Set.class 才走 Set 分支，HashSet.class 会返回 ArrayList");
+            assertInstanceOf(HashSet.class, result,
+                    "调用方传的是元素的运行时实际类（AirPower4J 传 data.getClass()），"
+                            + "HashSet / TreeSet / Hibernate 的 PersistentSet 都不等于 Set.class。"
+                            + "严格相等会让它们全部落到 ArrayList 分支，Set 的去重语义丢失且无告警");
+        }
+
+        @Test
+        @DisplayName("Set 分支应真正去重")
+        void testSetBranchKeepsDeduplication() {
+            Collection<String> result = CollectionUtil.getCollectWithoutNull(
+                    Arrays.asList("a", "a", "b", null), HashSet.class);
+
+            assertInstanceOf(HashSet.class, result, "Set 实现应走 Set 分支");
+            assertEquals(2, result.size(),
+                    "Set 的去重语义必须保留：若退化成 ArrayList，重复项会原样出现在响应里");
+        }
+
+        @Test
+        @DisplayName("TreeSet 等其它 Set 实现同样识别")
+        void testOtherSetImplementations() {
+            for (Class<?> setClass : List.of(TreeSet.class, LinkedHashSet.class, Set.class)) {
+                assertInstanceOf(HashSet.class,
+                        CollectionUtil.getCollectWithoutNull(null, setClass),
+                        "Set 的所有实现都应被识别为 Set：" + setClass.getSimpleName());
+            }
         }
     }
 
@@ -958,6 +982,71 @@ class CollectionUtilTest {
                     List.of("dictionaryWithoutDictionary", "numberAsString", "datetimeAsString", "plainText", "noDescription"),
                     fieldList.stream().map(Field::getName).toList(),
                     "辅助模型应按 sort 从大到小排列");
+        }
+    }
+
+    @Nested
+    @DisplayName("CSV 单元格转义与公式防护")
+    class CsvSanitizeTest {
+
+        @Test
+        @DisplayName("字段值含双引号时必须被处理，否则标准解析器会多切出列")
+        void doubleQuoteIsEscaped() throws IOException {
+            ExportDemoModel model = fullModel().setRemark("他说\"这是引号\"，还有 JSON {\"a\":1}");
+
+            String csv = readUtf8(CollectionUtil.toCsvInputStream(List.of(model), ExportDemoModel.class));
+
+            assertFalse(csv.contains("\"这是引号\""),
+                    "双引号是 RFC 4180 的引用字符，原样进入 CSV 会被 csv.reader / pandas 切片，"
+                            + "导致该行多出列、后续所有列错位");
+        }
+
+        @Test
+        @DisplayName("字段值含 CR 时必须被处理，否则一行被拆成两行")
+        void carriageReturnIsRemoved() throws IOException {
+            byte[] raw = CollectionUtil.toCsvInputStream(
+                    List.of(fullModel().setRemark("第一行\r\n第二行")), ExportDemoModel.class)
+                    .readAllBytes();
+
+            String csv = readUtf8(new ByteArrayInputStream(raw));
+            assertFalse(csv.contains("\r"),
+                    "输出里不应残留 CR：它会被部分表格软件当作换行，把一行拆成两行"
+                            + "（导出行数比数据条数多），且只在 Windows + WPS 上偶现，极难复现");
+            assertEquals(2, csv.split("\n", -1).length,
+                    "一行表头加一行数据共 2 行，不应因为字段里的 CR 变成 3 行");
+            assertTrue(csv.contains("第一行") && csv.contains("第二行"),
+                    "CR/LF 两侧的文字都应保留，只是不再携带换行语义");
+        }
+
+        @Test
+        @DisplayName("以公式字符开头的值必须加防护前缀")
+        void formulaPrefixIsGuarded() throws IOException {
+            for (String payload : List.of("=1+1", "+1", "-1", "@SUM(A1)")) {
+                String csv = readUtf8(CollectionUtil.toCsvInputStream(
+                        List.of(fullModel().setName(payload)), ExportDemoModel.class));
+                assertTrue(csv.contains("'" + payload),
+                        "以公式字符开头的值必须加 ' 前缀，否则 Excel/WPS 会当公式执行：" + payload);
+            }
+        }
+
+        @Test
+        @DisplayName("前导空白后的公式字符同样要防护")
+        void formulaAfterLeadingWhitespaceIsGuarded() throws IOException {
+            String csv = readUtf8(CollectionUtil.toCsvInputStream(
+                    List.of(fullModel().setName("  =cmd|'/c calc'!A1")), ExportDemoModel.class));
+
+            assertTrue(csv.contains("'  =cmd"),
+                    "Excel 解析时会忽略前导空白，所以必须跳过前导空白后再判定");
+        }
+
+        @Test
+        @DisplayName("普通值不应被加防护前缀")
+        void normalValueIsNotGuarded() throws IOException {
+            String csv = readUtf8(CollectionUtil.toCsvInputStream(
+                    List.of(fullModel().setName("张三")), ExportDemoModel.class));
+
+            assertTrue(csv.contains("张三"), "正常值应原样输出");
+            assertFalse(csv.contains("'张三"), "正常值不应被加防护前缀");
         }
     }
 }
