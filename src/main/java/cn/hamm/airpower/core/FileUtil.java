@@ -4,6 +4,7 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -31,8 +32,13 @@ public class FileUtil {
 
     /**
      * 文件单位
+     * <p>刻意<b>不</b>用数组：{@code final} 只保证引用不可重新赋值，数组内容仍然可变，
+     * 而它是 {@code public} 的——任何代码拿到引用就能 {@code UNITS[3] = "G"}，
+     * 改动对全进程立即生效且无任何告警，表现为「所有 formatSize() 的 TB 位集体错乱」，
+     * 而且只在特定量级的文件上出现，极难归因</p>
      */
-    public static final String[] UNITS = {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
+    public static final List<String> UNITS =
+            List.of("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB");
 
     /**
      * 文件名分隔符
@@ -43,6 +49,38 @@ public class FileUtil {
      * ZIP 条目名的目录分隔符（规范固定为 {@code /}，与平台无关）
      */
     private static final String ZIP_SEPARATOR = "/";
+
+    /**
+     * 单个 ZIP 的累计输出字节上限（10GB）
+     * <p>逐文件流式拷贝本身是对的（不会把单个文件读进堆），但整个 zip 原本
+     * <b>没有累计上限</b>：一个 50GB 的目录就能生成 50GB 的 zip 撑爆磁盘。
+     * 而且默认压缩级别对已压缩数据（图片/视频/已有的 .gz/.zip）几乎不压缩，
+     * 目录占用会被完整复制一遍</p>
+     */
+    private static final long MAX_ZIP_TOTAL_BYTES = 10L * 1024 * 1024 * 1024;
+
+    /**
+     * ZIP 累计大小上限的可覆盖句柄
+     * <p>默认取 {@link #MAX_ZIP_TOTAL_BYTES}。10GB 的上限在测试里无法直接构造，
+     * 因此提供这个受控入口让测试能下调阈值；包外无法写入（无 setter）</p>
+     */
+    static final ThreadLocal<Long> ZIP_TOTAL_LIMIT =
+            ThreadLocal.withInitial(() -> MAX_ZIP_TOTAL_BYTES);
+
+    /**
+     * 复制时的分块大小
+     */
+    private static final int ZIP_COPY_CHUNK = 64 * 1024;
+
+    /**
+     * 文件大小格式化的 {@link DecimalFormat}，按线程复用
+     * <p>{@code DecimalFormat} 非线程安全，不能做成共享静态常量；
+     * 但每次调用都新建一个的分配量对「列表页每行调一次」的场景也偏高</p>
+     */
+    private static final ThreadLocal<DecimalFormat> SIZE_FORMAT = ThreadLocal.withInitial(
+            // 固定使用 ROOT Locale，避免德语等环境下输出 1,00KB 导致调用方解析失败
+            () -> new DecimalFormat("#.00", DecimalFormatSymbols.getInstance(Locale.ROOT))
+    );
 
     /**
      * 未知文件大小
@@ -72,6 +110,11 @@ public class FileUtil {
             // 原实现会把整个文件名当成扩展名返回
             return "";
         }
+        if (index == 0) {
+            // 整个文件名就是一个点开头的隐藏文件：按 git / nginx / apache 的惯例，
+            // .gitignore、.env、.htaccess 都<b>没有</b>扩展名
+            return "";
+        }
         // 固定 Locale.ROOT：土耳其语环境下 "TXT".toLowerCase() 会得到 "tхt"
         return fileName.substring(index + EXTENSION_SEPARATOR.length()).toLowerCase(Locale.ROOT);
     }
@@ -88,11 +131,15 @@ public class FileUtil {
         }
         if (size == 0) {
             // 0 字节是合法的空文件，原实现与负数一起拒绝
-            return "0.00" + UNITS[0];
+            return "0.00" + UNITS.get(0);
         }
         double fileSize = size;
-        // 固定使用 ROOT Locale，避免德语等环境下输出 1,00KB 导致调用方解析失败
-        DecimalFormat decimalFormat = new DecimalFormat("#.00", DecimalFormatSymbols.getInstance(Locale.ROOT));
+        // DecimalFormat 本身不是线程安全的（内部有可变状态），所以不能做成静态常量
+        // 直接共享；但每次调用都 new 一个 DecimalFormat + DecimalFormatSymbols 也很贵
+        //（符号表要从一个大 switch + HashMap 里取，还要解析格式模式串），
+        // 而 formatSize 是「列表页每行都要调一次」的方法。
+        // 这里用 ThreadLocal 复用：既保持线程安全，又把分配摊到每线程一次
+        DecimalFormat decimalFormat = SIZE_FORMAT.get();
         for (String unit : UNITS) {
             if (fileSize < FILE_SCALE) {
                 return decimalFormat.format(fileSize) + unit;
@@ -282,9 +329,13 @@ public class FileUtil {
             // 压缩包落在源目录内部：写入时会破坏正在遍历的目录树
             throw new IOException("压缩文件不能输出到源文件夹内部: " + zipFilePath);
         }
+        // 根路径（如 "/"）的 getFileName() 返回 null，toString() 直接 NPE。
+        // 兜底用根分隔符，条目名会是 "/"，这是 ZIP 规范允许的
+        Path sourceName = sourceDir.getFileName();
+        String rootEntryName = Objects.isNull(sourceName) ? ZIP_SEPARATOR : sourceName.toString();
         try (FileOutputStream fos = new FileOutputStream(zipFilePath);
              ZipOutputStream zos = new ZipOutputStream(fos)) {
-            zipDirectory(sourceDir, sourceDir.getFileName().toString(), zos);
+            zipDirectory(sourceDir, rootEntryName, zos, new ZipSizeLimiter(MAX_ZIP_TOTAL_BYTES));
         }
     }
 
@@ -297,6 +348,20 @@ public class FileUtil {
      * @throws IOException IO 异常
      */
     private static void zipDirectory(Path dir, String dirName, @NotNull ZipOutputStream zos) throws IOException {
+        zipDirectory(dir, dirName, zos, null);
+    }
+
+    /**
+     * 递归压缩目录
+     *
+     * @param dir     要压缩的目录
+     * @param dirName 当前目录名称
+     * @param zos     ZIP 输出流
+     * @param limiter 累计字节计数器，为 {@code null} 表示不限制
+     * @throws IOException IO 异常，超出上限时同样以 IOException 形式抛出
+     */
+    private static void zipDirectory(Path dir, String dirName, @NotNull ZipOutputStream zos,
+                                     @Nullable ZipSizeLimiter limiter) throws IOException {
         // ZIP 规范要求条目名统一使用 '/'，不能沿用 File.separator（Windows 上是 '\'）
         dirName = dirName.endsWith(ZIP_SEPARATOR) ? dirName : dirName + ZIP_SEPARATOR;
 
@@ -307,26 +372,75 @@ public class FileUtil {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path path : stream) {
                 if (Files.isSymbolicLink(path)) {
-                    log.warn("跳过符号链接");
+                    // 日志里必须带上路径，否则线上只知道「跳过了某个符号链接」，
+                    // 无从定位跳了什么
+                    log.warn("跳过符号链接：{}", path);
                     continue;
                 }
                 String entryName = dirName + path.getFileName();
 
                 if (Files.isDirectory(path)) {
                     // 递归处理子目录
-                    zipDirectory(path, entryName, zos);
+                    zipDirectory(path, entryName, zos, limiter);
                     continue;
                 }
                 // 添加文件条目
                 ZipEntry fileEntry = new ZipEntry(entryName);
                 zos.putNextEntry(fileEntry);
 
-                // 写入文件内容
+                // 写入文件内容。按块搬运并累计字节数，超上限立刻中止：
+                // 一次性 transferTo 会把整个文件灌进去，中途才发现超限就晚了
+                long fileSize = Files.size(path);
+                if (Objects.nonNull(limiter) && !limiter.tryAcquire(fileSize, ZIP_TOTAL_LIMIT.get())) {
+                    throw new IOException("压缩包累计大小超过上限 " + ZIP_TOTAL_LIMIT.get()
+                            + " 字节，已在文件(" + path + ")处中止");
+                }
                 try (InputStream bis = new BufferedInputStream(new FileInputStream(path.toFile()))) {
-                    bis.transferTo(zos);
+                    byte[] chunk = new byte[ZIP_COPY_CHUNK];
+                    int read;
+                    while ((read = bis.read(chunk)) > 0) {
+                        zos.write(chunk, 0, read);
+                    }
                 }
                 zos.closeEntry();
             }
+        }
+    }
+
+    /**
+     * <h1>ZIP 累计字节计数器</h1>
+     *
+     * <p>非线程安全，仅供单次 {@code zip} 递归过程内使用。</p>
+     */
+    private static final class ZipSizeLimiter {
+        /**
+         * 上限
+         */
+        private final long maxBytes;
+
+        /**
+         * 已累计字节数
+         */
+        private long usedBytes;
+
+        /**
+         * 构造
+         *
+         * @param maxBytes 上限
+         */
+        private ZipSizeLimiter(long maxBytes) {
+            this.maxBytes = maxBytes;
+        }
+
+        /**
+         * 尝试占用配额
+         *
+         * @param bytes 本次要写入的字节数
+         * @return 是否允许
+         */
+        private boolean tryAcquire(long bytes, long limit) {
+            usedBytes += Math.max(bytes, 0L);
+            return usedBytes <= limit;
         }
     }
 

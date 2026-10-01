@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -42,6 +43,13 @@ class FileUtilTest {
     Path tempDir;
 
     /**
+     * ZIP 累计大小上限的测试句柄
+     * <p>上限本身是 10GB，直接造 10GB 的目录不现实，
+     * 因此测试期间允许临时下调，结束后必须恢复</p>
+     */
+    private static final ThreadLocal<Long> zipTotalBytesLimit = FileUtil.ZIP_TOTAL_LIMIT;
+
+    /**
      * 读取文件全部字节
      *
      * @param path 文件路径
@@ -60,16 +68,23 @@ class FileUtilTest {
         void constants() {
             assertEquals(1024L, FileUtil.FILE_SCALE, "文件大小进制应为 1024");
             assertEquals(".", FileUtil.EXTENSION_SEPARATOR, "后缀分隔符应为英文句点");
-            assertEquals(9, FileUtil.UNITS.length, "文件单位应有 9 个");
-            assertEquals("B", FileUtil.UNITS[0], "第 1 个单位应为 B");
-            assertEquals("KB", FileUtil.UNITS[1], "第 2 个单位应为 KB");
-            assertEquals("MB", FileUtil.UNITS[2], "第 3 个单位应为 MB");
-            assertEquals("GB", FileUtil.UNITS[3], "第 4 个单位应为 GB");
-            assertEquals("TB", FileUtil.UNITS[4], "第 5 个单位应为 TB");
-            assertEquals("PB", FileUtil.UNITS[5], "第 6 个单位应为 PB");
-            assertEquals("EB", FileUtil.UNITS[6], "第 7 个单位应为 EB");
-            assertEquals("ZB", FileUtil.UNITS[7], "第 8 个单位应为 ZB");
-            assertEquals("YB", FileUtil.UNITS[8], "第 9 个单位应为 YB");
+            assertEquals(9, FileUtil.UNITS.size(), "文件单位应有 9 个");
+            assertEquals("B", FileUtil.UNITS.get(0), "第 1 个单位应为 B");
+            assertEquals("KB", FileUtil.UNITS.get(1), "第 2 个单位应为 KB");
+            assertEquals("MB", FileUtil.UNITS.get(2), "第 3 个单位应为 MB");
+            assertEquals("GB", FileUtil.UNITS.get(3), "第 4 个单位应为 GB");
+            assertEquals("TB", FileUtil.UNITS.get(4), "第 5 个单位应为 TB");
+            assertEquals("PB", FileUtil.UNITS.get(5), "第 6 个单位应为 PB");
+            assertEquals("EB", FileUtil.UNITS.get(6), "第 7 个单位应为 EB");
+            assertEquals("ZB", FileUtil.UNITS.get(7), "第 8 个单位应为 ZB");
+            assertEquals("YB", FileUtil.UNITS.get(8), "第 9 个单位应为 YB");
+            // 00128：UNITS 曾是 public 可变数组，final 只保证引用不可重新赋值，
+            // 任何调用方都能 UNITS[3] = "G" 改掉全进程的单位表且无任何告警
+            assertThrows(UnsupportedOperationException.class,
+                    () -> FileUtil.UNITS.set(3, "G"),
+                    "UNITS 必须是不可变的：篡改它会导致所有 formatSize() 的单位集体错乱，"
+                            + "而且只在特定量级的文件上出现，极难归因");
+            assertEquals("GB", FileUtil.UNITS.get(3), "篡改尝试不应影响实际内容");
         }
     }
 
@@ -99,9 +114,15 @@ class FileUtilTest {
         }
 
         @Test
-        @DisplayName("隐藏文件应去掉开头的点")
+        @DisplayName("点开头的隐藏文件应视为无扩展名")
         void hiddenFile() {
-            assertEquals("gitignore", FileUtil.getExtension(".gitignore"), "隐藏文件应返回点后的名称");
+            // git / nginx / apache 都把 .gitignore / .env / .htaccess 当作没有扩展名
+            for (String hidden : List.of(".gitignore", ".env", ".htaccess")) {
+                assertEquals("", FileUtil.getExtension(hidden),
+                        "点开头的隐藏文件按惯例没有扩展名：" + hidden);
+            }
+            assertEquals("txt", FileUtil.getExtension(".gitignore.txt"),
+                    "点开头但后面还有扩展名时，仍应正确取到最后一个扩展名");
         }
 
         @Test
@@ -472,6 +493,44 @@ class FileUtilTest {
     @Nested
     @DisplayName("zip 压缩文件夹")
     class ZipTest {
+        @Test
+        @DisplayName("源路径是根目录时不得因 getFileName() 为 null 而 NPE")
+        void rootDirectorySource() {
+            // Path.getFileName() 对根路径返回 null，原实现 .toString() 直接 NPE
+            Path zip = tempDir.resolve("root.zip");
+
+            // 根路径的 getFileName() 返回 null；压缩根目录本身属于危险操作，
+            // 但必须给出受控的异常而不是 NPE
+            assertThrows(IOException.class, () -> FileUtil.zip("/", zip.toString()),
+                    "必须是受控的 IOException，不是 NullPointerException");
+        }
+
+        @Test
+        @DisplayName("压缩包累计大小超过上限时必须中止")
+        void zipTotalSizeLimit() throws IOException {
+            // 用一个 20MB 的源目录验证累计上限生效（上限 10GB，此处通过反射下调以便测试）
+            Path source = Files.createDirectories(tempDir.resolve("zip-source"));
+            byte[] chunk = new byte[1024 * 1024];
+            Arrays.fill(chunk, (byte) 'A');
+            for (int i = 0; i < 20; i++) {
+                Files.write(source.resolve("big-" + i + ".bin"), chunk);
+            }
+            Path zip = tempDir.resolve("limited.zip");
+
+            long originalLimit = zipTotalBytesLimit.get();
+            try {
+                // 把上限临时下调到 5MB，让 20MB 的目录必然超限
+                zipTotalBytesLimit.set(5L * 1024 * 1024);
+                IOException exception = assertThrows(IOException.class,
+                        () -> FileUtil.zip(source.toString(), zip.toString()),
+                        "整个 zip 原本没有任何累计上限，一个 50GB 的目录就能撑爆磁盘");
+                assertTrue(exception.getMessage().contains("超过上限"),
+                        "异常信息应说明是累计大小超限，实际：" + exception.getMessage());
+            } finally {
+                zipTotalBytesLimit.set(originalLimit);
+            }
+        }
+
         @Test
         @DisplayName("源文件夹不存在时应抛出 IO 异常")
         void sourceNotExist() {
