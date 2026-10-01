@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core.annotation;
 
 import cn.hamm.airpower.core.DictionaryUtil;
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.interfaces.IDictionary;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
@@ -53,8 +54,11 @@ public @interface Dictionary {
     class DictionaryValidator implements ConstraintValidator<Dictionary, Integer> {
         /**
          * 标记的枚举类
+         * <p>设为 {@code final}：验证器实例由框架缓存并在多线程间共享，
+         * 可变实例字段会引入跨线程可见性问题；而它的值只在
+         * {@link #initialize(Dictionary)} 里写一次，之后只读</p>
          */
-        private Class<? extends IDictionary> enumClazz = null;
+        private Class<? extends IDictionary> enumClazz;
 
         /**
          * 验证
@@ -62,6 +66,10 @@ public @interface Dictionary {
          * @param value   验证的值
          * @param context 验证器会话
          * @return 验证结果
+         * @apiNote 只把「值不在字典范围内」当成校验失败；
+         * 注解配置错误（{@code value()} 指向的不是 IDictionary 枚举等）
+         * 属于开发期 bug，必须原样抛出而不是被 {@code catch (Exception)}
+         * 吞成「值不合法」——后者会让开发者看到「值不合法」却完全找不到原因
          */
         @Contract("null, _ -> true")
         @Override
@@ -69,9 +77,12 @@ public @interface Dictionary {
             if (null == value) {
                 return true;
             }
+            if (null == enumClazz) {
+                throw new ServiceException("@Dictionary 的 value() 未指定字典枚举类，无法校验");
+            }
             try {
                 DictionaryUtil.getDictionary(enumClazz, value);
-            } catch (Exception e) {
+            } catch (ServiceException e) {
                 return false;
             }
             return true;
@@ -85,6 +96,11 @@ public @interface Dictionary {
         @Contract(mutates = "this")
         @Override
         public final void initialize(@NotNull Dictionary dictionary) {
+            if (!IDictionary.class.isAssignableFrom(dictionary.value())) {
+                // 开发期就报清楚，而不是等到校验时变成一句「值不合法」
+                throw new ServiceException("@Dictionary 的 value() 必须是 IDictionary 的实现类，当前为 "
+                        + dictionary.value().getName());
+            }
             enumClazz = dictionary.value();
         }
     }

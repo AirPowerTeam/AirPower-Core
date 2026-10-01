@@ -31,7 +31,9 @@ public class DictionaryUtil {
      * @param key       枚举字典值
      * @param <D>       字典类型
      * @return 查到的字典项
-     * @apiNote 找不到时抛异常，并把该枚举的全部可选项作为错误数据带出，方便前端提示
+     * @apiNote 找不到时抛异常，并把该枚举的全部可选项作为错误数据带出，方便前端提示。
+     * 该列表<b>只在报错分支构建</b>：它遍历全部枚举项并用反射逐项取值拼成 Map，
+     * 命中路径上用不到
      */
     public static <D extends IDictionary> @NotNull D getDictionary(Class<D> enumClass, int key) {
         return getDictionary(enumClass, IDictionary::getKey, key);
@@ -49,14 +51,19 @@ public class DictionaryUtil {
     public static <D extends IDictionary> @NotNull D getDictionary(
             Class<D> enumClass, Function<D, Object> function, Object value
     ) {
-        List<Map<String, Object>> dictionaryList = getDictionaryList(enumClass);
-        return Arrays.stream(getEnumConstants(enumClass))
+        D found = Arrays.stream(getEnumConstants(enumClass))
                 .filter(enumItem -> Objects.equals(function.apply(enumItem), value))
                 .findFirst()
-                .orElseThrow(new ServiceException(
-                        "传入的值(" + enumClass.getSimpleName() + "=" + value + ")不在字典可选范围内",
-                        dictionaryList)
-                );
+                .orElse(null);
+        if (Objects.nonNull(found)) {
+            return found;
+        }
+        // 字典列表只在真正「找不到」时才构建：它要遍历全部枚举项并用反射
+        // 逐项取值拼成 Map，命中路径上完全用不到，白算一遍是纯浪费
+        throw new ServiceException(
+                "传入的值(" + enumClass.getSimpleName() + "=" + value + ")不在字典可选范围内",
+                getDictionaryList(enumClass)
+        );
     }
 
     /**

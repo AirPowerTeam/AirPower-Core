@@ -7,6 +7,7 @@ import jakarta.validation.Constraint;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.Documented;
@@ -107,6 +108,7 @@ class DictionaryTest {
     @DisplayName("DictionaryValidator - 字典值分支")
     class Validator {
 
+
         @Test
         @DisplayName("字典中存在的值校验通过")
         void existsInDictionary() {
@@ -137,11 +139,14 @@ class DictionaryTest {
         }
 
         @Test
-        @DisplayName("未调用 initialize 时一律返回 false（enumClazz 为 null 触发内部异常并被吞掉）")
+        @DisplayName("未调用 initialize 时应暴露配置错误而不是谎报「值不合法」")
         void withoutInitialize() {
             Dictionary.DictionaryValidator validator = new Dictionary.DictionaryValidator();
-            assertFalse(validator.isValid(1, null), "未初始化时字典类为 null，源码吞掉异常后返回 false");
-            assertTrue(validator.isValid(null, null), "未初始化时 null 仍返回 true");
+            // 原来的 catch (Exception) 会把「字典类没配」也吞成 false，
+            // 开发者看到「值不合法」却完全找不到真正原因
+            assertThrows(ServiceException.class, () -> validator.isValid(1, null),
+                    "未 initialize 属于注解配置错误，必须原样抛出而不是返回 false");
+            assertTrue(validator.isValid(null, null), "null 值仍视为通过，不依赖初始化");
         }
     }
 

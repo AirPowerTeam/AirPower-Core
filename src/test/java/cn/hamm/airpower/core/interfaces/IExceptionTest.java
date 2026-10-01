@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -350,10 +351,25 @@ class IExceptionTest {
         }
 
         @Test
-        @DisplayName("whenEmpty(非字符串对象) 按 toString 判断，不应抛异常")
+        @DisplayName("whenEmpty(非字符串对象) 按 toString 判断，数字不应触发异常")
         void testWhenEmptyOtherObject() {
             assertDoesNotThrow(() -> ERROR.whenEmpty(0), "数字 0 的 toString 非空白，不应触发异常");
-            assertDoesNotThrow(() -> ERROR.whenEmpty(List.of()), "空集合的 toString 为 []，不应触发异常");
+            assertDoesNotThrow(() -> ERROR.whenEmpty(new java.util.Date()), "Date 的 toString 非空白");
+        }
+
+        @Test
+        @DisplayName("whenEmpty(空集合/空数组/空 Optional) 应抛异常")
+        void testWhenEmptyRecognizesEmptyContainers() {
+            // 集合与数组的 toString() 永远有内容（new ArrayList<>() 是 "[]"、
+            // new HashMap<>() 是 "{}"），只判 toString 会让「校验通过但实际没数据」蒙混过关
+            assertThrows(ServiceException.class, () -> ERROR.whenEmpty(List.of()),
+                    "空 List 的 toString 是 []，原实现会误判为非空");
+            assertThrows(ServiceException.class, () -> ERROR.whenEmpty(new int[0]),
+                    "空数组同样应被识别为空");
+            assertThrows(ServiceException.class, () -> ERROR.whenEmpty(Optional.empty()),
+                    "空 Optional 应被识别为空");
+            assertDoesNotThrow(() -> ERROR.whenEmpty(List.of(1, 2)), "非空集合不应触发异常");
+            assertDoesNotThrow(() -> ERROR.whenEmpty(new int[]{1}), "非空数组不应触发异常");
         }
 
         @Test

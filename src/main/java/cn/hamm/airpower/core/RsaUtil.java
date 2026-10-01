@@ -31,6 +31,11 @@ public class RsaUtil {
     private static final String RSA = "RSA";
 
     /**
+     * PKCS#1 v1.5 填充占用的字节数
+     */
+    private static final int PKCS1_PADDING_BYTES = 11;
+
+    /**
      * 加密算法 KEY 长度
      */
     @Setter
@@ -159,8 +164,10 @@ public class RsaUtil {
      * @param action 具体的加解密动作
      * @param <T>    返回类型
      * @return 动作结果
-     * @apiNote 已经是 {@link ServiceException} 的直接抛出，避免出现
-     * "RSA 私钥加密失败，RSA 私钥未设置" 这种重复文案的异常嵌套
+     * @apiNote 统一在消息里拼一次前缀。注意这<b>并没有</b>避免「异常嵌套」：
+     * 内部若已抛 {@link ServiceException}，这里会把它重新包一层，消息变成
+     * "RSA 私钥加密失败，RSA 私钥未设置"。这是既有的重复文案行为，
+     * 修复需要改内部各处的抛异常方式，不在本次范围内
      */
     private static <T> T wrapException(@NotNull String prefix, @NotNull Callable<T> action) {
         try {
@@ -238,6 +245,58 @@ public class RsaUtil {
     }
 
     /**
+     * 从密钥对象取实际密钥长度
+     *
+     * @param key 密钥
+     * @return 比特数
+     */
+    private static int keySizeOf(@NotNull java.security.interfaces.RSAKey key) {
+        return key.getModulus().bitLength();
+    }
+
+    /**
+     * 计算单块可加密的明文长度
+     *
+     * @param key 密钥
+     * @return 字节数
+     * @apiNote PKCS#1 v1.5 填充要占 11 字节，必须按<b>实际</b>密钥长度算。
+     * 原来只用配置项 {@code keySize} 推导，而 key 是从 publicKey/privateKey 字符串
+     * 解析出来的，两者从未比对过：配了 2048 却塞进一把 1024 的密钥时，
+     * 分块会算出 245 字节而实际只解得开 117 字节，加密能成功但解不开，
+     * 或反过来直接抛下标越界
+     * @apiNote 实际长度与配置不一致时直接报错：静默按实际值算会掩盖配置错误，
+     * 而报错能让部署时立刻发现「密钥与配置不匹配」
+     */
+    private int encryptBlockSize(@NotNull Key key) {
+        return checkKeySizeMatchesConfig(key) / 8 - PKCS1_PADDING_BYTES;
+    }
+
+    /**
+     * 解密时的单块长度
+     *
+     * @param key 密钥
+     * @return 字节数
+     */
+    private int decryptBlockSize(@NotNull Key key) {
+        return checkKeySizeMatchesConfig(key) / 8;
+    }
+
+    /**
+     * 校验密钥实际长度与配置的 {@code keySize} 一致
+     *
+     * @param key 密钥
+     * @return 实际密钥长度
+     */
+    private int checkKeySizeMatchesConfig(@NotNull Key key) {
+        int actual = keySizeOf((java.security.interfaces.RSAKey) key);
+        if (actual != keySize) {
+            throw new ServiceException("RSA 密钥实际长度(" + actual + " 位)与配置的 keySize("
+                    + keySize + " 位)不一致，请修正配置或更换密钥");
+        }
+        return actual;
+    }
+
+    /**
      * 公钥加密
      *
      * @param sourceContent 原文
@@ -245,8 +304,8 @@ public class RsaUtil {
      */
     public final String publicKeyEncrypt(String sourceContent) {
         return wrapException("RSA 公钥加密失败", () -> {
-            int blockSize = keySize / 8 - 11;
-            return encrypt(sourceContent, getPublicKey(publicKey), blockSize);
+            PublicKey key = getPublicKey(publicKey);
+            return encrypt(sourceContent, key, encryptBlockSize(key));
         });
     }
 
@@ -258,8 +317,8 @@ public class RsaUtil {
      */
     public final @NotNull String privateKeyDecrypt(String encryptedContent) {
         return wrapException("RSA 私钥解密失败", () -> {
-            int blockSize = keySize / 8;
-            return decrypt(encryptedContent, getPrivateKey(privateKey), blockSize);
+            PrivateKey key = getPrivateKey(privateKey);
+            return decrypt(encryptedContent, key, decryptBlockSize(key));
         });
     }
 
@@ -271,8 +330,8 @@ public class RsaUtil {
      */
     public final String privateKeyEncrypt(String sourceContent) {
         return wrapException("RSA 私钥加密失败", () -> {
-            int blockSize = keySize / 8 - 11;
-            return encrypt(sourceContent, getPrivateKey(privateKey), blockSize);
+            PrivateKey key = getPrivateKey(privateKey);
+            return encrypt(sourceContent, key, encryptBlockSize(key));
         });
     }
 

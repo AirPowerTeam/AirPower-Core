@@ -344,7 +344,9 @@ class RsaUtilTest {
         @DisplayName("PEM 私钥可直接回填使用，无需调用方自行剥离")
         void testPrivateKeyPemRoundTrip() {
             String pem = rsaUtil.getPemPrivateKey(keyPair);
-            RsaUtil instance = RsaUtil.create().setPrivateKey(pem).setPublicKey(rsaUtil.getPemPublicKey(keyPair));
+            // 同样必须设置 keySize：密钥按 TEST_KEY_SIZE 生成，而默认是 2048
+            RsaUtil instance = RsaUtil.create().setKeySize(TEST_KEY_SIZE)
+                    .setPrivateKey(pem).setPublicKey(rsaUtil.getPemPublicKey(keyPair));
             String encrypted = assertDoesNotThrow(() -> instance.privateKeyEncrypt("中文内容"),
                     "PEM 私钥应能直接用于加密");
             assertEquals("中文内容", instance.publicKeyDecrypt(encrypted), "私钥加密后应能用公钥解密还原");
@@ -354,7 +356,10 @@ class RsaUtilTest {
         @DisplayName("PEM 公钥可直接回填使用，无需调用方自行剥离")
         void testPublicKeyPemRoundTrip() {
             String pem = rsaUtil.getPemPublicKey(keyPair);
-            RsaUtil instance = RsaUtil.create().setPublicKey(pem).setPrivateKey(rsaUtil.getPemPrivateKey(keyPair));
+            // 必须一并设置 keySize：keyPair 是按 TEST_KEY_SIZE=1024 生成的，
+            // 而 RsaUtil 的 keySize 默认 2048。两者不一致时加密分块会算错
+            RsaUtil instance = RsaUtil.create().setKeySize(TEST_KEY_SIZE)
+                    .setPublicKey(pem).setPrivateKey(rsaUtil.getPemPrivateKey(keyPair));
             String encrypted = assertDoesNotThrow(() -> instance.publicKeyEncrypt("中文内容"),
                     "PEM 公钥应能直接用于加密");
             assertEquals("中文内容", instance.privateKeyDecrypt(encrypted), "公钥加密后应能用私钥解密还原");

@@ -4,7 +4,10 @@ import cn.hamm.airpower.core.StringUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 
+import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -269,7 +272,7 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
     }
 
     /**
-     * 当为 <b>null 或 空字符串</b> 时抛出异常
+     * 当为 <b>null、空字符串、空集合或空数组</b> 时抛出异常
      *
      * @param obj 被验证的数据
      */
@@ -286,7 +289,35 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
      */
     @Contract("null, _ -> fail")
     default void whenEmpty(Object obj, String message) {
-        when(Objects.isNull(obj) || !StringUtil.hasText(obj.toString()), message);
+        if (isEmptyValue(obj)) {
+            when(true, message);
+        }
+    }
+
+    /**
+     * 判断「空值」：{@code null}、无有效字符的文本、空集合、空数组
+     *
+     * @param obj 被判断的值
+     * @return 是否为空
+     * @apiNote 集合与数组的 {@code toString()} 永远有内容
+     * （{@code new ArrayList<>()} 是 {@code "[]"}、{@code new HashMap<>()} 是 {@code "{}"}），
+     * 只判 toString 会让「校验通过但实际没数据」蒙混过关
+     */
+    @Contract("null -> false")
+    private static boolean isEmptyValue(Object obj) {
+        if (Objects.isNull(obj)) {
+            return true;
+        }
+        if (obj instanceof Collection<?> collection) {
+            return collection.isEmpty();
+        }
+        if (obj.getClass().isArray()) {
+            return Array.getLength(obj) == 0;
+        }
+        if (obj instanceof Optional<?> optional) {
+            return optional.isEmpty();
+        }
+        return !StringUtil.hasText(obj.toString());
     }
 
     /**
