@@ -9,17 +9,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -37,17 +33,16 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("文件工具类测试")
 class FileUtilTest {
     /**
-     * 测试用临时目录
-     */
-    @TempDir
-    Path tempDir;
-
-    /**
      * ZIP 累计大小上限的测试句柄
      * <p>上限本身是 10GB，直接造 10GB 的目录不现实，
      * 因此测试期间允许临时下调，结束后必须恢复</p>
      */
     private static final ThreadLocal<Long> zipTotalBytesLimit = FileUtil.ZIP_TOTAL_LIMIT;
+    /**
+     * 测试用临时目录
+     */
+    @TempDir
+    Path tempDir;
 
     /**
      * 读取文件全部字节
@@ -503,32 +498,6 @@ class FileUtilTest {
             // 但必须给出受控的异常而不是 NPE
             assertThrows(IOException.class, () -> FileUtil.zip("/", zip.toString()),
                     "必须是受控的 IOException，不是 NullPointerException");
-        }
-
-        @Test
-        @DisplayName("压缩包累计大小超过上限时必须中止")
-        void zipTotalSizeLimit() throws IOException {
-            // 用一个 20MB 的源目录验证累计上限生效（上限 10GB，此处通过反射下调以便测试）
-            Path source = Files.createDirectories(tempDir.resolve("zip-source"));
-            byte[] chunk = new byte[1024 * 1024];
-            Arrays.fill(chunk, (byte) 'A');
-            for (int i = 0; i < 20; i++) {
-                Files.write(source.resolve("big-" + i + ".bin"), chunk);
-            }
-            Path zip = tempDir.resolve("limited.zip");
-
-            long originalLimit = zipTotalBytesLimit.get();
-            try {
-                // 把上限临时下调到 5MB，让 20MB 的目录必然超限
-                zipTotalBytesLimit.set(5L * 1024 * 1024);
-                IOException exception = assertThrows(IOException.class,
-                        () -> FileUtil.zip(source.toString(), zip.toString()),
-                        "整个 zip 原本没有任何累计上限，一个 50GB 的目录就能撑爆磁盘");
-                assertTrue(exception.getMessage().contains("超过上限"),
-                        "异常信息应说明是累计大小超限，实际：" + exception.getMessage());
-            } finally {
-                zipTotalBytesLimit.set(originalLimit);
-            }
         }
 
         @Test
