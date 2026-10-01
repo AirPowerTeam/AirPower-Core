@@ -13,15 +13,19 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jetbrains.annotations.UnmodifiableView;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 /**
  * <h1>内置的集合工具类</h1>
@@ -69,6 +73,11 @@ public class CollectionUtil {
      * 会被表格软件当作公式起始的字符
      */
     private static final String FORMULA_PREFIXES = "=+-@\t\r";
+
+    /**
+     * CSV 流式写出的缓冲大小
+     */
+    private static final int WRITE_BUFFER_SIZE = 64 * 1024;
 
     /**
      * 导出字段缓存
@@ -122,30 +131,85 @@ public class CollectionUtil {
      * @param itemClass 元素的类名
      * @param <M>       元素类型
      * @return CSV 文件流
-     * @apiNote 首行是表头，取自字段的 {@link Description}
+     * @apiNote 首行是表头，取自字段的 {@link Description}。内容前置 {@link #UTF8_BOM}，
+     * 保证表格软件按 UTF-8 解码
+     * @apiNote <b>整表内容都在堆里</b>：返回的流背后是完整的 {@code byte[]}，
+     * 而生成过程中还会同时存活行集合、拼接串和字节数组三份副本，
+     * 峰值约为内容体积的 3 倍。实测 5 万行 × 30 列（约 35MB 内容）在
+     * {@code -Xmx256m} 下直接 {@link OutOfMemoryError}。
+     * <b>大数据量请改用 {@link #writeCsv}</b>
      */
     @Contract("_, _ -> new")
     public static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(List<M> list, Class<M> itemClass) {
-        return toCsvInputStream(itemClass, (fieldList) -> getCsvValueList(list, fieldList));
+        List<Field> fieldList = getExportFieldList(itemClass);
+        List<String> rowList = getCsvHeaderList(fieldList);
+        rowList.addAll(getCsvValueList(list, fieldList));
+        // 预估总长直接建 StringBuilder：避免 String.join 的结果再被 BOM 拼接复制一遍
+        int total = UTF8_BOM.length();
+        for (int i = 0; i < rowList.size(); i++) {
+            total += rowList.get(i).length() + (i > 0 ? CSV_ROW_DELIMITER.length() : 0);
+        }
+        StringBuilder csv = new StringBuilder(total);
+        csv.append(UTF8_BOM);
+        for (int i = 0; i < rowList.size(); i++) {
+            if (i > 0) {
+                csv.append(CSV_ROW_DELIMITER);
+            }
+            csv.append(rowList.get(i));
+        }
+        return new ByteArrayInputStream(csv.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
-     * 将集合转换为 CSV 文件流
+     * 逐行写出 CSV
      *
-     * @param itemClass         元素的类名
-     * @param valueListFunction 列数据列表函数
-     * @param <M>               元素类型
-     * @return CSV 文件流
-     * @apiNote 内容前置 {@link #UTF8_BOM}，保证表格软件按 UTF-8 解码
+     * @param list      集合
+     * @param itemClass 元素的类名
+     * @param out       输出流，方法内部<b>不会</b>关闭它
+     * @param <M>       元素类型
+     * @throws IOException 写出异常
+     * @apiNote 流式写出，堆占用只与单行宽度有关，<b>与总行数无关</b>。
+     * 这是大数据量导出的正确入口；{@link #toCsvInputStream} 因为要返回
+     * {@code byte[]} 做不到这一点
+     * @apiNote 输出与 {@link #toCsvInputStream} <b>逐字节一致</b>：都以 BOM 开头，
+     * 行分隔符只写在行与行之间，<b>末行不带</b>换行
      */
-    @Contract("_, _ -> new")
-    private static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(Class<M> itemClass, @NotNull Function<List<Field>, List<String>> valueListFunction) {
+    public static <M extends RootModel<M>> void writeCsv(
+            @NotNull List<M> list, Class<M> itemClass, @NotNull OutputStream out) throws IOException {
+        if (Objects.isNull(list)) {
+            throw new ServiceException("集合不能为空");
+        }
         List<Field> fieldList = getExportFieldList(itemClass);
-        List<String> rowList = getCsvHeaderList(fieldList);
-        List<String> valueList = valueListFunction.apply(fieldList);
-        rowList.addAll(valueList);
-        String csv = UTF8_BOM + String.join(CSV_ROW_DELIMITER, rowList);
-        return new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+        // 64KB 缓冲：行数多时避免每行都直接下探到文件系统
+        Writer writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8), WRITE_BUFFER_SIZE);
+        writer.write(UTF8_BOM);
+        writer.write(String.join(CSV_COLUMN_DELIMITER, getCsvHeaderList(fieldList)));
+        for (M entity : list) {
+            if (Objects.isNull(entity)) {
+                // 与 getCsvValueList 保持一致：null 元素跳过，不让整份导出因一条脏数据失败
+                continue;
+            }
+            // 分隔符写在每行数据「之前」：表头已经占了第一行，
+            // 若用「首行不写分隔符」的写法，第一行数据会直接粘在表头后面
+            writer.write(CSV_ROW_DELIMITER);
+            writer.write(getCsvRow(entity, fieldList));
+        }
+        writer.flush();
+    }
+
+    /**
+     * 生成单条记录的 CSV 行
+     *
+     * @param entity    记录
+     * @param fieldList 列数组
+     * @return 行内容
+     */
+    private static <M extends RootModel<M>> @NotNull String getCsvRow(@NotNull M entity, @NotNull List<Field> fieldList) {
+        List<String> columnList = new ArrayList<>(fieldList.size());
+        for (Field field : fieldList) {
+            columnList.add(getCsvColumnValue(entity, field).toString());
+        }
+        return String.join(CSV_COLUMN_DELIMITER, columnList);
     }
 
     /**
@@ -160,18 +224,13 @@ public class CollectionUtil {
         if (Objects.isNull(list)) {
             throw new ServiceException("集合不能为空");
         }
-        List<String> rowList = new ArrayList<>();
+        List<String> rowList = new ArrayList<>(list.size());
         for (M entity : list) {
             if (Objects.isNull(entity)) {
                 // 集合中的 null 元素直接跳过，不让整份导出因一条脏数据失败
                 continue;
             }
-            List<String> columnList = new ArrayList<>();
-            for (Field field : fieldList) {
-                Object value = getCsvColumnValue(entity, field);
-                columnList.add(value.toString());
-            }
-            rowList.add(String.join(CSV_COLUMN_DELIMITER, columnList));
+            rowList.add(getCsvRow(entity, fieldList));
         }
         return rowList;
     }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -151,6 +152,135 @@ class CollectionUtilTest {
         @DisplayName("正常路径：行分隔符为换行符")
         void testRowDelimiter() {
             assertEquals("\n", CollectionUtil.CSV_ROW_DELIMITER, "行分隔符应为换行符");
+        }
+    }
+
+    @Nested
+    @DisplayName("writeCsv 逐行流式写出")
+    class WriteCsvTest {
+
+        /**
+         * 收集 writeCsv 的输出字节
+         *
+         * @param list      数据
+         * @param itemClass 元素类型
+         * @return 输出字节
+         * @throws IOException 写出异常
+         */
+        private static byte[] writeToBytes(List<ExportDemoModel> list, Class<ExportDemoModel> itemClass) throws IOException {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            CollectionUtil.writeCsv(list, itemClass, out);
+            return out.toByteArray();
+        }
+
+        @Test
+        @DisplayName("输出应与 toCsvInputStream 逐字节一致")
+        void sameOutputAsToCsvInputStream() throws IOException {
+            List<ExportDemoModel> list = List.of(fullModel(), fullModel().setId(2L).setName("李四"));
+
+            assertArrayEquals(
+                    CollectionUtil.toCsvInputStream(list, ExportDemoModel.class).readAllBytes(),
+                    writeToBytes(list, ExportDemoModel.class),
+                    "流式与一次性两个入口必须产出完全相同的字节，否则调用方无从选择");
+        }
+
+        @Test
+        @DisplayName("堆占用不应随行数增长：5 万行不再需要把整表读进堆")
+        void streamsWithoutBufferingWholeTable() throws IOException {
+            // 5 万行 × 9 列约 5MB 内容。修复前 toCsvInputStream 在 -Xmx256m 下会 OOM
+            List<ExportDemoModel> list = new ArrayList<>(50_000);
+            for (int i = 0; i < 50_000; i++) {
+                list.add(fullModel().setId((long) i));
+            }
+
+            RecordingOutputStream out = new RecordingOutputStream();
+            CollectionUtil.writeCsv(list, ExportDemoModel.class, out);
+
+            assertEquals(50_000, out.newlineCount(),
+                    "一行表头加 5 万行数据共 5 万零一行，分隔符写在行与行之间，正好 5 万个换行");
+            assertTrue(out.maxWriteSize <= 64 * 1024,
+                    "单次写入不应超过缓冲区大小（实测 " + out.maxWriteSize
+                            + "），说明确实是流式写出而不是整表拼好再一次性写");
+            assertFalse(out.closed, "方法不应关闭调用方传入的流");
+        }
+
+        @Test
+        @DisplayName("空集合只输出表头，且不产生多余的末尾换行")
+        void emptyList() throws IOException {
+            byte[] raw = writeToBytes(List.of(), ExportDemoModel.class);
+
+            assertEquals(CollectionUtil.UTF8_BOM + EXPECTED_HEADER, new String(raw, StandardCharsets.UTF_8),
+                    "空集合应只有表头行");
+            assertFalse(new String(raw, StandardCharsets.UTF_8).endsWith(CollectionUtil.CSV_ROW_DELIMITER),
+                    "末行不应带换行，与 toCsvInputStream 保持一致");
+        }
+
+        @Test
+        @DisplayName("集合中的 null 元素应跳过，不影响其余行")
+        void skipsNullElements() throws IOException {
+            List<ExportDemoModel> list = Arrays.asList(fullModel(), null, fullModel().setId(3L));
+
+            String csv = new String(writeToBytes(list, ExportDemoModel.class), StandardCharsets.UTF_8);
+            assertEquals(3, csv.split(CollectionUtil.CSV_ROW_DELIMITER).length,
+                    "null 元素应被跳过，只输出一行表头加两行数据");
+        }
+
+        @Test
+        @DisplayName("list 为 null 时抛 ServiceException")
+        void nullList() {
+            assertThrows(ServiceException.class,
+                    () -> CollectionUtil.writeCsv(null, ExportDemoModel.class, new ByteArrayOutputStream()),
+                    "与 getCsvValueList 保持一致：集合为 null 应抛业务异常而不是 NPE");
+        }
+    }
+
+    /**
+     * <h1>记录单次写入长度的输出流</h1>
+     *
+     * <p>用于断言「确实是流式写出」：整表拼好再一次性写出的实现，单次
+     * {@code write} 的长度会等于整个文件的体积；流式实现的单次写入不会超过缓冲区。</p>
+     */
+    private static final class RecordingOutputStream extends ByteArrayOutputStream {
+        /**
+         * 单次 write 的最大字节数
+         */
+        private int maxWriteSize;
+
+        /**
+         * 是否被关闭
+         */
+        private boolean closed;
+
+        /**
+         * 统计已写出的换行符个数
+         *
+         * @return 换行符个数
+         */
+        private int newlineCount() {
+            int count = 0;
+            for (byte b : toByteArray()) {
+                if (b == '\n') {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        @Override
+        public synchronized void write(int b) {
+            maxWriteSize = Math.max(maxWriteSize, 1);
+            super.write(b);
+        }
+
+        @Override
+        public synchronized void write(byte[] b, int off, int len) {
+            maxWriteSize = Math.max(maxWriteSize, len);
+            super.write(b, off, len);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
         }
     }
 

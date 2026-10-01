@@ -155,6 +155,26 @@ public class FileUtil {
      * {@link NoSuchFileException}
      */
     public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName, byte @NotNull [] bytes, OpenOption @NotNull ... options) {
+        Path target = resolveSaveTarget(absoluteDirectory, fileName);
+        try {
+            Files.write(target, bytes, completeAppendOption(options));
+        } catch (IOException | IllegalArgumentException e) {
+            // 带上异常类型：IO 异常的 getMessage() 往往只有路径，缺了类型根本无法判断是权限、
+            // 目录还是文件不存在
+            throw new ServiceException("文件保存失败，[" + e.getClass().getSimpleName() + "] " + e.getMessage());
+        }
+    }
+
+    /**
+     * 校验并解析待写入的目标文件路径
+     *
+     * @param absoluteDirectory 目录绝对路径
+     * @param fileName          文件名
+     * @return 规范化后的目标路径
+     * @apiNote 目录会自动创建。这里集中做「穿越、符号链接、文件名白名单」三项校验，
+     * 让 {@code byte[]} 与 {@link InputStream} 两个重载共享同一套安全规则
+     */
+    private static @NotNull Path resolveSaveTarget(@NotNull String absoluteDirectory, @NotNull String fileName) {
         absoluteDirectory = formatDirectory(absoluteDirectory);
         Path base = Paths.get(absoluteDirectory).toAbsolutePath().normalize();
         Path target = base.resolve(fileName).normalize();
@@ -171,13 +191,7 @@ public class FileUtil {
             throw new ServiceException("文件保存失败，非法的文件名：" + fileName);
         }
         createDirectories(base.toString());
-        try {
-            Files.write(target, bytes, completeAppendOption(options));
-        } catch (IOException | IllegalArgumentException e) {
-            // 带上异常类型：IO 异常的 getMessage() 往往只有路径，缺了类型根本无法判断是权限、
-            // 目录还是文件不存在
-            throw new ServiceException("文件保存失败，[" + e.getClass().getSimpleName() + "] " + e.getMessage());
-        }
+        return target;
     }
 
     /**
@@ -215,6 +229,32 @@ public class FileUtil {
      */
     public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName, @NotNull String string, OpenOption @NotNull ... options) {
         saveFile(absoluteDirectory, fileName, string.getBytes(StandardCharsets.UTF_8), options);
+    }
+
+    /**
+     * 把输入流保存为文件，边读边写
+     *
+     * @param absoluteDirectory 目录绝对路径
+     * @param fileName          文件名
+     * @param inputStream       输入流，方法内部<b>不会</b>关闭它
+     * @param options           保存选项
+     * @apiNote 供内容大到不能一次性读进堆里的场景使用。用
+     * {@code readAllBytes()} 再写会同时驻留「源缓冲 + 目标 byte[]」两份，
+     * 这里用固定 8KB 缓冲，堆占用与文件大小无关
+     * @apiNote 路径校验、符号链接拒绝、文件名白名单与 {@code byte[]} 重载完全一致；
+     * 目录不存在时同样自动创建。{@code APPEND} 仍会被补上 {@code CREATE}
+     */
+    public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName,
+                                @NotNull InputStream inputStream, OpenOption @NotNull ... options) {
+        Path target = resolveSaveTarget(absoluteDirectory, fileName);
+        createDirectories(target.getParent().toString());
+        try (OutputStream out = Files.newOutputStream(target, completeAppendOption(options))) {
+            inputStream.transferTo(out);
+        } catch (IOException | IllegalArgumentException e) {
+            // 带上异常类型：IO 异常的 getMessage() 往往只有路径，缺了类型无法判断是权限、
+            // 目录还是文件不存在
+            throw new ServiceException("文件保存失败，[" + e.getClass().getSimpleName() + "] " + e.getMessage());
+        }
     }
 
     /**

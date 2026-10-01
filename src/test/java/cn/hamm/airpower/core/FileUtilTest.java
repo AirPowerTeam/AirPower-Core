@@ -7,12 +7,15 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
@@ -363,6 +366,51 @@ class FileUtilTest {
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             assertEquals("第一行\n第二行\n", new String(readBytes(file), StandardCharsets.UTF_8),
                     "调用方自己带上 CREATE 时不应改变追加语义");
+        }
+
+        @Test
+        @DisplayName("输入流重载应边读边写，堆占用与流长度无关")
+        void saveInputStream() throws IOException {
+            Path dir = tempDir.resolve("input-stream");
+            Path file = dir.resolve("big.txt");
+            byte[] payload = new byte[1024 * 1024];
+            Arrays.fill(payload, (byte) 'A');
+
+            FileUtil.saveFile(dir.toString(), "big.txt", new ByteArrayInputStream(payload));
+
+            assertEquals(payload.length, Files.size(file), "落盘字节数应与源流一致");
+            assertEquals('A', readBytes(file)[0], "内容应原样落盘");
+        }
+
+        @Test
+        @DisplayName("输入流重载不应关闭调用方传入的流")
+        void inputStreamNotClosed() throws IOException {
+            Path dir = tempDir.resolve("stream-not-closed");
+            boolean[] closed = {false};
+            InputStream source = new ByteArrayInputStream("中文内容".getBytes(StandardCharsets.UTF_8)) {
+                @Override
+                public void close() {
+                    closed[0] = true;
+                }
+            };
+
+            FileUtil.saveFile(dir.toString(), "a.txt", source);
+
+            assertFalse(closed[0], "流的所有权属于调用方，工具类不应替它关闭");
+        }
+
+        @Test
+        @DisplayName("输入流重载应沿用路径穿越与文件名白名单校验")
+        void inputStreamRejectsIllegalFileName() {
+            Path dir = tempDir.resolve("stream-guard");
+            assertThrows(ServiceException.class,
+                    () -> FileUtil.saveFile(dir.toString(), "../evil.txt",
+                            new ByteArrayInputStream(new byte[]{1})),
+                    "与 byte[] 重载一样必须拒绝目录穿越");
+            assertThrows(ServiceException.class,
+                    () -> FileUtil.saveFile(dir.toString(), "中文名.txt",
+                            new ByteArrayInputStream(new byte[]{1})),
+                    "与 byte[] 重载一样只允许安全字符的文件名");
         }
 
         @Test
