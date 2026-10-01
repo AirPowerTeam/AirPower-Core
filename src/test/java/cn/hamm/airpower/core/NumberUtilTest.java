@@ -226,12 +226,19 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("double 重载：NaN / 无穷大会抛 NumberFormatException")
+        @DisplayName("double 重载：NaN / 无穷大会抛 ServiceException")
         void doubleSpecialValue() {
-            assertThrows(NumberFormatException.class, () -> NumberUtil.add(Double.NaN, 1.0),
-                    "BigDecimal.valueOf 无法处理 NaN，应抛 NumberFormatException");
-            assertThrows(NumberFormatException.class, () -> NumberUtil.multiply(Double.POSITIVE_INFINITY, 2.0),
-                    "BigDecimal.valueOf 无法处理正无穷，应抛 NumberFormatException");
+            // BigDecimal.valueOf 对 NaN/±Infinity 抛的是裸 NumberFormatException
+            //（"Character N is neither a decimal digit number"），既没有可读信息，
+            // 也会让 ExceptionInterceptor 走错分支（它只对 ServiceException 读 code/data）
+            assertThrows(ServiceException.class, () -> NumberUtil.add(Double.NaN, 1.0),
+                    "NaN 应抛带中文提示的 ServiceException");
+            assertThrows(ServiceException.class, () -> NumberUtil.multiply(Double.POSITIVE_INFINITY, 2.0),
+                    "正无穷应抛带中文提示的 ServiceException");
+            assertThrows(ServiceException.class, () -> NumberUtil.subtract(Double.NEGATIVE_INFINITY, 2.0),
+                    "负无穷应抛带中文提示的 ServiceException");
+            assertThrows(ServiceException.class, () -> NumberUtil.divide(Double.NaN, 1.0),
+                    "除法的 NaN 也应被拦下");
         }
 
         @Test
@@ -441,13 +448,16 @@ public class NumberUtilTest {
         }
 
         @Test
-        @DisplayName("NaN 与无穷大抛 NumberFormatException")
+        @DisplayName("NaN 与无穷大抛 ServiceException")
         void specialValue() {
-            assertThrows(NumberFormatException.class, () -> NumberUtil.round(Double.NaN, 2, RoundingMode.HALF_UP),
-                    "BigDecimal.valueOf 无法处理 NaN，应抛 NumberFormatException");
-            assertThrows(NumberFormatException.class,
+            assertThrows(ServiceException.class, () -> NumberUtil.round(Double.NaN, 2, RoundingMode.HALF_UP),
+                    "NaN 应抛带中文提示的 ServiceException");
+            assertThrows(ServiceException.class,
                     () -> NumberUtil.round(Double.POSITIVE_INFINITY, 2, RoundingMode.HALF_UP),
-                    "BigDecimal.valueOf 无法处理正无穷，应抛 NumberFormatException");
+                    "正无穷应抛带中文提示的 ServiceException");
+            assertThrows(ServiceException.class,
+                    () -> NumberUtil.floor(Double.NaN, 2),
+                    "floor 委托给 round，也应被拦下");
         }
     }
 
@@ -536,6 +546,44 @@ public class NumberUtilTest {
             // 10 / 3 HALF_UP 到 0 位 = 3
             assertEquals(3.0d, NumberUtil.divide(10d, 3d, 0),
                     "scale 为 0 是合法用法，不应被负 scale 的校验误伤");
+        }
+    }
+
+    @Nested
+    @DisplayName("NaN 与无穷大必须被拦下（00137）")
+    class NonFiniteTest {
+
+        @Test
+        @DisplayName("四则运算与取整都要拦下非有限值")
+        void allOperationsRejectNonFinite() {
+            double[] bad = {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
+            for (double v : bad) {
+                assertThrows(ServiceException.class, () -> NumberUtil.add(v, 1.0), "add 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.subtract(v, 1.0), "subtract 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.multiply(v, 2.0), "multiply 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.divide(v, 2.0), "divide 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.divide(1.0, v, 4), "divscale 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.round(v, 2, RoundingMode.HALF_UP),
+                        "round 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.floor(v, 2), "floor 应拦下 " + v);
+                assertThrows(ServiceException.class, () -> NumberUtil.ceil(v, 2), "ceil 应拦下 " + v);
+            }
+        }
+
+        @Test
+        @DisplayName("变长参数里的非有限值同样要拦下")
+        void varargsAlsoRejected() {
+            assertThrows(ServiceException.class, () -> NumberUtil.add(1.0, 2.0, Double.NaN),
+                    "第三个参数是非有限值时也必须拦下");
+            assertThrows(ServiceException.class, () -> NumberUtil.multiply(1.0, 2.0, Double.POSITIVE_INFINITY),
+                    "multiply 的变长参数同样要拦下");
+        }
+
+        @Test
+        @DisplayName("正常值不受影响")
+        void normalValuesStillWork() {
+            assertEquals(3.0, NumberUtil.add(1.0, 2.0), "正常加法不受影响");
+            assertEquals(0.5, NumberUtil.divide(1.0, 2.0), "正常除法不受影响");
         }
     }
 }

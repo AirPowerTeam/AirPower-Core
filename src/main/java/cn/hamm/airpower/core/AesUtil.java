@@ -42,15 +42,22 @@ public class AesUtil {
     private String algorithm = "AES";
 
     /**
+     * 默认偏移向量
+     */
+    private static final byte[] DEFAULT_IV = "0000000000000000".getBytes(UTF_8);
+
+    /**
      * 密钥
      */
     private byte[] key;
 
     /**
      * 偏移向量
+     * <p>刻意不生成 Lombok setter：{@code setKey} 做了 {@code clone()} 防调用方
+     * 事后篡改密钥，{@code setIv} 若直接存引用就会与 setKey 的保护不对称——
+     * 调用方拿到 iv 数组的引用后改一个字节，IV 就被静默换掉了</p>
      */
-    @Setter
-    private byte[] iv = "0000000000000000".getBytes(UTF_8);
+    private byte[] iv = DEFAULT_IV.clone();
 
     /**
      * 工作模式
@@ -119,6 +126,20 @@ public class AesUtil {
             throw new ServiceException("AES 密钥长度必须为 16、24 或 32 字节，当前为 " + key.length + " 字节");
         }
         this.key = key.clone();
+        return this;
+    }
+
+    /**
+     * 设置偏移向量
+     *
+     * @param iv 偏移向量
+     * @return this
+     * @apiNote 与 {@link #setKey(byte[])} 一样做防御性拷贝，避免调用方事后篡改数组
+     */
+    public AesUtil setIv(byte[] iv) {
+        // 传 null 时保持 null（不回落默认值）：null 会在加密时由 IV_LENGTH 校验
+        // 抛 ServiceException，那是既有契约，不该被这次改动悄悄改掉
+        this.iv = Objects.isNull(iv) ? null : iv.clone();
         return this;
     }
 

@@ -748,12 +748,25 @@ class AccessTokenUtilTest {
         }
 
         @Test
-        @DisplayName("临界值秒数不会被误判为溢出")
+        @DisplayName("大但安全的秒数不应被误判为溢出")
         void setExpireSecondAcceptsLargeButValidValue() {
-            // 约 292 年，在 long 范围内，不应触发溢出分支
-            long validSecond = Long.MAX_VALUE / DateTimeUtil.MILLISECONDS_PER_SECOND;
+            // 100 年 ≈ 3.15e12 秒，加上当前时间后仍在 long 范围内
+            long validSecond = 100L * 365 * 24 * 3600;
             assertDoesNotThrow(() -> AccessTokenUtil.create().setExpireSecond(validSecond),
-                    "范围内的秒数 " + validSecond + " 不应被误判为溢出");
+                    "安全范围内的秒数 " + validSecond + " 不应被误判为溢出");
+        }
+
+        @Test
+        @DisplayName("加上当前时间后仍会溢出时必须报错而不是静默变成负数")
+        void setExpireSecondRejectsSilentOverflow() {
+            // 约 292 年：秒数本身在 long 范围内，但 setExpireMillisecond 还要加上
+            // 当前时间（≈1.78e12），总和越过 Long.MAX_VALUE。
+            // 修复前这里是普通加法，会静默回绕成负数，令牌一签发就过期
+            long overflowingSecond = Long.MAX_VALUE / DateTimeUtil.MILLISECONDS_PER_SECOND;
+
+            assertThrows(ArithmeticException.class,
+                    () -> AccessTokenUtil.create().setExpireSecond(overflowingSecond),
+                    "总时间越过 Long.MAX_VALUE 时必须抛异常，而不是静默回绕成一个负的过期时间");
         }
     }
 
@@ -803,6 +816,35 @@ class AccessTokenUtilTest {
             assertFalse(e.getMessage().contains("创建失败"),
                     "验证场景的错误信息不应出现「创建失败」，实际：" + e.getMessage());
             assertTrue(e.getMessage().contains("校验失败"), "应说明是校验失败，实际：" + e.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("过期时间的溢出保护（00045）")
+    class MillisecondOverflowTest {
+
+        @Test
+        @DisplayName("millisecond 加上当前时间溢出时必须报错而不是静默回绕")
+        void addExactProtectsAgainstWrap() {
+            // 当前时间约 1.78e12，传 Long.MAX_VALUE 时普通加法会溢出成负数，
+            // 令牌一签发就过期，而且没有任何异常
+            assertThrows(ArithmeticException.class,
+                    () -> AccessTokenUtil.create().setPayloadId(1L).setExpireMillisecond(Long.MAX_VALUE),
+                    "溢出必须抛异常：静默回绕成负数会让令牌立刻失效");
+        }
+
+        @Test
+        @DisplayName("毫秒重载仍要拒绝非正数")
+        void nonPositiveStillRejected() {
+            assertThrows(ServiceException.class, () -> AccessTokenUtil.create().setExpireMillisecond(0L));
+            assertThrows(ServiceException.class, () -> AccessTokenUtil.create().setExpireMillisecond(-1L));
+        }
+
+        @Test
+        @DisplayName("正常值不受影响")
+        void normalValueStillWorks() {
+            assertDoesNotThrow(() -> AccessTokenUtil.create().setPayloadId(1L).setExpireMillisecond(60_000L),
+                    "60 秒这类正常值不应被误判为溢出");
         }
     }
 }

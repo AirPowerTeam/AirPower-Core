@@ -55,10 +55,39 @@ public class NumberUtil {
      * @return 和
      */
     public static double add(double first, double second, double... values) {
-        return calculate(BigDecimal::add, BigDecimal.valueOf(first), BigDecimal.valueOf(second),
+        return calculate(BigDecimal::add, toBigDecimal(first), toBigDecimal(second),
                 Arrays.stream(Objects.requireNonNullElse(values, EMPTY_DOUBLE))
-                        .mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
+                        .mapToObj(NumberUtil::toBigDecimal).toArray(BigDecimal[]::new)
         ).doubleValue();
+    }
+
+    /**
+     * 把 double 转成 {@link BigDecimal}
+     *
+     * @param value 原值
+     * @return BigDecimal
+     * @apiNote {@code BigDecimal.valueOf(double)} 对 NaN 与 ±Infinity 会抛裸的
+     * {@link NumberFormatException}（"Character N is neither a decimal digit number"），
+     * 而同一类里的其它失败分支都包成了带中文提示的 {@link ServiceException}，
+     * 裸异常既没有可读信息也会走错异常处理分支
+     */
+    private static @NotNull BigDecimal toBigDecimal(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            throw new ServiceException("数值不能为 NaN 或无穷大，当前为 " + value);
+        }
+        return BigDecimal.valueOf(value);
+    }
+
+    /**
+     * 把 long 转成 {@link BigDecimal}
+     *
+     * @param value 原值
+     * @return BigDecimal
+     * @apiNote 单独提供而不是让 long 隐式加宽到 double：超过 2^53 的 long
+     * 转成 double 会丢精度，除法结果会跟着错
+     */
+    private static @NotNull BigDecimal toBigDecimal(long value) {
+        return BigDecimal.valueOf(value);
     }
 
     /**
@@ -85,9 +114,9 @@ public class NumberUtil {
      * @return 差
      */
     public static double subtract(double first, double second, double... values) {
-        return calculate(BigDecimal::subtract, BigDecimal.valueOf(first), BigDecimal.valueOf(second),
+        return calculate(BigDecimal::subtract, toBigDecimal(first), toBigDecimal(second),
                 Arrays.stream(Objects.requireNonNullElse(values, EMPTY_DOUBLE))
-                        .mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
+                        .mapToObj(NumberUtil::toBigDecimal).toArray(BigDecimal[]::new)
         ).doubleValue();
     }
 
@@ -115,9 +144,9 @@ public class NumberUtil {
      * @return 乘积
      */
     public static double multiply(double first, double second, double... values) {
-        return calculate(BigDecimal::multiply, BigDecimal.valueOf(first), BigDecimal.valueOf(second),
+        return calculate(BigDecimal::multiply, toBigDecimal(first), toBigDecimal(second),
                 Arrays.stream(Objects.requireNonNullElse(values, EMPTY_DOUBLE))
-                        .mapToObj(BigDecimal::valueOf).toArray(BigDecimal[]::new)
+                        .mapToObj(NumberUtil::toBigDecimal).toArray(BigDecimal[]::new)
         ).doubleValue();
     }
 
@@ -156,7 +185,7 @@ public class NumberUtil {
      * @return 商
      */
     public static double divide(double first, double second, int scale) {
-        return divide(BigDecimal.valueOf(first), BigDecimal.valueOf(second), scale, DEFAULT_ROUNDING_MODE)
+        return divide(toBigDecimal(first), toBigDecimal(second), scale, DEFAULT_ROUNDING_MODE)
                 .doubleValue();
     }
 
@@ -170,7 +199,7 @@ public class NumberUtil {
      * @return 商
      */
     public static double divide(double first, double second, int scale, RoundingMode roundingMode) {
-        return divide(BigDecimal.valueOf(first), BigDecimal.valueOf(second), scale, roundingMode)
+        return divide(toBigDecimal(first), toBigDecimal(second), scale, roundingMode)
                 .doubleValue();
     }
 
@@ -194,7 +223,7 @@ public class NumberUtil {
      * @return 商
      */
     public static double divide(long first, long second, int scale) {
-        return divide(BigDecimal.valueOf(first), BigDecimal.valueOf(second), scale, DEFAULT_ROUNDING_MODE)
+        return divide(toBigDecimal(first), toBigDecimal(second), scale, DEFAULT_ROUNDING_MODE)
                 .doubleValue();
     }
 
@@ -208,7 +237,7 @@ public class NumberUtil {
      * @return 商
      */
     public static double divide(long first, long second, int scale, RoundingMode roundingMode) {
-        return divide(BigDecimal.valueOf(first), BigDecimal.valueOf(second), scale, roundingMode)
+        return divide(toBigDecimal(first), toBigDecimal(second), scale, roundingMode)
                 .doubleValue();
     }
 
@@ -312,6 +341,6 @@ public class NumberUtil {
         if (Objects.isNull(roundingMode)) {
             throw new ServiceException("舍弃方式不能为null");
         }
-        return BigDecimal.valueOf(number).setScale(scale, roundingMode);
+        return toBigDecimal(number).setScale(scale, roundingMode);
     }
 }

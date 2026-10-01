@@ -13,15 +13,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jetbrains.annotations.UnmodifiableView;
 
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+import java.io.*;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -48,6 +41,7 @@ public class CollectionUtil {
 
     /**
      * UTF-8 BOM
+     *
      * @apiNote Excel / WPS 在 Windows 上打开无 BOM 的 UTF-8 CSV 时不会用 UTF-8 解码，而是退回
      * 系统 ANSI 代码页，简体中文环境下整表中文乱码。以 {@code \uFEFF} 形式拼在内容最前，
      * 经 {@code getBytes(UTF_8)} 之后就是 {@code EF BB BF} 三个字节
@@ -181,7 +175,7 @@ public class CollectionUtil {
      * 行分隔符只写在行与行之间，<b>末行不带</b>换行
      */
     public static <M extends RootModel<M>> void writeCsv(
-            @NotNull List<M> list, Class<M> itemClass, @NotNull OutputStream out) throws IOException {
+            List<M> list, Class<M> itemClass, @NotNull OutputStream out) throws IOException {
         if (Objects.isNull(list)) {
             throw new ServiceException("集合不能为空");
         }

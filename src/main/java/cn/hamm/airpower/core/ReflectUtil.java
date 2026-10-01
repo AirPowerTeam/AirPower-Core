@@ -218,15 +218,21 @@ public class ReflectUtil {
      * @param <A>             泛型
      * @return 注解
      */
-    public static <A extends Annotation> @Nullable A getAnnotation(Class<A> annotationClass, @NotNull Class<?> clazz) {
+    public static <A extends Annotation> @Nullable A getAnnotation(Class<A> annotationClass, @Nullable Class<?> clazz) {
+        // clazz 为 null 与 clazz.getSuperclass() 为 null 都要挡住：
+        // 接口的 getSuperclass() 恒为 null（接口没有 superclass，只有 interfaces），
+        // 而递归的终止条件只判断了 Object.class，所以传任何接口进来第二轮就 NPE
+        if (Objects.isNull(annotationClass) || Objects.isNull(clazz)) {
+            return null;
+        }
         A annotation = clazz.getAnnotation(annotationClass);
         if (Objects.nonNull(annotation)) {
             return annotation;
         }
-        if (isTheRootClass(clazz)) {
+        Class<?> superClass = clazz.getSuperclass();
+        if (Objects.isNull(superClass) || isTheRootClass(clazz)) {
             return null;
         }
-        Class<?> superClass = clazz.getSuperclass();
         return getAnnotation(annotationClass, superClass);
     }
 

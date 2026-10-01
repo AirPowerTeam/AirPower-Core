@@ -19,6 +19,12 @@ import java.util.function.Function;
 @Slf4j
 public class TreeUtil {
     /**
+     * 树递归深度上限
+     * <p>超过这个深度就截断并告警。正常业务的树（部门、分类、BOM 工序）远远用不到，
+     * 而没有上限时一条脏数据造成的深链就会 StackOverflowError</p>
+     */
+    private static final int MAX_TREE_DEPTH = 1000;
+    /**
      * 根节点 ID
      */
     public static final long ROOT_ID = 0L;
@@ -133,6 +139,29 @@ public class TreeUtil {
     private static <E extends IEntity<E> & ITree<E>> @UnmodifiableView @NotNull List<E> buildTreeWithMap(
             @NotNull Map<Long, List<E>> parentMap, long parentId, @NotNull Set<Long> visiting
     ) {
+        return buildTreeWithMap(parentMap, parentId, visiting, 0);
+    }
+
+    /**
+     * 递归构建树结构（带深度上限）
+     *
+     * @param parentMap 父级 ID 到子节点列表的映射
+     * @param parentId  父级 ID
+     * @param visiting  当前递归路径上的 ID 集合
+     * @param depth     当前深度
+     * @param <E>       树节点类型
+     * @return 树结构列表
+     * @apiNote {@code visiting} 只能拦「成环」，拦不住「深但不成环」的链：
+     * 每一层递归都要占一个栈帧，超过几千层就会 StackOverflowError
+     */
+    private static <E extends IEntity<E> & ITree<E>> @UnmodifiableView @NotNull List<E> buildTreeWithMap(
+            @NotNull Map<Long, List<E>> parentMap, long parentId,
+            @NotNull Set<Long> visiting, int depth
+    ) {
+        if (depth > MAX_TREE_DEPTH) {
+            log.warn("构建树结构时递归深度超过上限({})，已在 parentId={} 处截断，请检查数据", MAX_TREE_DEPTH, parentId);
+            return Collections.emptyList();
+        }
         List<E> children = parentMap.getOrDefault(parentId, Collections.emptyList());
         List<E> result = new ArrayList<>(children.size());
         for (E child : children) {
@@ -149,7 +178,7 @@ public class TreeUtil {
                 continue;
             }
             try {
-                result.add(child.setChildren(buildTreeWithMap(parentMap, childId, visiting)));
+                result.add(child.setChildren(buildTreeWithMap(parentMap, childId, visiting, depth + 1)));
             } finally {
                 // 回溯移除，兄弟分支中出现的同 ID 节点仍应各自展开
                 visiting.remove(childId);
@@ -217,7 +246,7 @@ public class TreeUtil {
             @NotNull Function<Long, List<E>> function
     ) {
         Set<Long> collected = new HashSet<>();
-        collectChildrenIdList(parentId, function, collected);
+        collectChildrenIdList(parentId, function, collected, new HashSet<>(), 0);
         return collected;
     }
 
@@ -226,16 +255,32 @@ public class TreeUtil {
      *
      * @param parentId  父 ID
      * @param function  以父级 ID 为键获取子节点的函数
-     * @param collected 已收集的 ID 集合，用于过滤 {@code null} ID 与环形数据
+     * @param collected 已收集的 ID 集合（返回值）
+     * @param visiting  <b>当前递归路径</b>上的 ID 集合，与 {@code collected} 职责不同
+     * @param depth     当前深度
      * @param <E>       树节点类型
+     * @apiNote {@code collected} 与 {@code visiting} 必须分开：
+     * 两者曾共用一个集合，于是「已收集过」被当成「成环」——
+     * 菱形结构（同一节点从两条路径可达）不是环，但第二个分支会被误剪，
+     * 其子树被整片漏掉。{@code collected} 只负责累积结果，
+     * 环检测交给 {@code visiting}（回溯时移除，与 buildTreeWithMap 一致）
+     * @apiNote 深度上限：Java 默认线程栈约 512KB~1MB，链式树（部门、分类、BOM 工序）
+     * 超过几千层就会 StackOverflowError，而那种深度的数据本身就已经是脏数据
      */
     private static <
             E extends IEntity<E> & ITree<E>
             > void collectChildrenIdList(
             long parentId,
             @NotNull Function<Long, List<E>> function,
-            @NotNull Set<Long> collected
+            @NotNull Set<Long> collected,
+            @NotNull Set<Long> visiting,
+            int depth
     ) {
+        if (depth > MAX_TREE_DEPTH) {
+            log.warn("收集子节点ID时递归深度超过上限({})，已在 parentId={} 处中止，"
+                    + "该子树可能未被收集，请检查是否存在环或异常深的树", MAX_TREE_DEPTH, parentId);
+            return;
+        }
         List<E> children = function.apply(parentId);
         if (Objects.isNull(children)) {
             return;
@@ -252,11 +297,19 @@ public class TreeUtil {
                         child.getParentId());
                 continue;
             }
-            if (!collected.add(id)) {
-                // 已收集过，避免环形数据导致无限递归
+            // 结果集合只负责累积，重复出现不影响正确性（DAG 里同一节点只该算一次）
+            collected.add(id);
+            if (!visiting.add(id)) {
+                // 当前路径上再次出现同一个 ID，这才是真的成环
+                log.warn("收集子节点ID时检测到环形父子关系(nodeId={})，已剪断该分支", id);
                 continue;
             }
-            collectChildrenIdList(id, function, collected);
+            try {
+                collectChildrenIdList(id, function, collected, visiting, depth + 1);
+            } finally {
+                // 回溯移除：菱形结构下同 ID 从不同路径再次出现时应各自展开
+                visiting.remove(id);
+            }
         }
     }
 }

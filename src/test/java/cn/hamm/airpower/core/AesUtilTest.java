@@ -492,4 +492,36 @@ class AesUtilTest {
                     "使用其他密钥不应得到原文（可能抛出填充异常，也可能得到乱码）");
         }
     }
+
+    @Nested
+    @DisplayName("IV 的防御性拷贝（00046）")
+    class IvAliasTest {
+
+        @Test
+        @DisplayName("setIv 之后修改原数组不应影响内部 IV")
+        void ivIsDefensivelyCopied() {
+            byte[] iv = "0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            AesUtil instance = AesUtil.create().setKey(KEY_128).setIv(iv);
+
+            iv[0] = (byte) 'X';   // 调用方事后篡改
+
+            String encrypted = instance.encrypt("任意内容");
+            assertDoesNotThrow(() -> instance.decrypt(encrypted),
+                    "setKey 做了 clone()，setIv 若直接存引用就会与它不对称："
+                            + "调用方改一个字节，IV 被静默换掉，加密能成功但解不开");
+        }
+
+        @Test
+        @DisplayName("key 同样保持防御性拷贝（回归保护）")
+        void keyIsDefensivelyCopied() {
+            byte[] key = KEY_128.clone();
+            AesUtil instance = AesUtil.create().setKey(key);
+            key[0] = (byte) 'Z';
+
+            assertDoesNotThrow(() -> {
+                String encrypted = instance.encrypt("任意内容");
+                instance.decrypt(encrypted);
+            }, "setKey 的 clone() 保护不能被这次改动破坏");
+        }
+    }
 }

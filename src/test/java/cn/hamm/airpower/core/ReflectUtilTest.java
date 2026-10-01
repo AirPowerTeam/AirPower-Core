@@ -1242,4 +1242,41 @@ class ReflectUtilTest {
             });
         }
     }
+
+    @Nested
+    @DisplayName("getAnnotation 的入参健壮性（00140）")
+    class GetAnnotationArgumentTest {
+
+        @Test
+        @DisplayName("传接口时不得 NPE：接口的 getSuperclass() 恒为 null")
+        void interfaceArgumentDoesNotThrow() {
+            // 递归的终止条件只判断了 Object.class，而接口没有 superclass，
+            // 所以传任何接口进来第二轮就 NPE
+            assertDoesNotThrow(() -> ReflectUtil.getAnnotation(Description.class, Runnable.class),
+                    "接口的 getSuperclass() 恒为 null，递归必须以它为终止条件之一");
+            assertNull(ReflectUtil.getAnnotation(Description.class, Runnable.class),
+                    "接口上没有 @Description，应返回 null 而不是抛异常");
+        }
+
+        @Test
+        @DisplayName("传 null 类时应返回 null 而不是 NPE")
+        void nullClassReturnsNull() {
+            assertNull(ReflectUtil.getAnnotation(Description.class, (Class<?>) null),
+                    "clazz 为 null 时应返回 null（需要显式转型：null 字面量在两个重载间有歧义）");
+        }
+
+        @Test
+        @DisplayName("传 null 注解类时应返回 null")
+        void nullAnnotationReturnsNull() {
+            assertNull(ReflectUtil.getAnnotation(null, DemoModel.class), "annotationClass 为 null 时应返回 null");
+        }
+
+        @Test
+        @DisplayName("正常场景仍能找到注解")
+        void stillFindsAnnotation() throws NoSuchFieldException {
+            Field field = DemoModel.class.getDeclaredField("id");
+            assertNotNull(ReflectUtil.getAnnotation(Description.class, field),
+                    "正常字段上的 @Description 必须仍能找到");
+        }
+    }
 }
