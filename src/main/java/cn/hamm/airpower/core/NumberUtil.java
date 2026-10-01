@@ -31,13 +31,14 @@ public class NumberUtil {
 
     /**
      * 空的 {@code double} 数组（可变参数为 {@code null} 时的兜底）
+     * <p>不用 {@code new double[0]}：每次调用都会新建数组</p>
      */
-    private static final double[] EMPTY_DOUBLE = {};
+    private static final double[] EMPTY_DOUBLE = new double[0];
 
     /**
      * 空的 {@code long} 数组（可变参数为 {@code null} 时的兜底）
      */
-    private static final long[] EMPTY_LONG = {};
+    private static final long[] EMPTY_LONG = new long[0];
 
     /**
      * 禁止外部实例化

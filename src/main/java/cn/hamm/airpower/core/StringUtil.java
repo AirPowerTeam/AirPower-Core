@@ -25,8 +25,6 @@ public class StringUtil {
      *
      * @param str 字符串
      * @return 状态
-     * @apiNote 与 {@link #isEmpty(CharSequence)} 实现一致，保留以兼容按 {@code String}
-     * 静态类型调用的场景
      */
     @Contract("null -> true")
     public static boolean isEmpty(@Nullable String str) {
@@ -60,8 +58,6 @@ public class StringUtil {
      *
      * @param str 字符串
      * @return 状态
-     * @apiNote 与 {@link #hasText(CharSequence)} 实现一致，保留以兼容按 {@code String}
-     * 静态类型调用的场景
      */
     @Contract("null -> false")
     public static boolean hasText(@Nullable String str) {
@@ -103,8 +99,7 @@ public class StringUtil {
      *
      * @param str 字符串
      * @return 去除空白后的字符串，入参为 null 时返回 null
-     * @apiNote 删的是<b>所有位置</b>的空白，不只是首尾，与 {@link String#trim()}
-     * 语义不同
+     * @apiNote 删的是<b>所有位置</b>的空白，不只是首尾
      */
     public static CharSequence trimAllWhitespace(@Nullable CharSequence str) {
         if (isEmpty(str)) {

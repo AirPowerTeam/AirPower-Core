@@ -5,6 +5,7 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -286,7 +287,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 年份
      */
-    public static int getYear(@NotNull Date date) {
+    public static int getYear(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getYear();
     }
 
@@ -305,7 +309,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 月份
      */
-    public static int getMonth(@NotNull Date date) {
+    public static int getMonth(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getMonthValue();
     }
 
@@ -336,7 +343,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 日期
      */
-    public static int getDay(@NotNull Date date) {
+    public static int getDay(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getDayOfMonth();
     }
 
@@ -355,7 +365,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 小时
      */
-    public static int getHour(@NotNull Date date) {
+    public static int getHour(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getHour();
     }
 
@@ -374,7 +387,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 分钟
      */
-    public static int getMinute(@NotNull Date date) {
+    public static int getMinute(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getMinute();
     }
 
@@ -393,7 +409,10 @@ public class DateTimeUtil {
      * @param date 时间
      * @return 秒
      */
-    public static int getSecond(@NotNull Date date) {
+    public static int getSecond(@Nullable Date date) {
+        if (Objects.isNull(date)) {
+            throw new ServiceException("日期不能为null");
+        }
         return getLocalDateTime(date.getTime()).getSecond();
     }
 
@@ -408,7 +427,6 @@ public class DateTimeUtil {
     private static @NotNull Date add(Date date, int calendarField, int amount) {
         Calendar c = Calendar.getInstance();
         c.setTime(date);
-        //noinspection MagicConstant
         c.add(calendarField, amount);
         return c.getTime();
     }

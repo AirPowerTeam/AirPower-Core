@@ -135,22 +135,22 @@ public class RandomUtil {
      * 获取一个随机整数
      *
      * @return 随机数
+     * @return 随机数
      * @see Random#nextInt()
-     * @apiNote 无上界版本，<b>返回值可能为负数</b>
+     * @apiNote 无上界版本，<b>返回值可能为负数</b>，需要非负请用带下界的重载
      */
     public static int randomInt() {
         return getRandom().nextInt();
     }
 
     /**
-     * 获得 {@code [0, exclude)} 范围内的随机数
+     * 获得 {@code [0, upperBound)} 范围内的随机数
      *
-     * @param exclude 上界（不包含）
+     * @param upperBound 上界（不包含）
      * @return 随机数
-     * @apiNote 参数名沿用历史写法，实际含义是上界而非"要排除的数字"
      */
-    public static int randomInt(final int exclude) {
-        return getRandom().nextInt(exclude);
+    public static int randomInt(final int upperBound) {
+        return getRandom().nextInt(upperBound);
     }
 
     /**
@@ -174,6 +174,10 @@ public class RandomUtil {
      * @return 随机数
      * @apiNote 最终委托给 {@code nextInt(min, max)}（上界不含），因此两个开关都是
      * {@code false} 时区间为空，会抛 {@code IllegalArgumentException}
+     * @apiNote 端点语义：{@code includeMin=false} 时下界从 {@code min+1} 起算，
+     * {@code includeMax=false} 时上界为 {@code max-1}（含）。两个开关都不含时
+     * 结果区间是 {@code [min+1, max-1]}，两个都含时是 {@code [min, max]}，
+     * 只开一个时请按上面两条各自换算
      */
     public static int randomInt(int min, int max, final boolean includeMin, final boolean includeMax) {
         if (!includeMin) {

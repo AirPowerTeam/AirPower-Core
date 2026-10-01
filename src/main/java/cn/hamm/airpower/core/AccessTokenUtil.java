@@ -156,23 +156,10 @@ public class AccessTokenUtil {
     }
 
     /**
-     * 创建一个 AccessToken
-     *
-     * @param id TokenID
-     * @return AccessTokenUtil 实例
-     * @apiNote 不设置令牌过期时间
-     */
-    public AccessTokenUtil setPayloadId(Long id) {
-        return addPayload(Constant.ID, id);
-    }
-
-    /**
      * 校验令牌密钥
      *
      * @param secret  密钥
      * @param isBuild 是否为签发场景（只影响错误文案）
-     * @apiNote {@link #build(String)} 与 {@link #verify(String, String)} 必须走同一套校验，
-     * 否则会出现「签发得出去、永远验不过」的死锁
      */
     private static void checkSecret(String secret, boolean isBuild) {
         if (!StringUtil.hasText(secret)) {
@@ -182,6 +169,17 @@ public class AccessTokenUtil {
             throwException((isBuild ? "身份令牌创建失败" : "身份令牌校验失败")
                     + "，令牌密钥最短限制为 " + MIN_SECRET_LENGTH + " 位字符，当前为 " + secret.length() + " 位");
         }
+    }
+
+    /**
+     * 创建一个 AccessToken
+     *
+     * @param id TokenID
+     * @return AccessTokenUtil 实例
+     * @apiNote 不设置令牌过期时间
+     */
+    public AccessTokenUtil setPayloadId(Long id) {
+        return addPayload(Constant.ID, id);
     }
 
     /**

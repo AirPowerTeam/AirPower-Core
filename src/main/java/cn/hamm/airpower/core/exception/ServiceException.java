@@ -3,8 +3,8 @@ package cn.hamm.airpower.core.exception;
 import cn.hamm.airpower.core.Json;
 import cn.hamm.airpower.core.interfaces.IException;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serial;
@@ -100,22 +100,6 @@ public class ServiceException extends RuntimeException implements IException<Ser
     }
 
     /**
-     * 拒绝把异常放进 {@code data}：记日志并挂到 {@code cause}
-     *
-     * @param cause 被误当成 data 传入的异常
-     * @apiNote 「data 不放异常、堆栈只进日志」是项目铁律。这里做成运行期强制，
-     * 而不是只靠 javadoc 提醒：调用点分散在三个仓库，靠约定迟早会漏，
-     * 而漏一次就是把完整堆栈发到前端
-     * @apiNote 调用前 {@code super(message)} 没有设置 cause，
-     * 所以此处 {@code initCause} 是合法的；挂上之后排障时仍能看到完整堆栈
-     */
-    private void rejectThrowableData(@NotNull Throwable cause) {
-        log.error("[{}]data 实参是异常，已改挂 cause；data 会回传前端，不得携带异常",
-                cause.getMessage(), cause);
-        this.initCause(cause);
-    }
-
-    /**
      * 抛出指定错误码的业务异常
      *
      * @param code    错误代码
@@ -148,5 +132,15 @@ public class ServiceException extends RuntimeException implements IException<Ser
     public ServiceException(@NotNull IException<?> exception) {
         super(exception.getMessage());
         this.code = exception.getCode();
+    }
+
+    /**
+     * 拒绝把异常放进 {@code data}
+     *
+     * @param cause 被误当成 data 传入的异常
+     */
+    private void rejectThrowableData(@NotNull Throwable cause) {
+        log.error("异常: {}", cause.getMessage(), cause);
+        this.initCause(cause);
     }
 }

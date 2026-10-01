@@ -70,10 +70,20 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 - `AccessTokenUtil` 的 secret **必须通过环境变量 `airpower.accessTokenSecret` 注入**，禁止硬编码
 - `AesUtil`：算法 `AES/CBC/PKCS5Padding`，`key` 必须是 16 / 24 / 32 字节；每次操作新建 `Cipher`（ **不要缓存**，
   `Cipher` 非线程安全，缓存会在并发下出错）；`key` / `Base64` 密钥非法时统一抛 `ServiceException`
-- `RsaUtil`：RSA 2048 + `SHA256withRSA`，支持 PEM（Base64 字符串）密钥注入，分段加解密（`keySize/8 - 11` / `keySize/8`）；
+- `RsaUtil`：RSA 2048 + `SHA256withRSA`，支持 PEM（Base64 字符串）密钥注入，分段加解密
+  （按**实际**密钥长度算 `- 11` / 无偏移，并与配置的 `keySize` 校验一致，不一致直接报错）；
   私钥 PEM 头尾是 `PRIVATE KEY`（PKCS#8，与 `PKCS8EncodedKeySpec` 解析一致， **不要**改成 `RSA PRIVATE KEY`）
 - `Json.parse*` 失败统一包装为 `ServiceException`（不是 Jackson 原生异常），便于上层拦截器统一处理；`parse*` /
   `toString` 均捕获 `Exception`，因此 `null` 入参也会被包装
+- **`ServiceException` 的 `data` 绝不携带异常或堆栈。** `data` 会被 Jackson 序列化进
+  HTTP 响应体（`ExceptionInterceptor` 直接 `setData(exception.getData())`），异常一旦落在里面，
+  其类型、message 与完整 `stackTrace`（类名、文件名、行号）全部泄露给前端。
+  要保留原始异常用 `new ServiceException(msg, cause)`（`Throwable` 重载），堆栈需要落盘时由
+  `log.error(msg, cause)` 输出，**不要**抛给前端。
+  两个 `data` 重载已加运行期兜底：实参是 `Throwable` 时一律拒收并改挂 `cause`
+- **注释与日志只写约束，不写审计过程。** 写「为什么必须这样」和维护者无法从代码推得的
+  事实（如某个 JDK / Lombok 行为、某个 NIO 语义），**不要**写「原实现错在哪」「考虑过哪些方案」
+  「实测如何如何」这类修复过程的叙述——那属于提交信息与 issue 档案，不属于代码
 
 ## 7. 测试约定
 

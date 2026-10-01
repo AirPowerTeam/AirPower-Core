@@ -31,9 +31,6 @@ public class DictionaryUtil {
      * @param key       枚举字典值
      * @param <D>       字典类型
      * @return 查到的字典项
-     * @apiNote 找不到时抛异常，并把该枚举的全部可选项作为错误数据带出，方便前端提示。
-     * 该列表<b>只在报错分支构建</b>：它遍历全部枚举项并用反射逐项取值拼成 Map，
-     * 命中路径上用不到
      */
     public static <D extends IDictionary> @NotNull D getDictionary(Class<D> enumClass, int key) {
         return getDictionary(enumClass, IDictionary::getKey, key);
@@ -103,8 +100,6 @@ public class DictionaryUtil {
      * @param lambdas 需要获取的方法表达式
      * @param <D>     字典类型
      * @return 枚举选项列表
-     * @apiNote 返回项的 key 是<b>方法名首字母小写</b>后的结果（{@code getKey()} → {@code key}），
-     * 顺序与传入的 {@code lambdas} 一致；某个方法取值失败只记日志，该字段直接缺失
      */
     @SafeVarargs
     public static <D extends IDictionary> @NotNull List<Map<String, Object>> getDictionaryList(
