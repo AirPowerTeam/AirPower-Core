@@ -760,4 +760,112 @@ class RootModelTest {
         @Meta
         private List<ContactModel> children;
     }
+
+    @Nested
+    @DisplayName("Map 容器内的模型也必须被过滤")
+    class MapValueTest {
+
+        /**
+         * Map 的 key 为模型
+         */
+        @Test
+        @DisplayName("Map<String, 模型> 里的实体应被脱敏")
+        void mapValueIsDesensitized() {
+            DemoModel child = new DemoModel().setMobile(MOBILE);
+            DemoModel root = new DemoModel().setChildrenWithNull(null)
+                    .setMobileList(null)
+                    .setMapOfChild(java.util.Map.of("k", child));
+
+            root.desensitize();
+
+            assertEquals("138****8000", child.getMobile(),
+                    "Map 里的实体的 @Desensitize 字段此前不会被处理，会以明文返回前端");
+        }
+
+        /**
+         * Map 的 value 为模型
+         */
+        @Test
+        @DisplayName("Map 里实体的非 @Meta 字段应被排除")
+        void mapValueExcludesNotMeta() {
+            DemoModel child = new DemoModel().setMobile(MOBILE).setRemark("内部备注");
+            DemoModel root = new DemoModel().setMapOfChild(java.util.Map.of("k", child));
+
+            root.excludeNotMeta();
+
+            assertNull(child.getRemark(), "Map 里实体的非 @Meta 字段此前不会被排除");
+            assertEquals(MOBILE, child.getMobile(), "带 @Meta 的字段应保留");
+        }
+
+        @Test
+        @DisplayName("Map 里实体的只读字段应被清空")
+        void mapValueExcludesReadOnly() {
+            DemoModel child = new DemoModel().setCreateTime(1700000000000L);
+            DemoModel root = new DemoModel().setMapOfChild(java.util.Map.of("k", child));
+
+            root.excludeReadOnly();
+
+            assertNull(child.getCreateTime(), "Map 里实体的 @ReadOnly 字段此前不会被清空");
+        }
+    }
+
+    @Nested
+    @DisplayName("白名单递归的环检测")
+    class CycleTest {
+
+        @Test
+        @DisplayName("成环模型在白名单分支下不得 StackOverflowError")
+        void cyclicModelDoesNotOverflow() {
+            CycleModel a = new CycleModel();
+            CycleModel b = new CycleModel();
+            a.setName("A").setPeer(b);
+            b.setName("B").setPeer(a);
+
+            assertDoesNotThrow(() -> a.excludeNotMetaAndDesensitize(List.of(CycleModel.class), true),
+                    "A→B→A 成环。白名单分支此前完全没有环检测，会一路递归到栈溢出；"
+                            + "而且每次递归都重新 new 一个 visited 集合，环检测根本不起作用");
+        }
+
+        @Test
+        @DisplayName("自引用模型在白名单分支下不得 StackOverflowError")
+        void selfReferenceDoesNotOverflow() {
+            CycleModel a = new CycleModel();
+            a.setName("A").setPeer(a);
+
+            assertDoesNotThrow(() -> a.excludeNotMetaAndDesensitize(List.of(CycleModel.class), true),
+                    "child == this 的自引用模型同样必须被环检测拦下");
+        }
+
+        @Test
+        @DisplayName("成环模型在非白名单分支下也不得 StackOverflowError")
+        void cyclicModelWithoutWhiteList() {
+            CycleModel a = new CycleModel();
+            CycleModel b = new CycleModel();
+            a.setName("A").setPeer(b);
+            b.setName("B").setPeer(a);
+
+            assertDoesNotThrow(() -> a.excludeNotMetaAndDesensitize(List.of(), true),
+                    "空白名单走 excludeNotMetaAll 分支，同样依赖 visited 拦环");
+        }
+    }
+
+    /**
+     * 用于验证环检测的模型：{@code peer} 可指向自身或另一个同类模型
+     */
+    @Data
+    @EqualsAndHashCode(callSuper = true)
+    @Accessors(chain = true)
+    static class CycleModel extends RootModel<CycleModel> {
+        /**
+         * 同类模型
+         */
+        @Meta
+        private CycleModel peer;
+
+        /**
+         * 姓名
+         */
+        @Meta
+        private String name;
+    }
 }

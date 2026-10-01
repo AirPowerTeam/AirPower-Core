@@ -142,6 +142,15 @@ public class DemoModel extends RootModel<DemoModel> {
     private String hidden;
 
     /**
+     * key 为字符串、value 为模型的 Map
+     * <p>用来验证 {@code @ReadOnly} / {@code @Meta} / {@code @Desensitize}
+     * 三条递归路径是否都覆盖了 Map 形态</p>
+     */
+    @Description("按 key 索引的子模型")
+    @Meta
+    private java.util.Map<String, DemoModel> mapOfChild;
+
+    /**
      * 集合类型的脱敏字段
      */
     @Description("手机号列表")

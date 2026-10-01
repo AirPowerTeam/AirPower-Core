@@ -13,6 +13,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * <h1>数据根模型</h1>
@@ -68,6 +69,10 @@ public class RootModel<M extends RootModel<M>> {
                 });
                 return;
             }
+            if (value instanceof Map<?, ?> valueMap) {
+                forEachModelValue(valueMap, item -> excludeReadOnlyAll((RootModel<?>) item, visited));
+                return;
+            }
             if (RootModel.isModel(value.getClass())) {
                 excludeReadOnlyAll((RootModel<?>) value, visited);
             }
@@ -86,13 +91,19 @@ public class RootModel<M extends RootModel<M>> {
     private static void handleNested(
             @NotNull RootModel<?> nested,
             @NotNull List<Class<? extends RootModel<?>>> whiteList,
-            boolean isDesensitize
+            boolean isDesensitize,
+            @NotNull Set<RootModel<?>> visited
     ) {
+        // 这里原来完全没有环检测：A→B→A 这类成环模型会一路递归到栈溢出。
+        // 其它三条路径都有 visited，只有白名单分支漏了。
+        // 注意不要在这里 visited.add —— 两个下游方法（excludeNotMetaAll 与
+        // excludeNotMetaAndDesensitize）自己都会 add，提前 add 会让它们
+        // 立刻判定「已访问」而直接返回，递归彻底断掉
         if (whiteList.contains(nested.getClass())) {
-            nested.excludeNotMetaAndDesensitize(whiteList, isDesensitize);
+            excludeNotMetaAndDesensitize(nested, whiteList, isDesensitize, visited);
             return;
         }
-        nested.excludeNotMeta();
+        excludeNotMetaAll(nested, visited);
     }
 
     /**
@@ -120,6 +131,10 @@ public class RootModel<M extends RootModel<M>> {
                 });
                 return;
             }
+            if (value instanceof Map<?, ?> valueMap) {
+                forEachModelValue(valueMap, item -> desensitizeAll((RootModel<?>) item, visited));
+                return;
+            }
             if (RootModel.isModel(value.getClass())) {
                 desensitizeAll((RootModel<?>) value, visited);
                 return;
@@ -136,6 +151,28 @@ public class RootModel<M extends RootModel<M>> {
      */
     private static void excludeFieldValueNotMeta(@NotNull RootModel<?> instance, @NotNull Field field) {
         excludeFieldValueNotMeta(instance, field, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 遍历 Map 中的模型值
+     *
+     * @param valueMap Map
+     * @param action   对每个模型值执行的动作
+     * @apiNote 之前的 {@code @ReadOnly} / {@code @Meta} / {@code @Desensitize}
+     * 三条递归路径都只处理 {@code Collection} 与 {@code RootModel}，
+     * Map 里的模型原样穿透——{@code @Desensitize} 字段会以<b>明文</b>返回前端。
+     * key 与 value 都要遍历：两种写法（{@code Map<String, Entity>} 与
+     * {@code Map<Entity, String>}）在业务里都出现过
+     */
+    private static void forEachModelValue(@NotNull Map<?, ?> valueMap, @NotNull Consumer<RootModel<?>> action) {
+        for (Map.Entry<?, ?> entry : valueMap.entrySet()) {
+            if (entry.getKey() instanceof RootModel<?> keyModel) {
+                action.accept(keyModel);
+            }
+            if (entry.getValue() instanceof RootModel<?> valueModel) {
+                action.accept(valueModel);
+            }
+        }
     }
 
     /**
@@ -175,6 +212,10 @@ public class RootModel<M extends RootModel<M>> {
                 }
                 excludeNotMetaAll((RootModel<?>) item, visited);
             });
+            return;
+        }
+        if (value instanceof Map<?, ?> valueMap) {
+            forEachModelValue(valueMap, item -> excludeNotMetaAll((RootModel<?>) item, visited));
             return;
         }
         if (isModel(value.getClass())) {
@@ -316,15 +357,41 @@ public class RootModel<M extends RootModel<M>> {
      * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
      */
     public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
-        List<Class<? extends RootModel<?>>> whiteNameList = Objects.isNull(whiteList) ? List.of() : whiteList;
-        filterModelFieldValue((instance, field) -> {
+        excludeNotMetaAndDesensitize(this,
+                Objects.isNull(whiteList) ? List.of() : whiteList,
+                isDesensitize,
+                Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param model        当前模型
+     * @param whiteList    类白名单
+     * @param isDesensitize 是否需要脱敏
+     * @param visited      已访问的模型，按对象身份去重
+     * @apiNote 白名单分支此前每次递归都重新 new 一个 visited 集合，
+     * 成环模型（{@code A→B→A}）会直接 StackOverflowError；
+     * 而且集合是按引用传递的，环检测根本不起作用
+     */
+    private static void excludeNotMetaAndDesensitize(
+            @NotNull RootModel<?> model,
+            @NotNull List<Class<? extends RootModel<?>>> whiteList,
+            boolean isDesensitize,
+            @NotNull Set<RootModel<?>> visited
+    ) {
+        if (!visited.add(model)) {
+            return;
+        }
+        List<Class<? extends RootModel<?>>> whiteNameList = whiteList;
+        model.filterModelFieldValue((instance, field) -> {
             Object value = ReflectUtil.getFieldValue(instance, field);
             if (Objects.isNull(value)) {
                 return;
             }
-            if (whiteNameList.isEmpty() || !whiteNameList.contains(this.getClass())) {
+            if (whiteNameList.isEmpty() || !whiteNameList.contains(model.getClass())) {
                 // 当前类不在白名单中：只做非元数据排除，不触发脱敏
-                excludeFieldValueNotMeta(instance, field);
+                excludeFieldValueNotMeta(instance, field, visited);
                 return;
             }
             if (value instanceof Collection<?> valueList) {
@@ -335,12 +402,17 @@ public class RootModel<M extends RootModel<M>> {
                     }
                     // 集合元素按自身类重新判定白名单：
                     // 在白名单内则继续递归（脱敏），否则只排除非元数据
-                    handleNested((RootModel<?>) item, whiteNameList, isDesensitize);
+                    handleNested((RootModel<?>) item, whiteNameList, isDesensitize, visited);
                 });
                 return;
             }
+            if (value instanceof Map<?, ?> valueMap) {
+                forEachModelValue(valueMap,
+                        item -> handleNested((RootModel<?>) item, whiteNameList, isDesensitize, visited));
+                return;
+            }
             if (RootModel.isModel(value.getClass())) {
-                handleNested((RootModel<?>) value, whiteNameList, isDesensitize);
+                handleNested((RootModel<?>) value, whiteNameList, isDesensitize, visited);
                 return;
             }
             if (isDesensitize) {
