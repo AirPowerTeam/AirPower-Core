@@ -693,7 +693,7 @@ class ReflectUtilTest {
         @DisplayName("返回本类与父类的全部实例字段")
         void containsInheritedFields() {
             List<String> names = ReflectUtil.getFieldList(DemoModel.class).stream().map(Field::getName).toList();
-            assertEquals(12, names.size(), "DemoModel 应返回 12 个字段");
+            assertEquals(15, names.size(), "DemoModel 应返回 15 个字段");
             assertTrue(names.contains("id"), "字段列表应包含本类字段 id");
             assertTrue(names.contains("children"), "字段列表应包含集合类型字段 children");
         }

@@ -508,7 +508,7 @@ class HttpUtilTest {
                     () -> HttpUtil.create().get(), "url 为 null 时应抛出业务异常");
             assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
             assertEquals(Json.SERVICE_ERROR, exception.getCode(), "异常码应为默认的服务错误码");
-            assertNotNull(exception.getCause(), "包装异常应通过 initCause 保留原始异常，便于上层定位根因");
+            assertNotNull(exception.getCause(), "包装异常应保留原始异常作为 cause，便于上层定位根因");
         }
 
         @Test
@@ -517,7 +517,7 @@ class HttpUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().setUrl("这不是一个URL").get(), "非法 url 应抛出业务异常");
             assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
-            assertNotNull(exception.getCause(), "包装异常应通过 initCause 保留 URI 解析的原始异常");
+            assertNotNull(exception.getCause(), "包装异常应保留 URI 解析的原始异常作为 cause");
         }
 
         @Test
@@ -527,7 +527,7 @@ class HttpUtilTest {
                     () -> HttpUtil.create().setUrl("").get(), "空 url 应抛出业务异常");
             assertEquals("发起请求失败，请求地址不能为空", exception.getMessage(),
                     "应由 send 统一加上「发起请求失败」前缀，同时保留明确的根因提示");
-            assertInstanceOf(ServiceException.class, exception.getCause(), "应通过 initCause 保留原始异常");
+            assertInstanceOf(ServiceException.class, exception.getCause(), "应保留原始异常作为 cause");
             assertEquals("请求地址不能为空", exception.getCause().getMessage(), "根因消息应说明是地址为空");
         }
 
@@ -600,12 +600,12 @@ class HttpUtilTest {
         }
 
         @Test
-        @DisplayName("send() 失败时应通过 initCause 保留原始的连接异常")
+        @DisplayName("send() 失败时应把原始连接异常放进 cause（而不是当成 data 回传前端）")
         void testSendKeepsOriginalCause() {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().setUrl("http://127.0.0.1:1/api").get(),
                     "连接未监听端口时应抛出业务异常");
-            assertNotNull(exception.getCause(), "包装后的 ServiceException 应保留原始异常");
+            assertNotNull(exception.getCause(), "包装后的 ServiceException 应把原始异常放进 cause 而不是 data");
             assertInstanceOf(IOException.class, exception.getCause(),
                     "原始异常应为连接失败的 IOException，实际为：" + exception.getCause());
         }

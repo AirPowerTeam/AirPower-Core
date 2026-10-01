@@ -216,4 +216,50 @@ class ServiceExceptionTest {
             assertEquals("参数错误", thrown.getMessage(), "异常信息应取自枚举");
         }
     }
+
+    @Nested
+    @DisplayName("原始异常（cause）构造器")
+    class CauseTest {
+
+        @Test
+        @DisplayName("消息 + Throwable 构造器应把异常放进 cause 而不是 data")
+        void causeIsNotData() {
+            IllegalStateException root = new IllegalStateException("root cause");
+
+            ServiceException exception = new ServiceException("加密失败", root);
+
+            assertEquals("加密失败", exception.getMessage(), "消息应原样保留");
+            assertSame(root, exception.getCause(),
+                    "原始异常必须落在 cause 上。没有 (String, Throwable) 重载时，"
+                            + "new ServiceException(msg, throwable) 会静默匹配到 (String, Object)，"
+                            + "异常被当成 data，getCause() 返回 null、堆栈彻底丢失");
+            assertNull(exception.getData(),
+                    "data 必须为 null：ExceptionInterceptor 会把 getData() 直接放进响应体，"
+                            + "异常一旦落在 data 里，其类型、message 与 stackTrace 都会泄露给前端");
+        }
+
+        @Test
+        @DisplayName("cause 为 null 时不应退化成 data 重载")
+        void nullCauseIsNotData() {
+            ServiceException exception = new ServiceException("加密失败", (Throwable) null);
+
+            assertNull(exception.getCause(), "cause 为 null 时 getCause() 应为 null");
+            assertNull(exception.getData(), "cause 为 null 时 data 也必须是 null");
+        }
+
+        @Test
+        @DisplayName("两个重载在传 Throwable 时必须走不同分支")
+        void overloadsDoNotCollide() {
+            Object businessData = List.of("a", "b");
+            Throwable cause = new IllegalStateException("boom");
+
+            ServiceException withData = new ServiceException("消息", businessData);
+            ServiceException withCause = new ServiceException("消息", cause);
+
+            assertSame(businessData, withData.getData(), "显式传业务数据时必须落在 data 上");
+            assertNull(withData.getCause(), "业务数据不应变成 cause");
+            assertSame(cause, withCause.getCause(), "显式传 Throwable 时必须落在 cause 上");
+            assertNull(withCause.getData(), "cause 不应变成 data");
+        }
+    }
 }

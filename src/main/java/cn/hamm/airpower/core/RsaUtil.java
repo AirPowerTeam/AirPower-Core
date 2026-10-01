@@ -167,6 +167,7 @@ public class RsaUtil {
             return action.call();
         } catch (Exception e) {
             // 保留原始异常作为 cause，同时只在消息里拼一次前缀，避免嵌套重复文案
+            // 走 (String, Throwable) 重载：异常只进 cause，不会被当成 data 回传前端
             throw new ServiceException(prefix + "，" + e.getMessage(), e);
         }
     }

@@ -38,6 +38,11 @@ public class AccessTokenUtil {
     private static final String SET_ENV_TOKEN_SECRET_FIRST = "请在环境变量配置 airpower.accessTokenSecret";
 
     /**
+     * 令牌密钥最短长度
+     */
+    private static final int MIN_SECRET_LENGTH = 32;
+
+    /**
      * 算法
      */
     private static final String HMAC_SHA_256 = "HmacSHA256";
@@ -162,15 +167,33 @@ public class AccessTokenUtil {
     }
 
     /**
+     * 校验令牌密钥
+     *
+     * @param secret  密钥
+     * @param isBuild 是否为签发场景（只影响错误文案）
+     * @apiNote {@link #build(String)} 与 {@link #verify(String, String)} 必须走同一套校验。
+     * 只在 verify 侧校验长度会形成「签发得出去、永远验不过」的死锁：
+     * 配了短密钥时登录成功，但一调业务接口就 401，
+     * 排查方向会被误导到「令牌传递 / 拦截器」，而启动时又不会失败，部署后才发现
+     */
+    private static void checkSecret(String secret, boolean isBuild) {
+        if (!StringUtil.hasText(secret)) {
+            throwException(isBuild ? "身份令牌创建失败，" + SET_ENV_TOKEN_SECRET_FIRST : SET_ENV_TOKEN_SECRET_FIRST);
+        }
+        if (secret.length() < MIN_SECRET_LENGTH) {
+            throwException((isBuild ? "身份令牌创建失败" : "身份令牌校验失败")
+                    + "，令牌密钥最短限制为 " + MIN_SECRET_LENGTH + " 位字符，当前为 " + secret.length() + " 位");
+        }
+    }
+
+    /**
      * 生成 {@code Token}
      *
      * @param secret 密钥
      * @return AccessToken
      */
     public final String build(String secret) {
-        if (!StringUtil.hasText(secret)) {
-            throwException("身份令牌创建失败，" + SET_ENV_TOKEN_SECRET_FIRST);
-        }
+        checkSecret(secret, true);
         if (verifiedToken.getPayloads().isEmpty()) {
             throw new ServiceException("没有任何负载数据");
         }
@@ -259,12 +282,7 @@ public class AccessTokenUtil {
      * @return VerifiedToken
      */
     public final VerifiedToken verify(String accessToken, String secret) {
-        if (!StringUtil.hasText(secret)) {
-            throwException(SET_ENV_TOKEN_SECRET_FIRST);
-        }
-        if (secret.length() < 32) {
-            throwException("身份令牌创建失败，令牌最短限制为32位字符");
-        }
+        checkSecret(secret, false);
         if (!StringUtil.hasText(accessToken)) {
             throwException(ACCESS_TOKEN_INVALID);
         }

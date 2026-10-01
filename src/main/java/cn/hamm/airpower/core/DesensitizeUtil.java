@@ -1,8 +1,10 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.enums.DesensitizeType;
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
@@ -47,7 +49,7 @@ public class DesensitizeUtil {
      */
     public static @NotNull String replace(String text, int head, int tail, String symbol) {
         if (Objects.isNull(text)) {
-            throw new IllegalArgumentException("待脱敏文本不能为 null");
+            throw new ServiceException("待脱敏文本不能为 null");
         }
         if (!StringUtil.hasText(symbol)) {
             // 符号为空会导致原文被静默删除（symbol.repeat 抛 NPE，或空串拼接丢数据）
@@ -75,7 +77,12 @@ public class DesensitizeUtil {
      * @apiNote 只保留首尾两段，中间两段整体替换；传入内容不是合法 IPv4 时<b>原样返回</b>，
      * 不做脱敏
      */
-    public static @NotNull String desensitizeIpv4Address(@NotNull String ipv4, String symbol) {
+    public static @NotNull String desensitizeIpv4Address(@Nullable String ipv4, String symbol) {
+        // 脱敏是「尽力而为」的展示逻辑，入参为空时原样返回空串而不是抛异常：
+        // 原来的 @NotNull 契约在这里是假的，ipv4.split() 会直接 NPE
+        if (!StringUtil.hasText(ipv4)) {
+            return Objects.isNull(ipv4) ? "" : ipv4;
+        }
         if (!StringUtil.hasText(symbol)) {
             symbol = DEFAULT_SYMBOL;
         }
@@ -94,7 +101,7 @@ public class DesensitizeUtil {
      * @param ipv4 IPv4 地址
      * @return 脱敏后的 IPv4 地址
      */
-    public static @NotNull String desensitizeIpv4Address(@NotNull String ipv4) {
+    public static @NotNull String desensitizeIpv4Address(@Nullable String ipv4) {
         return desensitizeIpv4Address(ipv4, DEFAULT_SYMBOL);
     }
 
@@ -130,10 +137,10 @@ public class DesensitizeUtil {
             String valueString, DesensitizeType type, int head, int tail, String symbol
     ) {
         if (Objects.isNull(valueString)) {
-            throw new IllegalArgumentException("待脱敏文本不能为 null");
+            throw new ServiceException("待脱敏文本不能为 null");
         }
         if (Objects.isNull(type)) {
-            throw new IllegalArgumentException("脱敏类型不能为 null");
+            throw new ServiceException("脱敏类型不能为 null");
         }
         if (!StringUtil.hasText(symbol)) {
             // 脱敏符号为空时会导致原文被静默删除，统一回退为默认符号

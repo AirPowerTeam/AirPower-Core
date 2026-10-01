@@ -7,6 +7,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -155,16 +156,16 @@ public class RootModel<M extends RootModel<M>> {
         Meta meta = ReflectUtil.getAnnotation(Meta.class, field);
         if (Objects.isNull(meta)) {
             // 字段上没标 @Meta 时，回退到看 getter 上是否标了
-            String fieldGetter = ReflectUtil.getFieldGetter(field);
-            try {
-                Method getter = instance.getClass().getMethod(fieldGetter);
-                meta = ReflectUtil.getAnnotation(Meta.class, getter);
-                if (Objects.isNull(meta)) {
-                    ReflectUtil.setFieldValue(instance, field, null);
-                    return;
-                }
-            } catch (NoSuchMethodException ignored) {
-            }
+            meta = findMetaOnGetter(instance.getClass(), field);
+        }
+        if (Objects.isNull(meta)) {
+            // 字段和所有可推断的 getter 上都没有 @Meta：一律排除。
+            // 这里必须 fail-closed —— 早先的写法把 getMethod 的 NoSuchMethodException
+            // 空 catch 掉，控制流直接落到 if 块之外，于是「拼不出 getter 名」的字段
+            // （基本类型 boolean isXxx、非 public getter、@Getter(NONE) 等）
+            // 既不被置空也不被处理，被原样返回前端。白名单 fail-open 等于没有白名单
+            ReflectUtil.setFieldValue(instance, field, null);
+            return;
         }
         if (value instanceof Collection<?> valueList) {
             // 是对象集合，逐个递归排除非元数据字段
@@ -179,6 +180,29 @@ public class RootModel<M extends RootModel<M>> {
         if (isModel(value.getClass())) {
             excludeNotMetaAll((RootModel<?>) value, visited);
         }
+    }
+
+    /**
+     * 在 getter 上查找 {@link Meta}
+     *
+     * @param clazz 当前类
+     * @param field 字段
+     * @return 找到返回注解，否则返回 {@code null}
+     * @apiNote getter 名有多个候选（见 {@link ReflectUtil#candidateGetterNames}），
+     * 任一命中即算找到；全部找不到才返回 {@code null}，由调用方按 fail-closed 处理
+     */
+    private static @Nullable Meta findMetaOnGetter(@NotNull Class<?> clazz, @NotNull Field field) {
+        for (String candidate : ReflectUtil.candidateGetterNames(field)) {
+            try {
+                Meta meta = ReflectUtil.getAnnotation(Meta.class, clazz.getMethod(candidate));
+                if (Objects.nonNull(meta)) {
+                    return meta;
+                }
+            } catch (NoSuchMethodException ignored) {
+                // 试下一个候选名
+            }
+        }
+        return null;
     }
 
     /**
@@ -211,7 +235,7 @@ public class RootModel<M extends RootModel<M>> {
         if (Objects.isNull(desensitize)) {
             return;
         }
-        if ((value instanceof String valueString)) {
+        if (value instanceof String valueString) {
             if (desensitize.replace()) {
                 ReflectUtil.setFieldValue(instance, field, desensitize.symbol());
                 return;
@@ -227,7 +251,18 @@ public class RootModel<M extends RootModel<M>> {
             );
             return;
         }
-        ReflectUtil.setFieldValue(instance, field, null);
+        // 非 String 一律保持原值并告警，绝不置 null。
+        // 置 null 有两个问题：其一，本方法是**原地修改实体**，一旦被 flush 回库
+        // 就是真实的字段级数据丢失；其二，前端只看到「数据没了」，
+        // 服务端毫无线索。保持原值 + 告警至少让「打码没生效」变成可发现的问题。
+        //
+        // 集合也没做逐元素脱敏：String 不可变，Collection<?> 又拿不到类型信息，
+        // 逐元素替换要么需要 setFieldValue 换掉整个集合（Hibernate 托管集合被替换
+        // 可能造成脏数据），要么需要强转 List<String> 后调 set（List.of 之类不可变集合会抛
+        // UnsupportedOperationException）。两种都比「不脱敏」更危险，故一并告警。
+        log.warn("字段({})声明了 @Desensitize，但值类型为 {}，无法在不破坏类型的前提下脱敏，已保持原值。"
+                        + "敏感信息请用 String 字段承载；集合类型的 @Desensitize 目前不生效",
+                field.getName(), value.getClass().getSimpleName());
     }
 
     /**

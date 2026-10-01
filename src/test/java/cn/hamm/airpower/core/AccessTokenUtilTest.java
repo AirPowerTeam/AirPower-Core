@@ -756,4 +756,53 @@ class AccessTokenUtilTest {
                     "范围内的秒数 " + validSecond + " 不应被误判为溢出");
         }
     }
+
+    @Nested
+    @DisplayName("密钥长度校验（build 与 verify 必须一致）")
+    class SecretLengthTest {
+
+        /**
+         * 刚好达到下限的密钥
+         */
+        private static final String SECRET_32 = "01234567890123456789012345678901";
+
+        /**
+         * 比下限少一位的密钥
+         */
+        private static final String SECRET_31 = "0123456789012345678901234567890";
+
+        @Test
+        @DisplayName("build 必须校验密钥长度：短密钥不能被签发出去")
+        void buildRejectsShortSecret() {
+            ServiceException e = assertThrows(ServiceException.class,
+                    () -> AccessTokenUtil.create().setPayloadId(1L).setExpireSecond(60).build(SECRET_31),
+                    "build 只查非空、不查长度时，短密钥能签发成功，"
+                            + "但 verify 会拒绝它，形成「登录成功、一调业务接口就 401」的死锁，"
+                            + "且启动时不报错、部署后才发现");
+            assertTrue(e.getMessage().contains("32"), "错误信息应说明最短限制，实际：" + e.getMessage());
+        }
+
+        @Test
+        @DisplayName("32 位密钥的签发与验证必须闭环")
+        void secretAtBoundaryWorks() {
+            String token = AccessTokenUtil.create().setPayloadId(1L).setExpireSecond(60).build(SECRET_32);
+
+            assertDoesNotThrow(() -> AccessTokenUtil.create().verify(token, SECRET_32),
+                    "刚好 32 位应同时通过签发与验证");
+        }
+
+        @Test
+        @DisplayName("verify 的错误文案不应出现「创建失败」")
+        void verifyMessageIsNotAboutCreation() {
+            String token = AccessTokenUtil.create().setPayloadId(1L).setExpireSecond(60).build(SECRET_32);
+
+            ServiceException e = assertThrows(ServiceException.class,
+                    () -> AccessTokenUtil.create().verify(token, SECRET_31),
+                    "验证阶段失败却提示「创建失败」，会把排查方向误导到别处");
+
+            assertFalse(e.getMessage().contains("创建失败"),
+                    "验证场景的错误信息不应出现「创建失败」，实际：" + e.getMessage());
+            assertTrue(e.getMessage().contains("校验失败"), "应说明是校验失败，实际：" + e.getMessage());
+        }
+    }
 }

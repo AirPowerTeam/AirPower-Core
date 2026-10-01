@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.enums.DesensitizeType;
+import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -140,10 +141,10 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：text 为 null 抛 IllegalArgumentException")
+        @DisplayName("异常分支：text 为 null 抛 ServiceException")
         void testReplaceWithNullText() {
-            assertThrows(IllegalArgumentException.class, () -> DesensitizeUtil.replace(null, 1, 1, "*"),
-                    "text 为 null 是调用错误，应抛带明确信息的 IllegalArgumentException");
+            assertThrows(ServiceException.class, () -> DesensitizeUtil.replace(null, 1, 1, "*"),
+                    "text 为 null 是调用错误，应抛带错误码的 ServiceException，与全项目其它 Util 一致");
         }
     }
 
@@ -407,17 +408,17 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：text 为 null 抛 IllegalArgumentException")
+        @DisplayName("异常分支：text 为 null 抛 ServiceException")
         void testNullText() {
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(ServiceException.class,
                     () -> DesensitizeUtil.desensitize(null, DesensitizeType.CUSTOM, 1, 1),
                     "text 为 null 是调用错误，应抛带明确信息的异常");
         }
 
         @Test
-        @DisplayName("异常分支：type 为 null 抛 IllegalArgumentException")
+        @DisplayName("异常分支：type 为 null 抛 ServiceException")
         void testNullType() {
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(ServiceException.class,
                     () -> DesensitizeUtil.desensitize("abc", null, 1, 1),
                     "type 为 null 是调用错误，不应靠 switch 落空才抛 NPE");
         }
@@ -494,9 +495,9 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：五参重载传 null 文本抛 IllegalArgumentException")
+        @DisplayName("异常分支：五参重载传 null 文本抛 ServiceException")
         void testNullValueString() {
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(ServiceException.class,
                     () -> DesensitizeUtil.desensitize(null, DesensitizeType.MOBILE, 0, 0, "*"),
                     "valueString 为 null 是调用错误，应抛带明确信息的异常");
         }
@@ -514,6 +515,34 @@ class DesensitizeUtilTest {
             constructor.setAccessible(true);
             DesensitizeUtil instance = constructor.newInstance();
             assertNotNull(instance, "反射调用私有构造器应能正常创建实例");
+        }
+    }
+
+    @Nested
+    @DisplayName("desensitizeIpv4Address 入参为空的健壮性")
+    class Ipv4NullTest {
+
+        @Test
+        @DisplayName("ipv4 为 null 时应返回空串而不是抛 NPE")
+        void nullIpv4ReturnsEmpty() {
+            assertDoesNotThrow(() -> DesensitizeUtil.desensitizeIpv4Address(null),
+                    "ipv4 标了 @NotNull 却没判空，ipv4.split() 会直接 NPE；"
+                            + "脱敏是「尽力而为」的展示逻辑，入参为空应原样返回");
+            assertEquals("", DesensitizeUtil.desensitizeIpv4Address(null), "null 应返回空串");
+        }
+
+        @Test
+        @DisplayName("ipv4 为空串或纯空白时按原样返回")
+        void blankIpv4ReturnsAsIs() {
+            assertEquals("", DesensitizeUtil.desensitizeIpv4Address(""), "空串应原样返回");
+            assertEquals("   ", DesensitizeUtil.desensitizeIpv4Address("   "), "纯空白应原样返回");
+        }
+
+        @Test
+        @DisplayName("双参重载的 ipv4 为 null 时同样不抛异常")
+        void nullIpv4WithSymbol() {
+            assertDoesNotThrow(() -> DesensitizeUtil.desensitizeIpv4Address(null, "#"),
+                    "双参重载也必须判空");
         }
     }
 }

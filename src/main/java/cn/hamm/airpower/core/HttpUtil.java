@@ -256,10 +256,10 @@ public class HttpUtil {
         try {
             return httpClient.send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
-            // 保留原始异常，便于上层区分超时、连接失败或请求非法
-            ServiceException serviceException = new ServiceException("发起请求失败，" + e.getMessage(), e);
-            serviceException.initCause(e);
-            throw serviceException;
+            // 保留原始异常，便于上层区分超时、连接失败或请求非法。
+            // 走 (String, Throwable) 重载：cause 由构造器设置，异常不会被当成 data 回传前端。
+            // 不要再调 initCause —— cause 已存在时它会抛 IllegalStateException
+            throw new ServiceException("发起请求失败，" + e.getMessage(), e);
         }
     }
 

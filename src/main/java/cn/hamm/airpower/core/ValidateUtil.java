@@ -176,8 +176,6 @@ public class ValidateUtil {
      * @return 验证结果
      */
     public static boolean isChina2Identity(String idCard) {
-        // 一代身份证长度
-        final int idLength = 15;
         // 二代身份证长度
         final int id2Length = 18;
         // 二代身份证求余数
@@ -190,23 +188,27 @@ public class ValidateUtil {
         if (Objects.isNull(idCard)) {
             return false;
         }
-        if (idCard.length() != id2Length && idCard.length() != idLength) {
+        // 15 位一代身份证没有校验位，无法做校验码比对，直接判否。
+        // 这里必须返回 false 而不是抛异常：本方法是 isXxx 谓词，
+        // 调用方普遍写成 if (isChina2Identity(id)) 放行 else 拒绝，
+        // 抛异常会让 15 位号码落到「系统错误」分支，
+        // 用户看到的是「暂不支持」这种毫无意义且无法自行处理的提示
+        if (idCard.length() != id2Length) {
             return false;
         }
-        if (idCard.length() == id2Length) {
-            // 前 17 位必须是数字，校验位允许大写 X 或小写 x
-            if (!isDigits(idCard, id2Length - 1)) {
-                return false;
-            }
-            char checkCode = idCard.charAt(idCard.length() - 1);
-            if (checkCode == 'x') {
-                checkCode = 'X';
-            }
-            int sum = IntStream.range(0, idCard.length() - 1).map(i -> Integer.parseInt(String.valueOf(idCard.charAt(i))) * factor[i]).sum();
-            // 求和后取余数11，得到的余数与校验码进行匹配，匹配成功，说明通过验证。
-            return flags[sum % id2Mod] == checkCode;
+        // 前 17 位必须是数字，校验位允许大写 X 或小写 x
+        if (!isDigits(idCard, id2Length - 1)) {
+            return false;
         }
-        throw new ServiceException("暂不支持一代身份证校验");
+        char checkCode = idCard.charAt(idCard.length() - 1);
+        if (checkCode == 'x') {
+            checkCode = 'X';
+        }
+        int sum = IntStream.range(0, id2Length - 1)
+                .map(i -> Character.digit(idCard.charAt(i), 10) * factor[i])
+                .sum();
+        // 求和后取余数11，得到的余数与校验码进行匹配，匹配成功，说明通过验证。
+        return flags[sum % id2Mod] == checkCode;
     }
 
     /**

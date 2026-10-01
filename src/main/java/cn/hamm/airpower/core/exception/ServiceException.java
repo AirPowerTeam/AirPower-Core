@@ -44,10 +44,27 @@ public class ServiceException extends RuntimeException implements IException<Ser
     }
 
     /**
+     * 抛出携带原始异常的业务异常
+     *
+     * @param message 错误信息
+     * @param cause   原始异常，只进 cause，<b>不会</b>回传前端
+     * @apiNote 没有本构造器时，{@code new ServiceException(msg, someException)} 会静默匹配到
+     * {@link #ServiceException(String, Object)}，把异常当成 {@code data}——而
+     * {@code ExceptionInterceptor} 会把 {@code getData()} 直接放进响应体，
+     * 于是异常类型、message 甚至 {@code stackTrace} 全部泄露给前端，
+     * 同时 {@code getCause()} 为 null、原始堆栈彻底丢失
+     */
+    public ServiceException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    /**
      * 抛出携带错误数据的业务异常
      *
      * @param message 错误信息
-     * @param data    错误数据
+     * @param data    错误数据，会随响应体返回给前端
+     * @apiNote <b>不要把异常对象传进来</b>，那会被序列化进响应体。
+     * 要保留原始异常请用 {@link #ServiceException(String, Throwable)}
      */
     public ServiceException(String message, Object data) {
         super(message);

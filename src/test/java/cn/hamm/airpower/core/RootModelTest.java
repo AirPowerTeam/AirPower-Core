@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -199,6 +200,28 @@ class RootModelTest {
         }
 
         @Test
+        @DisplayName("白名单必须 fail-closed：拼不出 getter 名的字段也要被排除")
+        void testExcludeNotMetaIsFailClosed() throws Exception {
+            // 用反射直接赋值，绕开 @Getter(NONE) 造成的编译期限制
+            Field internalFlag = DemoModel.class.getDeclaredField("isInternalFlag");
+            internalFlag.setAccessible(true);
+            internalFlag.setBoolean(model, true);
+            Field hidden = DemoModel.class.getDeclaredField("hidden");
+            hidden.setAccessible(true);
+            hidden.set(model, "不该出现在响应里");
+
+            model.excludeNotMeta();
+
+            assertFalse(internalFlag.getBoolean(model),
+                    "基本类型 boolean isInternalFlag：Lombok 生成的是 isInternalFlag() 而非 "
+                            + "getIsInternalFlag()，按字段名硬拼 getter 找不到方法。"
+                            + "早先的写法把 NoSuchMethodException 空 catch 掉，"
+                            + "字段既不被置空也不被处理，被原样返回前端——白名单 fail-open 等于没有白名单");
+            assertNull(hidden.get(model),
+                    "@Getter(NONE) 的字段没有任何 getter，同样必须被排除而不是泄露");
+        }
+
+        @Test
         @DisplayName("正常路径：嵌套模型被递归排除非元数据字段")
         void testExcludeNotMetaWithChild() {
             DemoModel child = new DemoModel()
@@ -315,7 +338,9 @@ class RootModelTest {
 
             assertEquals("138****8000", model.getMobile(), "标记 @Desensitize(MOBILE) 的 mobile 应按手机号规则脱敏");
             assertEquals("*", model.getSecret(), "replace=true 的 secret 应被整体替换为单个脱敏符号");
-            assertNull(model.getSecretNumber(), "Integer 类型的 secretNumber 不支持脱敏，应被置空");
+            assertEquals(1234, model.getSecretNumber(),
+                    "Integer 类型的 secretNumber 无法在不破坏类型的前提下脱敏，应保持原值而不是被置空"
+                            + "（置空会让原地修改的实体一旦 flush 回库就是真实的字段级数据丢失）");
             assertEquals(EMAIL_MASKED, model.getEmail(), "自定义 head=1/tail=1/symbol=# 的 email 应按自定义规则脱敏");
             assertNull(model.getRemark(), "desensitize 会先排除非元数据字段，remark 应被清空");
             assertEquals("标题", model.getTitle(), "Getter 上有 @Meta 的 title 应被保留");
@@ -438,11 +463,24 @@ class RootModelTest {
         }
 
         @Test
-        @DisplayName("正常路径：非字符串的脱敏字段被置空")
+        @DisplayName("集合类型的脱敏字段保持原值而不是被置空")
+        void testDesensitizeCollectionKeepsValue() {
+            model.setMobileList(new ArrayList<>(List.of("13800138000", "13900139000")));
+
+            model.desensitize();
+
+            assertNotNull(model.getMobileList(), "集合不应被置空");
+            assertEquals(2, model.getMobileList().size(), "集合元素不应丢失");
+        }
+
+        @Test
+        @DisplayName("正常路径：非字符串的脱敏字段保持原值而不是被置空")
         void testDesensitizeNonStringValue() {
             model.excludeNotMetaAndDesensitize(WHITE_LIST, true);
 
-            assertNull(model.getSecretNumber(), "Integer 类型的密文字段不支持脱敏，当前实现应被置空");
+            assertEquals(1234, model.getSecretNumber(),
+                    "非 String 类型无法脱敏，应保持原值。置空会静默销毁数据："
+                            + "desensitize 是原地修改实体，flush 回库即造成字段级数据丢失");
         }
 
         @Test

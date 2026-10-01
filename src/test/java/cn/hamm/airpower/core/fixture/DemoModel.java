@@ -6,7 +6,10 @@ import cn.hamm.airpower.core.annotation.Desensitize;
 import cn.hamm.airpower.core.annotation.Meta;
 import cn.hamm.airpower.core.annotation.ReadOnly;
 import cn.hamm.airpower.core.enums.DesensitizeType;
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
@@ -120,4 +123,29 @@ public class DemoModel extends RootModel<DemoModel> {
     public String getTitle() {
         return title;
     }
+
+    /**
+     * 基本类型 boolean，未标 {@code @Meta}
+     *
+     * <p>Lombok 对基本类型 boolean 生成的是 {@code isInternalFlag()} 而不是
+     * {@code getIsInternalFlag()}，按字段名硬拼 getter 会找不到方法。</p>
+     */
+    @Description("内部标记")
+    private boolean isInternalFlag;
+
+    /**
+     * 无 getter 的字段，未标 {@code @Meta}
+     */
+    @Description("隐藏字段")
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private String hidden;
+
+    /**
+     * 集合类型的脱敏字段
+     */
+    @Description("手机号列表")
+    @Meta
+    @Desensitize(value = DesensitizeType.MOBILE)
+    private List<String> mobileList;
 }

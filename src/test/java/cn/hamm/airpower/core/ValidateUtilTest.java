@@ -396,11 +396,15 @@ class ValidateUtilTest {
         }
 
         @Test
-        @DisplayName("15 位一代身份证抛 ServiceException")
+        @DisplayName("15 位一代身份证返回 false 而不是抛异常")
         void firstGeneration() {
-            ServiceException e = assertThrows(ServiceException.class, () -> ValidateUtil.isChina2Identity("110105194912310"),
-                    "15 位一代身份证应抛 ServiceException");
-            assertEquals("暂不支持一代身份证校验", e.getMessage(), "异常消息应与源码一致");
+            // isXxx 是谓词，调用方普遍写成 if (isChina2Identity(id)) 放行 else 拒绝。
+            // 原实现对 15 位抛 ServiceException，会让合法的一代号码落到「系统错误」分支，
+            // 用户看到的是无法自行处理的提示
+            assertFalse(ValidateUtil.isChina2Identity("110105194912310"),
+                    "15 位一代身份证无校验位，应判否而不是抛异常");
+            assertFalse(ValidateUtil.isChina2Identity("11010519491231a"),
+                    "15 位但含非数字字符，同样应判否而不是抛异常");
         }
 
         @Test

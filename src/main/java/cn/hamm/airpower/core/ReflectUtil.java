@@ -30,6 +30,11 @@ public class ReflectUtil {
     private static final String GET = "get";
 
     /**
+     * 布尔字段的常见前缀（Lombok 对基本类型 boolean 生成 {@code isXxx()}）
+     */
+    private static final String IS = "is";
+
+    /**
      * 缓存字段列表
      */
     private final static ConcurrentHashMap<Class<?>, List<Field>> FIELD_LIST_MAP = new ConcurrentHashMap<>();
@@ -49,10 +54,34 @@ public class ReflectUtil {
      * @return Getter 方法名
      */
     public static @NotNull String getFieldGetter(@NotNull Field field) {
+        return candidateGetterNames(field).get(0);
+    }
+
+    /**
+     * 获取字段的 Getter 方法名候选列表
+     *
+     * @param field 字段
+     * @return 候选 Getter 方法名，按可能性从高到低
+     * @apiNote 只拼一个名字会漏掉两类常见形态：Lombok 对<b>基本类型</b>
+     * {@code boolean isHot} 生成的是 {@code isHot()} 而不是 {@code getIsHot()}；
+     * 另有开发者手写 {@code getUrl()} 之类非标准命名。
+     * 漏掉候选名会让「按 getter 找注解」的逻辑找不到方法，
+     * 进而使 {@code @Meta} 这类白名单注解 fail-open
+     */
+    public static @NotNull List<String> candidateGetterNames(@NotNull Field field) {
         final String fieldName = field.getName();
         // 固定 Locale.ROOT：土耳其语环境下 "i".toUpperCase() 得到 "İ"，
         // 会把 getId 拼成 getİd，导不到方法、注解查找随之全部失效
-        return GET + fieldName.substring(0, 1).toUpperCase(Locale.ROOT) + fieldName.substring(1);
+        final String capitalized = fieldName.substring(0, 1).toUpperCase(Locale.ROOT) + fieldName.substring(1);
+        List<String> names = new ArrayList<>(3);
+        names.add(GET + capitalized);
+        // 基本类型 boolean isHot → Lombok 生成 isHot()，也可能生成 getIsHot()
+        if (fieldName.length() > 2 && fieldName.startsWith(IS)) {
+            final String tail = fieldName.substring(IS.length());
+            names.add(GET + tail.substring(0, 1).toUpperCase(Locale.ROOT) + tail.substring(1));
+            names.add(fieldName);
+        }
+        return names;
     }
 
     /**
@@ -87,11 +116,50 @@ public class ReflectUtil {
     public static void setFieldValue(Object object, @NotNull Field field, Object value) {
         try {
             field.setAccessible(true);
+            // 基本类型字段不接受 null：Field#set 会抛 IllegalArgumentException。
+            // 「排除该字段」的语义对基本类型就是清成它的零值，
+            // 不能因为字段是 primitive 就抛异常——那会让 @Meta 这类白名单
+            // 在遇到 private boolean isXxx 时直接失败
+            if (Objects.isNull(value) && field.getType().isPrimitive()) {
+                field.set(object, defaultPrimitiveValue(field.getType()));
+                return;
+            }
             field.set(object, value);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
             throw new ServiceException("设置对象指定属性的值失败, " + e.getMessage());
         }
+    }
+
+    /**
+     * 获取基本类型的零值
+     *
+     * @param type 基本类型
+     * @return 零值装箱结果
+     */
+    private static @NotNull Object defaultPrimitiveValue(@NotNull Class<?> type) {
+        if (boolean.class == type) {
+            return Boolean.FALSE;
+        }
+        if (char.class == type) {
+            return (char) 0;
+        }
+        if (byte.class == type) {
+            return (byte) 0;
+        }
+        if (short.class == type) {
+            return (short) 0;
+        }
+        if (int.class == type) {
+            return 0;
+        }
+        if (long.class == type) {
+            return 0L;
+        }
+        if (float.class == type) {
+            return 0F;
+        }
+        return 0D;
     }
 
     /**
