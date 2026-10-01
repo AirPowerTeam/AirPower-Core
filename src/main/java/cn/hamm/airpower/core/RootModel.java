@@ -141,16 +141,6 @@ public class RootModel<M extends RootModel<M>> {
     }
 
     /**
-     * 排除非元数据字段
-     *
-     * @param instance 模型实例
-     * @param field    字段
-     */
-    private static void excludeFieldValueNotMeta(@NotNull RootModel<?> instance, @NotNull Field field) {
-        excludeFieldValueNotMeta(instance, field, Collections.newSetFromMap(new IdentityHashMap<>()));
-    }
-
-    /**
      * 遍历 Map 中的模型值
      *
      * @param valueMap Map

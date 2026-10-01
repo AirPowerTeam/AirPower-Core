@@ -4,7 +4,6 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -303,7 +302,7 @@ public class FileUtil {
         String rootEntryName = Objects.isNull(sourceName) ? ZIP_SEPARATOR : sourceName.toString();
         try (FileOutputStream fos = new FileOutputStream(zipFilePath);
              ZipOutputStream zos = new ZipOutputStream(fos)) {
-            zipDirectory(sourceDir, rootEntryName, zos, new ZipSizeLimiter());
+            zipDirectory(sourceDir, rootEntryName, zos);
         }
     }
 
@@ -313,23 +312,9 @@ public class FileUtil {
      * @param dir     要压缩的目录
      * @param dirName 当前目录名称
      * @param zos     ZIP 输出流
-     * @throws IOException IO 异常
-     */
-    private static void zipDirectory(Path dir, String dirName, @NotNull ZipOutputStream zos) throws IOException {
-        zipDirectory(dir, dirName, zos, null);
-    }
-
-    /**
-     * 递归压缩目录
-     *
-     * @param dir     要压缩的目录
-     * @param dirName 当前目录名称
-     * @param zos     ZIP 输出流
-     * @param limiter 累计字节计数器，为 {@code null} 表示不限制
      * @throws IOException IO 异常，超出上限时同样以 IOException 形式抛出
      */
-    private static void zipDirectory(Path dir, String dirName, @NotNull ZipOutputStream zos,
-                                     @Nullable ZipSizeLimiter limiter) throws IOException {
+    private static void zipDirectory(Path dir, String dirName, @NotNull ZipOutputStream zos) throws IOException {
         // ZIP 规范要求条目名统一使用 '/'，不能沿用 File.separator（Windows 上是 '\'）
         dirName = dirName.endsWith(ZIP_SEPARATOR) ? dirName : dirName + ZIP_SEPARATOR;
 
@@ -349,20 +334,12 @@ public class FileUtil {
 
                 if (Files.isDirectory(path)) {
                     // 递归处理子目录
-                    zipDirectory(path, entryName, zos, limiter);
+                    zipDirectory(path, entryName, zos);
                     continue;
                 }
                 // 添加文件条目
                 ZipEntry fileEntry = new ZipEntry(entryName);
                 zos.putNextEntry(fileEntry);
-
-                // 写入文件内容。按块搬运并累计字节数，超上限立刻中止：
-                // 一次性 transferTo 会把整个文件灌进去，中途才发现超限就晚了
-                long fileSize = Files.size(path);
-                if (Objects.nonNull(limiter) && !limiter.tryAcquire(fileSize, ZIP_TOTAL_LIMIT.get())) {
-                    throw new IOException("压缩包累计大小超过上限 " + ZIP_TOTAL_LIMIT.get()
-                            + " 字节，已在文件(" + path + ")处中止");
-                }
                 try (InputStream bis = new BufferedInputStream(new FileInputStream(path.toFile()))) {
                     byte[] chunk = new byte[ZIP_COPY_CHUNK];
                     int read;
@@ -407,32 +384,4 @@ public class FileUtil {
         }
     }
 
-    /**
-     * <h1>ZIP 累计字节计数器</h1>
-     *
-     * <p>非线程安全，仅供单次 {@code zip} 递归过程内使用。</p>
-     */
-    private static final class ZipSizeLimiter {
-        /**
-         * 已累计字节数
-         */
-        private long usedBytes;
-
-        /**
-         * 构造
-         */
-        private ZipSizeLimiter() {
-        }
-
-        /**
-         * 尝试占用配额
-         *
-         * @param bytes 本次要写入的字节数
-         * @return 是否允许
-         */
-        private boolean tryAcquire(long bytes, long limit) {
-            usedBytes += Math.max(bytes, 0L);
-            return usedBytes <= limit;
-        }
-    }
 }
