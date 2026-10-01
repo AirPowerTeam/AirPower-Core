@@ -248,7 +248,9 @@ public class NumberUtil {
      */
     private static <T extends Number> T calculate(@NotNull BiFunction<T, T, T> function, T first, T second, T[] values) {
         T result = function.apply(first, second);
-        // 入参已由调用方用 requireNonNullElse 兜底，此处恒不为 null
+        if (Objects.isNull(values)) {
+            return result;
+        }
         for (T value : values) {
             result = function.apply(result, value);
         }

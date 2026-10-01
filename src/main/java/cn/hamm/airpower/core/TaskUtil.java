@@ -25,6 +25,11 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 @Slf4j
 public class TaskUtil {
     /**
+     * 队列容量
+     */
+    private static final int QUEUE_CAPACITY = 1000;
+
+    /**
      * 核心线程数（根据 CPU 核心数动态计算）
      */
     private static final int CORE_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors());
@@ -35,19 +40,9 @@ public class TaskUtil {
     private static final int MAX_POOL_SIZE = CORE_POOL_SIZE * 2;
 
     /**
-     * 队列容量
-     */
-    private static final int QUEUE_CAPACITY = 1000;
-
-    /**
      * 共享线程池
      *
-     * @apiNote 队列满时<b>立即拒绝</b>而不是回退到调用方线程执行。
-     * 回退执行（{@code CallerRunsPolicy}）会把调用方的 Web 线程一起占住：
-     * 队列满 → 请求线程陪着执行 → 导出更慢 → 队列更难排空 → 更多请求进入回退，
-     * 这个正反馈会让 Tomcat 工作线程被逐个耗尽，最终全站接口一起卡住。
-     * 宁可让调用方收到「系统繁忙」，也不要拖垮整个 Web 层。
-     * 需要「绝不丢任务」的场景请自行持有队列，不要依赖本类
+     * @apiNote 队列满时<b>立即拒绝</b>而不是回退到调用方线程执行
      */
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
             CORE_POOL_SIZE,

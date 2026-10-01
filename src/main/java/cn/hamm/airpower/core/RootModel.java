@@ -69,7 +69,7 @@ public class RootModel<M extends RootModel<M>> {
                 return;
             }
             if (value instanceof Map<?, ?> valueMap) {
-                forEachModelValue(valueMap, item -> excludeReadOnlyAll((RootModel<?>) item, visited));
+                forEachModelValue(valueMap, item -> excludeReadOnlyAll(item, visited));
                 return;
             }
             if (RootModel.isModel(value.getClass())) {
@@ -129,7 +129,7 @@ public class RootModel<M extends RootModel<M>> {
                 return;
             }
             if (value instanceof Map<?, ?> valueMap) {
-                forEachModelValue(valueMap, item -> desensitizeAll((RootModel<?>) item, visited));
+                forEachModelValue(valueMap, item -> desensitizeAll(item, visited));
                 return;
             }
             if (RootModel.isModel(value.getClass())) {
@@ -204,7 +204,7 @@ public class RootModel<M extends RootModel<M>> {
             return;
         }
         if (value instanceof Map<?, ?> valueMap) {
-            forEachModelValue(valueMap, item -> excludeNotMetaAll((RootModel<?>) item, visited));
+            forEachModelValue(valueMap, item -> excludeNotMetaAll(item, visited));
             return;
         }
         if (isModel(value.getClass())) {
@@ -304,13 +304,12 @@ public class RootModel<M extends RootModel<M>> {
         if (!visited.add(model)) {
             return;
         }
-        List<Class<? extends RootModel<?>>> whiteNameList = whiteList;
         model.filterModelFieldValue((instance, field) -> {
             Object value = ReflectUtil.getFieldValue(instance, field);
             if (Objects.isNull(value)) {
                 return;
             }
-            if (whiteNameList.isEmpty() || !whiteNameList.contains(model.getClass())) {
+            if (whiteList.isEmpty() || !whiteList.contains(model.getClass())) {
                 // 当前类不在白名单中：只做非元数据排除，不触发脱敏
                 excludeFieldValueNotMeta(instance, field, visited);
                 return;
@@ -323,17 +322,17 @@ public class RootModel<M extends RootModel<M>> {
                     }
                     // 集合元素按自身类重新判定白名单：
                     // 在白名单内则继续递归（脱敏），否则只排除非元数据
-                    handleNested((RootModel<?>) item, whiteNameList, isDesensitize, visited);
+                    handleNested((RootModel<?>) item, whiteList, isDesensitize, visited);
                 });
                 return;
             }
             if (value instanceof Map<?, ?> valueMap) {
                 forEachModelValue(valueMap,
-                        item -> handleNested((RootModel<?>) item, whiteNameList, isDesensitize, visited));
+                        item -> handleNested(item, whiteList, isDesensitize, visited));
                 return;
             }
             if (RootModel.isModel(value.getClass())) {
-                handleNested((RootModel<?>) value, whiteNameList, isDesensitize, visited);
+                handleNested((RootModel<?>) value, whiteList, isDesensitize, visited);
                 return;
             }
             if (isDesensitize) {

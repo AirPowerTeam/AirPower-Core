@@ -1,6 +1,5 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.exception.ServiceException;
 import jakarta.validation.*;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;

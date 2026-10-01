@@ -32,8 +32,6 @@ public class FileUtil {
 
     /**
      * 文件单位
-     * <p>用 {@link List} 而非数组：{@code final} 数组的内容仍可被任何调用方改写，
-     * 且改动全进程生效、无任何告警</p>
      */
     public static final List<String> UNITS =
             List.of("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB");
@@ -50,17 +48,11 @@ public class FileUtil {
 
     /**
      * 单个 ZIP 的累计输出字节上限（10GB）
-     * <p>逐文件流式拷贝本身是对的（不会把单个文件读进堆），但整个 zip 原本
-     * <b>没有累计上限</b>：一个 50GB 的目录就能生成 50GB 的 zip 撑爆磁盘。
-     * 而且默认压缩级别对已压缩数据（图片/视频/已有的 .gz/.zip）几乎不压缩，
-     * 目录占用会被完整复制一遍</p>
      */
     private static final long MAX_ZIP_TOTAL_BYTES = 10L * 1024 * 1024 * 1024;
 
     /**
      * ZIP 累计大小上限的可覆盖句柄
-     * <p>默认取 {@link #MAX_ZIP_TOTAL_BYTES}。10GB 的上限在测试里无法直接构造，
-     * 因此提供这个受控入口让测试能下调阈值；包外无法写入（无 setter）</p>
      */
     static final ThreadLocal<Long> ZIP_TOTAL_LIMIT =
             ThreadLocal.withInitial(() -> MAX_ZIP_TOTAL_BYTES);
@@ -72,8 +64,6 @@ public class FileUtil {
 
     /**
      * 文件大小格式化的 {@link DecimalFormat}，按线程复用
-     * <p>{@code DecimalFormat} 非线程安全，不能做成共享静态常量；
-     * 但每次调用都新建一个的分配量对「列表页每行调一次」的场景也偏高</p>
      */
     private static final ThreadLocal<DecimalFormat> SIZE_FORMAT = ThreadLocal.withInitial(
             // 固定使用 ROOT Locale，避免德语等环境下输出 1,00KB 导致调用方解析失败
@@ -313,7 +303,7 @@ public class FileUtil {
         String rootEntryName = Objects.isNull(sourceName) ? ZIP_SEPARATOR : sourceName.toString();
         try (FileOutputStream fos = new FileOutputStream(zipFilePath);
              ZipOutputStream zos = new ZipOutputStream(fos)) {
-            zipDirectory(sourceDir, rootEntryName, zos, new ZipSizeLimiter(MAX_ZIP_TOTAL_BYTES));
+            zipDirectory(sourceDir, rootEntryName, zos, new ZipSizeLimiter());
         }
     }
 
@@ -424,22 +414,14 @@ public class FileUtil {
      */
     private static final class ZipSizeLimiter {
         /**
-         * 上限
-         */
-        private final long maxBytes;
-
-        /**
          * 已累计字节数
          */
         private long usedBytes;
 
         /**
          * 构造
-         *
-         * @param maxBytes 上限
          */
-        private ZipSizeLimiter(long maxBytes) {
-            this.maxBytes = maxBytes;
+        private ZipSizeLimiter() {
         }
 
         /**
