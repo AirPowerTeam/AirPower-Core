@@ -65,8 +65,6 @@ public class DictionaryUtil {
      * @param enumClass 枚举字典类
      * @param <D>       字典类型
      * @return 枚举常量数组
-     * @apiNote {@link Class#getEnumConstants()} 对非枚举类返回 {@code null}，
-     * 直接 {@code .stream()} 会抛 {@code NullPointerException}
      */
     private static <D extends IDictionary> D @NotNull [] getEnumConstants(Class<D> enumClass) {
         if (Objects.isNull(enumClass)) {

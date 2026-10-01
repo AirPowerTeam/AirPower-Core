@@ -29,15 +29,18 @@ public class AesUtil {
      * 合法的 AES 密钥长度（字节）
      */
     private static final Set<Integer> VALID_KEY_LENGTHS = Set.of(16, 24, 32);
+
     /**
      * CBC 模式要求的 IV 长度（字节）
      */
     private static final int IV_LENGTH = 16;
+
     /**
      * 加密算法
      */
     @Setter(AccessLevel.NONE)
     private String algorithm = "AES";
+
     /**
      * 密钥
      */

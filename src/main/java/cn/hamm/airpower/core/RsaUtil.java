@@ -36,9 +36,15 @@ public class RsaUtil {
     @Setter
     private int keySize = 2048;
 
+    /**
+     * 加密算法
+     */
     @Setter
     private String cryptAlgorithm = RSA;
 
+    /**
+     * 签名算法
+     */
     @Setter
     private String signAlgorithm = "SHA256withRSA";
 

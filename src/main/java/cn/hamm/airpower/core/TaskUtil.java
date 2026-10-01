@@ -35,7 +35,6 @@ public class TaskUtil {
     /**
      * 共享线程池，队列满时由调用方线程执行（不丢任务、不抛拒绝异常）
      */
-    @SuppressWarnings("AlibabaThreadShouldSetName")
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
             CORE_POOL_SIZE,
             MAX_POOL_SIZE,

@@ -320,7 +320,7 @@ public class HttpUtil {
         /**
          * 代理地址
          */
-        private String host = "127.0.0.1";
+        private String host = HttpConstant.LOCAL_IP_ADDRESS;
 
         /**
          * 代理端口

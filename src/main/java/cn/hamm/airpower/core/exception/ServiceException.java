@@ -31,9 +31,6 @@ public class ServiceException extends RuntimeException implements IException<Ser
 
     /**
      * 错误数据
-     *
-     * @apiNote 标为 {@code transient}：本类继承自 {@code RuntimeException}
-     * （实现 Serializable），若 data 不可序列化，跨进程传递时会二次抛异常掩盖根因
      */
     private transient Object data = null;
 

@@ -69,7 +69,6 @@ public class FileUtil {
         }
         int index = fileName.lastIndexOf(EXTENSION_SEPARATOR);
         if (index < 0 || index == fileName.length() - EXTENSION_SEPARATOR.length()) {
-            // 无扩展名或以点结尾（如 "noext" / "archive."）时返回空串，
             // 原实现会把整个文件名当成扩展名返回
             return "";
         }

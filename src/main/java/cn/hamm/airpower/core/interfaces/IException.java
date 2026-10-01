@@ -11,12 +11,22 @@ import java.util.function.Supplier;
 /**
  * <h1>异常断言接口</h1>
  *
- * @author Hamm.cn
  * @param <T> 异常枚举自身类型
- * @apiNote 实现类是<b>错误码枚举</b>，而不是异常实例：所有 {@code whenXxx} 方法
- * 只在条件成立时抛出 {@link ServiceException}，条件不成立时静默返回
+ * @author Hamm.cn
  */
 public interface IException<T extends IException<T>> extends Supplier<T> {
+    /**
+     * 归一化字符串用于忽略大小写比较
+     *
+     * @param value 字符串
+     * @return 归一化结果
+     * @apiNote 固定使用 {@link java.util.Locale#ROOT}，避免土耳其语环境下
+     * 大写 I 转成点无点 i 导致比较结果失真
+     */
+    private static String normalizeCase(String value) {
+        return value.toLowerCase(Locale.ROOT);
+    }
+
     /**
      * 获取错误代码
      *
@@ -189,18 +199,6 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
             show(message);
         }
         when(Objects.equals(normalizeCase(str1), normalizeCase(str2)), message);
-    }
-
-    /**
-     * 归一化字符串用于忽略大小写比较
-     *
-     * @param value 字符串
-     * @return 归一化结果
-     * @apiNote 固定使用 {@link java.util.Locale#ROOT}，避免土耳其语环境下
-     * 大写 I 转成点无点 i 导致比较结果失真
-     */
-    private static String normalizeCase(String value) {
-        return value.toLowerCase(Locale.ROOT);
     }
 
     /**
