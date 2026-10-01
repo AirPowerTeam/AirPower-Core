@@ -60,10 +60,14 @@ public class TaskUtil {
      * @param runnable     任务
      * @param moreRunnable 更多任务
      * @apiNote 线程池使用 {@code CallerRunsPolicy}，队列满时任务会在<b>调用方线程</b>
-     * 同步执行，此时不再是异步；每个任务各自提交到线程池，彼此不保证先后顺序
+     * 同步执行，此时不再是异步；每个任务各自提交到线程池，彼此不保证先后顺序。
+     * 走调用方线程时<b>不会</b>清理该线程的 TraceID——那是调用方请求自己的标识
      */
     public static void run(Runnable runnable, Runnable... moreRunnable) {
         String traceId = TraceUtil.getTraceId();
+        // 提交前记下调用方线程：CallerRunsPolicy 生效时任务就跑在这个线程上，
+        // 此时 finally 里不能动它的 MDC，否则会擦掉这个请求自己的 TraceID
+        Thread callerThread = Thread.currentThread();
         getRunnableList(runnable, moreRunnable).forEach((run) -> EXECUTOR.submit(() -> {
             try {
                 TraceUtil.setTraceId(traceId);
@@ -73,8 +77,11 @@ public class TaskUtil {
                 // 必须传异常对象本身，只打印 getMessage() 会丢掉堆栈，线上问题无从定位
                 log.error("异步执行任务失败", e);
             } finally {
-                // 线程会被复用，清理 MDC 避免 TraceID 残留到下一个任务
-                TraceUtil.clearTraceId();
+                // 池线程会被复用，清理 MDC 避免 TraceID 残留到下一个任务；
+                // 但跑在调用方线程上时不能清——那会连带清掉请求自己的 TraceID
+                if (Thread.currentThread() != callerThread) {
+                    TraceUtil.clearTraceId();
+                }
             }
         }));
     }

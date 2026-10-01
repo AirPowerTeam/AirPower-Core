@@ -301,4 +301,131 @@ class TaskUtilTest {
             assertNotNull(firstTaskTrace.get(), "任务执行期间应能读到 TraceID");
         }
     }
+
+    @Nested
+    @DisplayName("CallerRunsPolicy 饱和路径")
+    class CallerRunsTest {
+
+        /**
+         * 池与队列的总容量：最大线程数 + 有界队列长度，与 TaskUtil 的配置一致
+         */
+        private static final int SATURATION = Math.max(2, Runtime.getRuntime().availableProcessors()) * 2 + 1000;
+
+        /**
+         * 堵住线程池的阻塞时长（秒）
+         * @apiNote 用带超时的等待而不是无限等待：即使断言失败、清理遗漏，
+         * 池也会自己排空，不会把后续用例一起拖死
+         */
+        private static final long BLOCK_SECONDS = 10L;
+
+        /**
+         * 等待线程池进入饱和（探测任务开始跑在调用方线程上）
+         *
+         * @throws InterruptedException 中断异常
+         */
+        private void awaitSaturation() throws InterruptedException {
+            for (int i = 0; i < 200; i++) {
+                if (isCallerRuns()) {
+                    return;
+                }
+                Thread.sleep(50L);
+            }
+            fail("线程池在预期时间内没有进入饱和状态，无法验证 CallerRuns 路径");
+        }
+
+        /**
+         * 等待线程池排空
+         *
+         * @apiNote 线程池是全进程共享的静态单例，本用例把它塞满后必须等它排空，
+         * 否则紧随其后的用例会撞上 CallerRuns，把「异步任务应跑在线程池线程上」
+         * 这类断言弄成偶发失败
+         *
+         * @throws InterruptedException 中断异常
+         */
+        private void awaitDrain() throws InterruptedException {
+            for (int i = 0; i < 400; i++) {
+                if (!isCallerRuns()) {
+                    return;
+                }
+                Thread.sleep(50L);
+            }
+            fail("线程池在预期时间内没有排空，会影响后续用例");
+        }
+
+        /**
+         * 判断当前是否处于 CallerRuns（任务跑在调用方线程上）
+         *
+         * @return 是否为 CallerRuns
+         * @apiNote 探测任务不阻塞：即便 CallerRuns 生效也会立刻返回
+         */
+        private boolean isCallerRuns() {
+            AtomicReference<Thread> probe = new AtomicReference<>();
+            TaskUtil.run(() -> probe.set(Thread.currentThread()));
+            return probe.get() == Thread.currentThread();
+        }
+
+        @Test
+        @DisplayName("队列打满时不得擦掉调用线程自己的 TraceID")
+        void mustNotClearCallerTraceId() throws InterruptedException {
+            CountDownLatch release = new CountDownLatch(1);
+            try {
+                // 把池线程与队列全部占满：这些任务都阻塞在 release 上
+                for (int i = 0; i < SATURATION; i++) {
+                    TaskUtil.run(() -> {
+                        try {
+                            release.await(BLOCK_SECONDS, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+                }
+                awaitSaturation();
+
+                // 饱和确认之后才设置 TraceID，避免被前面的探测任务影响
+                String expected = "调用方-TraceId";
+                TraceUtil.setTraceId(expected);
+                AtomicReference<Thread> executedOn = new AtomicReference<>();
+                TaskUtil.run(() -> executedOn.set(Thread.currentThread()));
+
+                assertSame(Thread.currentThread(), executedOn.get(),
+                        "前置条件不成立：这一步的任务没有跑在调用方线程上，断言会空过");
+                assertEquals(expected, TraceUtil.getTraceId(),
+                        "CallerRuns 下任务跑在调用方线程上，finally 里清 MDC 会擦掉该请求自己的 TraceID");
+            } finally {
+                release.countDown();
+                awaitDrain();
+                MDC.clear();
+            }
+        }
+
+        @Test
+        @DisplayName("饱和路径不应影响非饱和路径的 TraceID 继承")
+        void stillPropagatesTraceIdUnderSaturation() throws InterruptedException {
+            CountDownLatch release = new CountDownLatch(1);
+            try {
+                for (int i = 0; i < SATURATION; i++) {
+                    TaskUtil.run(() -> {
+                        try {
+                            release.await(BLOCK_SECONDS, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+                }
+                awaitSaturation();
+
+                String expected = "饱和时的-TraceId";
+                TraceUtil.setTraceId(expected);
+                AtomicReference<String> seen = new AtomicReference<>("未执行");
+                TaskUtil.run(() -> seen.set(TraceUtil.getTraceId()));
+
+                assertEquals(expected, seen.get(), "即使走 CallerRuns，任务内部仍应读到调用方的 TraceID");
+                assertEquals(expected, TraceUtil.getTraceId(), "调用方线程的 TraceID 不应被改变");
+            } finally {
+                release.countDown();
+                awaitDrain();
+                MDC.clear();
+            }
+        }
+    }
 }
