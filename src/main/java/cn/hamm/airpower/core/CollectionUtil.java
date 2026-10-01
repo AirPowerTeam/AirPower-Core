@@ -115,11 +115,8 @@ public class CollectionUtil {
      * @return 空集合
      */
     private static <T> @NotNull Collection<T> newCollection(Class<?> fieldClass) {
-        // 必须用 isAssignableFrom 而不是 Objects.equals：
-        // 调用方传的是元素的运行时实际类（AirPower4J 传 data.getClass()），
-        // HashSet / TreeSet / LinkedHashSet / Hibernate 的 PersistentSet
-        // 都不等于 Set.class，严格相等会让它们全部落到 ArrayList 分支，
-        // Set 的去重语义就此丢失，而且没有任何告警
+        // 必须用 isAssignableFrom：调用方传的是运行时实际类（data.getClass()），
+        // HashSet / TreeSet / PersistentSet 都不等于 Set.class
         return null != fieldClass && Set.class.isAssignableFrom(fieldClass)
                 ? new HashSet<>() : new ArrayList<>();
     }
@@ -133,11 +130,6 @@ public class CollectionUtil {
      * @return CSV 文件流
      * @apiNote 首行是表头，取自字段的 {@link Description}。内容前置 {@link #UTF8_BOM}，
      * 保证表格软件按 UTF-8 解码
-     * @apiNote <b>整表内容都在堆里</b>：返回的流背后是完整的 {@code byte[]}，
-     * 而生成过程中还会同时存活行集合、拼接串和字节数组三份副本，
-     * 峰值约为内容体积的 3 倍。实测 5 万行 × 30 列（约 35MB 内容）在
-     * {@code -Xmx256m} 下直接 {@link OutOfMemoryError}。
-     * <b>大数据量请改用 {@link #writeCsv}</b>
      */
     @Contract("_, _ -> new")
     public static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(List<M> list, Class<M> itemClass) {
@@ -168,11 +160,9 @@ public class CollectionUtil {
      * @param out       输出流，方法内部<b>不会</b>关闭它
      * @param <M>       元素类型
      * @throws IOException 写出异常
-     * @apiNote 流式写出，堆占用只与单行宽度有关，<b>与总行数无关</b>。
-     * 这是大数据量导出的正确入口；{@link #toCsvInputStream} 因为要返回
-     * {@code byte[]} 做不到这一点
-     * @apiNote 输出与 {@link #toCsvInputStream} <b>逐字节一致</b>：都以 BOM 开头，
-     * 行分隔符只写在行与行之间，<b>末行不带</b>换行
+     * @apiNote 堆占用只与单行宽度有关，与总行数无关；{@link #toCsvInputStream}
+     * 要返回 byte[]，做不到这一点
+     * @apiNote 输出与 {@link #toCsvInputStream} 逐字节一致：末行不带换行
      */
     public static <M extends RootModel<M>> void writeCsv(
             List<M> list, Class<M> itemClass, @NotNull OutputStream out) throws IOException {
@@ -244,11 +234,8 @@ public class CollectionUtil {
      */
     private static @NotNull String escapeCell(@NotNull String cell) {
         // 除了列/行分隔符，还必须处理双引号与 CR：
-        // 双引号是 RFC 4180 的引用字符，原样进入 CSV 会被标准解析器当成语法字符，
-        // 导致该行多切出列、后续所有列错位；
-        // 游离的 CR 在部分表格软件里会被当作换行，把一行拆成两行。
-        // 双引号选择<b>直接删除</b>而不是替成空格：它本身是语法字符，
-        // 用户极少有意在备注里打它，替成空格反而像原文里真有一个空格
+        // \" 是 RFC 4180 的引用字符，CR 会被部分表格软件当作换行，两者都必须处理。
+        // 双引号直接删除而非替成空格：它是语法字符，替成空格反而像原文里真有一个空格
         return cell
                 .replace(CSV_COLUMN_DELIMITER, " ")
                 .replace("\"", "")

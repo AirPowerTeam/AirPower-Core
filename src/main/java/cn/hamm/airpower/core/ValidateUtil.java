@@ -133,7 +133,9 @@ public class ValidateUtil {
      *
      * @param value 参数
      * @return 验证结果
-     * @apiNote 允许字符：{@code @ # % a-z A-Z 0-9 汉字 _ + /}
+     * @apiNote 允许字符：{@code @ # % a-z A-Z 0-9 汉字 _ - \ + /}。
+     * 其中 {@code -} 常见于编码前缀（如 {@code WH-001}）、
+     * {@code \} 常见于路径与转义，两者都是有安全含义的字符
      */
     public static boolean isNormalCode(String value) {
         return validRegex(value, NORMAL_CODE);

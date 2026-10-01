@@ -110,7 +110,10 @@ class AnnotationsTest {
             assertArrayEquals(new ElementType[]{ElementType.FIELD, ElementType.METHOD,
                             ElementType.TYPE, ElementType.PARAMETER},
                     Description.class.getAnnotation(Target.class).value(), "@Description 的作用目标应保持不变");
-            assertNotNull(Description.class.getAnnotation(Inherited.class), "@Description 应可被继承");
+            // @Inherited 按 JLS 只对 TYPE 上的注解生效，对 FIELD/METHOD 毫无作用，
+            // 标注它只会让人误以为子类字段能继承到父类注解
+            assertNull(Description.class.getAnnotation(Inherited.class),
+                    "@Description 的 @Target 不含 TYPE，@Inherited 对它无效，不应标注");
             assertNotNull(Description.class.getAnnotation(Documented.class), "@Description 应进入文档");
         }
     }
@@ -289,7 +292,8 @@ class AnnotationsTest {
             assertArrayEquals(new ElementType[]{ElementType.METHOD},
                     DesensitizeIgnore.class.getAnnotation(Target.class).value(),
                     "@DesensitizeIgnore 只应作用于方法");
-            assertNotNull(DesensitizeIgnore.class.getAnnotation(Inherited.class), "@DesensitizeIgnore 应可被继承");
+            assertNull(DesensitizeIgnore.class.getAnnotation(Inherited.class),
+                    "@DesensitizeIgnore 只作用于方法，@Inherited 对它无效，不应标注");
         }
 
         @Test

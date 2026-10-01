@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.BadPaddingException;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -260,6 +261,63 @@ class ServiceExceptionTest {
             assertNull(withData.getCause(), "业务数据不应变成 cause");
             assertSame(cause, withCause.getCause(), "显式传 Throwable 时必须落在 cause 上");
             assertNull(withCause.getData(), "cause 不应变成 data");
+        }
+    }
+
+    @Nested
+    @DisplayName("铁律：data 里绝不出现异常或堆栈")
+    class DataNeverHoldsThrowableTest {
+
+        @Test
+        @DisplayName("硬把异常塞进 data 时必须被拦下并改挂到 cause")
+        void throwablePassedAsDataIsRejected() {
+            BadPaddingException root = new BadPaddingException("Given final block not properly padded");
+
+            // 显式转成 Object，模拟「调用方没看 javadoc」的违规写法
+            ServiceException exception = new ServiceException("RSA 加密失败", (Object) root);
+
+            assertNull(exception.getData(),
+                    "data 会被 Jackson 序列化进响应体，异常一旦落在里面，"
+                            + "其类型、message 与完整 stackTrace（类名/文件名/行号）都会泄露给前端");
+            assertSame(root, exception.getCause(),
+                    "堆栈不能丢：应改挂到 cause 上，排障时仍能看到");
+        }
+
+        @Test
+        @DisplayName("三参构造器同样受保护")
+        void threeArgConstructorAlsoProtected() {
+            ServiceException exception = new ServiceException(500, "加密失败", (Object) new IllegalStateException("boom"));
+
+            assertEquals(500, exception.getCode(), "错误码不应受影响");
+            assertNull(exception.getData(), "data 同样不能是异常");
+            assertNotNull(exception.getCause(), "cause 应保留原始异常");
+        }
+
+        @Test
+        @DisplayName("响应体里不含 stackTrace 与异常类型名")
+        void responseBodyHasNoStackTrace() {
+            ServiceException exception = new ServiceException(
+                    "RSA 加密失败", (Object) new BadPaddingException("Given final block not properly padded"));
+
+            // 复刻 ExceptionInterceptor:240-243 的响应构造
+            String body = Json.toString(
+                    Json.create().setCode(exception.getCode())
+                            .setMessage(exception.getMessage())
+                            .setData(exception.getData()));
+
+            assertFalse(body.contains("stackTrace"), "响应体不得包含 stackTrace：" + body);
+            assertFalse(body.contains("BadPadding"), "响应体不得包含异常类型名：" + body);
+        }
+
+        @Test
+        @DisplayName("正常业务数据不受影响")
+        void businessDataStillWorks() {
+            List<String> data = List.of("a", "b");
+
+            assertEquals(data, new ServiceException("参数缺失", data).getData(),
+                    "Map/List/String 这类业务数据必须照常放进 data");
+            assertEquals(data, new ServiceException(400, "参数缺失", data).getData(),
+                    "三参重载同样如此");
         }
     }
 }

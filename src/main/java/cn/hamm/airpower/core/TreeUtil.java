@@ -151,15 +151,14 @@ public class TreeUtil {
      * @param depth     当前深度
      * @param <E>       树节点类型
      * @return 树结构列表
-     * @apiNote {@code visiting} 只能拦「成环」，拦不住「深但不成环」的链：
-     * 每一层递归都要占一个栈帧，超过几千层就会 StackOverflowError
+     * @apiNote {@code visiting} 只拦成环，拦不住深链，故需配合 {@link #MAX_TREE_DEPTH}
      */
     private static <E extends IEntity<E> & ITree<E>> @UnmodifiableView @NotNull List<E> buildTreeWithMap(
             @NotNull Map<Long, List<E>> parentMap, long parentId,
             @NotNull Set<Long> visiting, int depth
     ) {
         if (depth > MAX_TREE_DEPTH) {
-            log.warn("构建树结构时递归深度超过上限({})，已在 parentId={} 处截断，请检查数据", MAX_TREE_DEPTH, parentId);
+            log.warn("构建树结构递归深度超过上限({})，已在 parentId={} 处截断", MAX_TREE_DEPTH, parentId);
             return Collections.emptyList();
         }
         List<E> children = parentMap.getOrDefault(parentId, Collections.emptyList());
@@ -259,13 +258,8 @@ public class TreeUtil {
      * @param visiting  <b>当前递归路径</b>上的 ID 集合，与 {@code collected} 职责不同
      * @param depth     当前深度
      * @param <E>       树节点类型
-     * @apiNote {@code collected} 与 {@code visiting} 必须分开：
-     * 两者曾共用一个集合，于是「已收集过」被当成「成环」——
-     * 菱形结构（同一节点从两条路径可达）不是环，但第二个分支会被误剪，
-     * 其子树被整片漏掉。{@code collected} 只负责累积结果，
-     * 环检测交给 {@code visiting}（回溯时移除，与 buildTreeWithMap 一致）
-     * @apiNote 深度上限：Java 默认线程栈约 512KB~1MB，链式树（部门、分类、BOM 工序）
-     * 超过几千层就会 StackOverflowError，而那种深度的数据本身就已经是脏数据
+     * @apiNote {@code collected} 只累积结果，环检测交给 {@code visiting}：
+     * 两者共用一个集合会把「已收集过」误判为成环，菱形结构的子树会被整片漏掉
      */
     private static <
             E extends IEntity<E> & ITree<E>

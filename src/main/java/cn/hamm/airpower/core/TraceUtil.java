@@ -30,7 +30,7 @@ public class TraceUtil {
      *
      * @return 当前线程的 TraceID，未设置时为 {@code null}
      */
-    public static String getTraceId() {
+    public static @Nullable String getTraceId() {
         return MDC.get(HttpConstant.Header.TRACE_ID);
     }
 

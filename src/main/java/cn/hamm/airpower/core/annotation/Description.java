@@ -3,7 +3,6 @@ package cn.hamm.airpower.core.annotation;
 import cn.hamm.airpower.core.ReflectUtil;
 
 import java.lang.annotation.Documented;
-import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
@@ -18,7 +17,6 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  */
 @Target({FIELD, METHOD, TYPE, PARAMETER})
 @Retention(RUNTIME)
-@Inherited
 @Documented
 public @interface Description {
     /**

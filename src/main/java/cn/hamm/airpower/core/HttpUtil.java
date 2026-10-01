@@ -277,9 +277,7 @@ public class HttpUtil {
         try {
             return httpClient.send(getHttpRequest(), boundedStringBodyHandler());
         } catch (InterruptedException e) {
-            // 优雅停机：Spring Boot 收到 SIGTERM 后会 interrupt 容器线程。
-            // 不恢复中断位的话，JDK 内部的锁与信号量会跳过等待、停止响应中断，
-            // 停机过程会被拖长。必须先恢复中断位再抛
+            // 必须恢复中断位，否则 JDK 内部的锁与信号量会停止响应中断，拖长优雅停机
             Thread.currentThread().interrupt();
             throw new ServiceException("发起请求被中断，" + e.getMessage(), e);
         } catch (Exception e) {

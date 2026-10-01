@@ -62,11 +62,8 @@ public class ReflectUtil {
      *
      * @param field 字段
      * @return 候选 Getter 方法名，按可能性从高到低
-     * @apiNote 只拼一个名字会漏掉两类常见形态：Lombok 对<b>基本类型</b>
-     * {@code boolean isHot} 生成的是 {@code isHot()} 而不是 {@code getIsHot()}；
-     * 另有开发者手写 {@code getUrl()} 之类非标准命名。
-     * 漏掉候选名会让「按 getter 找注解」的逻辑找不到方法，
-     * 进而使 {@code @Meta} 这类白名单注解 fail-open
+     * @apiNote Lombok 对基本类型 {@code boolean isHot} 生成的是 {@code isHot()} 而非
+     * {@code getIsHot()}，只拼一个名字会找不到方法
      */
     public static @NotNull List<String> candidateGetterNames(@NotNull Field field) {
         final String fieldName = field.getName();

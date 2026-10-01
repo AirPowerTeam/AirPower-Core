@@ -171,10 +171,8 @@ public class AccessTokenUtil {
      *
      * @param secret  密钥
      * @param isBuild 是否为签发场景（只影响错误文案）
-     * @apiNote {@link #build(String)} 与 {@link #verify(String, String)} 必须走同一套校验。
-     * 只在 verify 侧校验长度会形成「签发得出去、永远验不过」的死锁：
-     * 配了短密钥时登录成功，但一调业务接口就 401，
-     * 排查方向会被误导到「令牌传递 / 拦截器」，而启动时又不会失败，部署后才发现
+     * @apiNote {@link #build(String)} 与 {@link #verify(String, String)} 必须走同一套校验，
+     * 否则会出现「签发得出去、永远验不过」的死锁
      */
     private static void checkSecret(String secret, boolean isBuild) {
         if (!StringUtil.hasText(secret)) {

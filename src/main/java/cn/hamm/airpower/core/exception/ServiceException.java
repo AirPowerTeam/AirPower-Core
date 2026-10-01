@@ -3,6 +3,7 @@ package cn.hamm.airpower.core.exception;
 import cn.hamm.airpower.core.Json;
 import cn.hamm.airpower.core.interfaces.IException;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import lombok.NoArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 
@@ -13,9 +14,14 @@ import java.util.Objects;
  * <h1>业务异常</h1>
  *
  * @author Hamm.cn
- * @apiNote 不传错误码时使用 {@link Json#SERVICE_ERROR}；{@code data} 会随响应体返回给前端，
- * 因此不要往里塞敏感信息
+ * @apiNote 不传错误码时使用 {@link Json#SERVICE_ERROR}
+ * @apiNote <b>铁律：{@code data} 绝对不能放异常对象或堆栈。</b>
+ * {@code data} 会被 Jackson 序列化进 HTTP 响应体，异常一旦落在里面，
+ * 其类型、message 与完整 {@code stackTrace}（类名、文件名、行号）全部泄露给前端。
+ * 要保留原始异常请用 {@link #ServiceException(String, Throwable)}，
+ * 堆栈需要落盘时由本类统一 {@code log.error} 输出
  */
+@Slf4j
 @NoArgsConstructor
 @Getter
 public class ServiceException extends RuntimeException implements IException<ServiceException> {
@@ -48,11 +54,7 @@ public class ServiceException extends RuntimeException implements IException<Ser
      *
      * @param message 错误信息
      * @param cause   原始异常，只进 cause，<b>不会</b>回传前端
-     * @apiNote 没有本构造器时，{@code new ServiceException(msg, someException)} 会静默匹配到
-     * {@link #ServiceException(String, Object)}，把异常当成 {@code data}——而
-     * {@code ExceptionInterceptor} 会把 {@code getData()} 直接放进响应体，
-     * 于是异常类型、message 甚至 {@code stackTrace} 全部泄露给前端，
-     * 同时 {@code getCause()} 为 null、原始堆栈彻底丢失
+     * @apiNote 必须用它而不是 {@code (String, Object)}：后者会把异常当成 data 回传前端
      */
     public ServiceException(String message, Throwable cause) {
         super(message, cause);
@@ -63,12 +65,54 @@ public class ServiceException extends RuntimeException implements IException<Ser
      *
      * @param message 错误信息
      * @param data    错误数据，会随响应体返回给前端
-     * @apiNote <b>不要把异常对象传进来</b>，那会被序列化进响应体。
-     * 要保留原始异常请用 {@link #ServiceException(String, Throwable)}
+     * @apiNote <b>禁止把异常对象传进来</b>：{@code data} 会被 Jackson 序列化进响应体，
+     * 异常一旦落在里面，其类型、message 与完整 {@code stackTrace}
+     * （含类名、文件名、行号）都会泄露给前端。
+     * 要保留原始异常请用 {@link #ServiceException(String, Throwable)}，
+     * 堆栈由本类统一 {@code log.error} 输出
      */
     public ServiceException(String message, Object data) {
         super(message);
+        if (data instanceof Throwable cause) {
+            // 兜底：即便调用方漏看了 javadoc 硬传了异常，也不能让它进 data
+            rejectThrowableData(cause);
+            return;
+        }
         this.data = data;
+    }
+
+    /**
+     * 抛出指定错误码并携带错误数据的业务异常
+     *
+     * @param code    错误代码
+     * @param message 错误信息
+     * @param data    错误数据，会随响应体返回给前端
+     * @apiNote 与 {@link #ServiceException(String, Object)} 同样禁止传入异常对象
+     */
+    public ServiceException(int code, String message, Object data) {
+        super(message);
+        this.code = code;
+        if (data instanceof Throwable cause) {
+            rejectThrowableData(cause);
+            return;
+        }
+        this.data = data;
+    }
+
+    /**
+     * 拒绝把异常放进 {@code data}：记日志并挂到 {@code cause}
+     *
+     * @param cause 被误当成 data 传入的异常
+     * @apiNote 「data 不放异常、堆栈只进日志」是项目铁律。这里做成运行期强制，
+     * 而不是只靠 javadoc 提醒：调用点分散在三个仓库，靠约定迟早会漏，
+     * 而漏一次就是把完整堆栈发到前端
+     * @apiNote 调用前 {@code super(message)} 没有设置 cause，
+     * 所以此处 {@code initCause} 是合法的；挂上之后排障时仍能看到完整堆栈
+     */
+    private void rejectThrowableData(@NotNull Throwable cause) {
+        log.error("[{}]data 实参是异常，已改挂 cause；data 会回传前端，不得携带异常",
+                cause.getMessage(), cause);
+        this.initCause(cause);
     }
 
     /**
@@ -80,19 +124,6 @@ public class ServiceException extends RuntimeException implements IException<Ser
     public ServiceException(int code, String message) {
         super(message);
         this.code = code;
-    }
-
-    /**
-     * 抛出指定错误码并携带错误数据的业务异常
-     *
-     * @param code    错误代码
-     * @param message 错误信息
-     * @param data    错误数据
-     */
-    public ServiceException(int code, String message, Object data) {
-        super(message);
-        this.code = code;
-        this.data = data;
     }
 
     /**

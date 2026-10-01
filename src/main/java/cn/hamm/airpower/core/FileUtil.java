@@ -32,10 +32,8 @@ public class FileUtil {
 
     /**
      * 文件单位
-     * <p>刻意<b>不</b>用数组：{@code final} 只保证引用不可重新赋值，数组内容仍然可变，
-     * 而它是 {@code public} 的——任何代码拿到引用就能 {@code UNITS[3] = "G"}，
-     * 改动对全进程立即生效且无任何告警，表现为「所有 formatSize() 的 TB 位集体错乱」，
-     * 而且只在特定量级的文件上出现，极难归因</p>
+     * <p>用 {@link List} 而非数组：{@code final} 数组的内容仍可被任何调用方改写，
+     * 且改动全进程生效、无任何告警</p>
      */
     public static final List<String> UNITS =
             List.of("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB");
@@ -134,11 +132,7 @@ public class FileUtil {
             return "0.00" + UNITS.get(0);
         }
         double fileSize = size;
-        // DecimalFormat 本身不是线程安全的（内部有可变状态），所以不能做成静态常量
-        // 直接共享；但每次调用都 new 一个 DecimalFormat + DecimalFormatSymbols 也很贵
-        //（符号表要从一个大 switch + HashMap 里取，还要解析格式模式串），
-        // 而 formatSize 是「列表页每行都要调一次」的方法。
-        // 这里用 ThreadLocal 复用：既保持线程安全，又把分配摊到每线程一次
+        // DecimalFormat 非线程安全，不能做成共享静态常量；用 ThreadLocal 复用
         DecimalFormat decimalFormat = SIZE_FORMAT.get();
         for (String unit : UNITS) {
             if (fileSize < FILE_SCALE) {

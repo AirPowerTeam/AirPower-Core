@@ -158,10 +158,7 @@ public class RootModel<M extends RootModel<M>> {
      *
      * @param valueMap Map
      * @param action   对每个模型值执行的动作
-     * @apiNote 之前的 {@code @ReadOnly} / {@code @Meta} / {@code @Desensitize}
-     * 三条递归路径都只处理 {@code Collection} 与 {@code RootModel}，
-     * Map 里的模型原样穿透——{@code @Desensitize} 字段会以<b>明文</b>返回前端。
-     * key 与 value 都要遍历：两种写法（{@code Map<String, Entity>} 与
+     * @apiNote key 与 value 都要遍历，两种写法（{@code Map<String, Entity>} 与
      * {@code Map<Entity, String>}）在业务里都出现过
      */
     private static void forEachModelValue(@NotNull Map<?, ?> valueMap, @NotNull Consumer<RootModel<?>> action) {
@@ -196,11 +193,8 @@ public class RootModel<M extends RootModel<M>> {
             meta = findMetaOnGetter(instance.getClass(), field);
         }
         if (Objects.isNull(meta)) {
-            // 字段和所有可推断的 getter 上都没有 @Meta：一律排除。
-            // 这里必须 fail-closed —— 早先的写法把 getMethod 的 NoSuchMethodException
-            // 空 catch 掉，控制流直接落到 if 块之外，于是「拼不出 getter 名」的字段
-            // （基本类型 boolean isXxx、非 public getter、@Getter(NONE) 等）
-            // 既不被置空也不被处理，被原样返回前端。白名单 fail-open 等于没有白名单
+            // 字段和所有候选 getter 上都没有 @Meta，一律排除。
+            // 必须 fail-closed：getter 名拼不出时若不排除，字段会被原样返回前端
             ReflectUtil.setFieldValue(instance, field, null);
             return;
         }
@@ -292,17 +286,10 @@ public class RootModel<M extends RootModel<M>> {
             );
             return;
         }
-        // 非 String 一律保持原值并告警，绝不置 null。
-        // 置 null 有两个问题：其一，本方法是**原地修改实体**，一旦被 flush 回库
-        // 就是真实的字段级数据丢失；其二，前端只看到「数据没了」，
-        // 服务端毫无线索。保持原值 + 告警至少让「打码没生效」变成可发现的问题。
-        //
-        // 集合也没做逐元素脱敏：String 不可变，Collection<?> 又拿不到类型信息，
-        // 逐元素替换要么需要 setFieldValue 换掉整个集合（Hibernate 托管集合被替换
-        // 可能造成脏数据），要么需要强转 List<String> 后调 set（List.of 之类不可变集合会抛
-        // UnsupportedOperationException）。两种都比「不脱敏」更危险，故一并告警。
-        log.warn("字段({})声明了 @Desensitize，但值类型为 {}，无法在不破坏类型的前提下脱敏，已保持原值。"
-                        + "敏感信息请用 String 字段承载；集合类型的 @Desensitize 目前不生效",
+        // 非 String 保持原值：置 null 会在实体被 flush 回库时造成字段级数据丢失。
+        // 集合同样不逐元素脱敏：String 不可变、Collection<?> 无类型信息，
+        // 逐元素替换要么换掉整个托管集合，要么在不可变集合上抛异常，都更危险
+        log.warn("字段({})的 @Desensitize 对类型 {} 不生效，已保持原值；请改用 String 字段",
                 field.getName(), value.getClass().getSimpleName());
     }
 
@@ -370,9 +357,7 @@ public class RootModel<M extends RootModel<M>> {
      * @param whiteList    类白名单
      * @param isDesensitize 是否需要脱敏
      * @param visited      已访问的模型，按对象身份去重
-     * @apiNote 白名单分支此前每次递归都重新 new 一个 visited 集合，
-     * 成环模型（{@code A→B→A}）会直接 StackOverflowError；
-     * 而且集合是按引用传递的，环检测根本不起作用
+     * @apiNote {@code visited} 必须按引用传递：成环模型（{@code A→B→A}）会 StackOverflowError
      */
     private static void excludeNotMetaAndDesensitize(
             @NotNull RootModel<?> model,

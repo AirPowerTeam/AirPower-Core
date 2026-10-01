@@ -259,13 +259,8 @@ public class RsaUtil {
      *
      * @param key 密钥
      * @return 字节数
-     * @apiNote PKCS#1 v1.5 填充要占 11 字节，必须按<b>实际</b>密钥长度算。
-     * 原来只用配置项 {@code keySize} 推导，而 key 是从 publicKey/privateKey 字符串
-     * 解析出来的，两者从未比对过：配了 2048 却塞进一把 1024 的密钥时，
-     * 分块会算出 245 字节而实际只解得开 117 字节，加密能成功但解不开，
-     * 或反过来直接抛下标越界
-     * @apiNote 实际长度与配置不一致时直接报错：静默按实际值算会掩盖配置错误，
-     * 而报错能让部署时立刻发现「密钥与配置不匹配」
+     * @apiNote 按<b>实际</b>密钥长度计算：PKCS#1 v1.5 填充固定占 11 字节，
+     * 分块大小与密钥长度强相关，用配置值推算会与实际密钥不符
      */
     private int encryptBlockSize(@NotNull Key key) {
         return checkKeySizeMatchesConfig(key) / 8 - PKCS1_PADDING_BYTES;
