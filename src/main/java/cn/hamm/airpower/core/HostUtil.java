@@ -16,9 +16,6 @@ import java.net.UnknownHostException;
 public class HostUtil {
     /**
      * 主机名缓存
-     * <p>主机名在进程生命周期内不会变，但 {@code InetAddress.getLocalHost()} 每次
-     * 都会做一次解析（可能触发 DNS 查询），再叠加 2 个环境变量读取。
-     * 用 {@link Supplier} 而不是直接存值，是为了把「null 也算已缓存」表达清楚</p>
      */
     private static volatile String cachedHostName;
 
