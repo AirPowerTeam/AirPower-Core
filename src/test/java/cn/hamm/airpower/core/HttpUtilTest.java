@@ -50,6 +50,12 @@ class HttpUtilTest {
     /**
      * 本地测试服务器
      */
+    /**
+     * 测试服务器收到的 Content-Type 头个数
+     * <p>HttpRequest.Builder.header() 是追加语义，重复头在这里被计数暴露出来</p>
+     */
+    private static int recordedContentTypeCount;
+
     private static HttpServer server;
 
     /**
@@ -140,6 +146,7 @@ class HttpUtilTest {
         recordedMethod = exchange.getRequestMethod();
         recordedBody = body;
         recordedContentType = firstHeader(exchange, HttpConstant.Header.CONTENT_TYPE);
+        recordedContentTypeCount = headerCount(exchange, HttpConstant.Header.CONTENT_TYPE);
         recordedCustomHeader = firstHeader(exchange, CUSTOM_HEADER);
         recordedCookie = firstHeader(exchange, HttpConstant.Header.COOKIE);
         byte[] bytes = RESPONSE_BODY.getBytes(StandardCharsets.UTF_8);
@@ -157,6 +164,11 @@ class HttpUtilTest {
      * @param name     请求头名称
      * @return 请求头值，不存在时返回 {@code null}
      */
+    private static int headerCount(HttpExchange exchange, String name) {
+        List<String> values = exchange.getRequestHeaders().get(name);
+        return null == values ? 0 : values.size();
+    }
+
     private static String firstHeader(HttpExchange exchange, String name) {
         List<String> values = exchange.getRequestHeaders().get(name);
         return (null == values || values.isEmpty()) ? null : values.get(0);
@@ -170,6 +182,7 @@ class HttpUtilTest {
         recordedMethod = null;
         recordedBody = null;
         recordedContentType = null;
+        recordedContentTypeCount = 0;
         recordedCustomHeader = null;
         recordedCookie = null;
         receivedCount.set(0);
@@ -702,6 +715,194 @@ class HttpUtilTest {
             // 对照组：同一个客户端在超时前拿到响应时不应受影响
             assertDoesNotThrow(() -> HttpUtil.create(5).setUrl(baseUrl).get(),
                     "超时时间内正常响应的请求不应受影响");
+        }
+    }
+
+    @Nested
+    @DisplayName("请求头与 Cookie 的注入防护")
+    class InjectionGuardTest {
+
+        @Test
+        @DisplayName("Cookie 值含分号时必须拒绝而不是拼进请求头")
+        void cookieValueWithSemicolonIsRejected() {
+            String injected = "abc; admin=true; role=ROOT";
+
+            ServiceException e = assertThrows(ServiceException.class,
+                    () -> HttpUtil.create(10).setUrl(baseUrl).addCookie("token", injected).get(),
+                    "直接拼接时，值里的 ; 会让对端解析出 3 个 Cookie，后两个是攻击者凭空注入的");
+
+            assertTrue(e.getMessage().contains("Cookie"), "错误信息应指向 Cookie，实际：" + e.getMessage());
+            assertEquals(0, receivedCount.get(), "请求不应被发出");
+        }
+
+        @Test
+        @DisplayName("Cookie 名含分号、逗号、等号或 CR/LF 时必须拒绝")
+        void cookieNameWithIllegalCharIsRejected() {
+            for (String illegal : new String[]{"a;b", "a,b", "a=b", "a\r\nX-Evil: 1"}) {
+                assertThrows(ServiceException.class,
+                        () -> HttpUtil.create(10).setUrl(baseUrl).addCookie(illegal, "v").get(),
+                        "Cookie 名称含非法字符时必须拒绝：" + escape(illegal));
+            }
+        }
+
+        @Test
+        @DisplayName("CR/LF 在 Cookie 值里必须被拒绝以防请求头注入")
+        void cookieValueWithCrLfIsRejected() {
+            assertThrows(ServiceException.class,
+                    () -> HttpUtil.create(10).setUrl(baseUrl).addCookie("token", "a\r\nX-Injected: yes").get(),
+                    "CR/LF 会造成请求头注入");
+        }
+
+        @Test
+        @DisplayName("合法 Cookie 仍应正常透传")
+        void legalCookieStillWorks() {
+            String body = HttpUtil.create(10).setUrl(baseUrl)
+                    .addCookie("token", "abc123")
+                    .addCookie("uid", "42")
+                    .get().body();
+
+            assertEquals(RESPONSE_BODY, body, "正常请求不应受影响");
+            // cookies 是 HashMap，多个 Cookie 的顺序不保证，这里只校验集合内容
+            List<String> parts = List.of(recordedCookie.split("; "));
+            assertEquals(2, parts.size(), "应发出两个 Cookie，实际：" + recordedCookie);
+            assertTrue(parts.contains("token=abc123"), "应包含 token，实际：" + recordedCookie);
+            assertTrue(parts.contains("uid=42"), "应包含 uid，实际：" + recordedCookie);
+        }
+
+        @Test
+        @DisplayName("Content-Type 只能出现一次：addHeader 传过也不应产生第二个")
+        void contentTypeMustNotBeDuplicated() {
+            HttpUtil.create(10).setUrl(baseUrl)
+                    .addHeader(HttpConstant.Header.CONTENT_TYPE, "text/csv")
+                    .get();
+
+            assertEquals(1, recordedContentTypeCount,
+                    "HttpRequest.Builder.header() 是追加语义。这里若用 header 追加，"
+                            + "调用方已通过 addHeader 传过 Content-Type 时会出现两个，"
+                            + "而不少服务端/网关对重复头是取第一个或直接 400，第三方 API 往往只报「参数错误」");
+        }
+
+        @Test
+        @DisplayName("setContentType 应覆盖 addHeader 传入的 Content-Type")
+        void setContentTypeOverridesAddHeader() {
+            HttpUtil.create(10).setUrl(baseUrl)
+                    .addHeader(HttpConstant.Header.CONTENT_TYPE, "text/csv")
+                    .setContentType("application/xml")
+                    .get();
+
+            assertEquals(1, recordedContentTypeCount, "显式设置后仍应只有一个 Content-Type");
+            assertEquals("application/xml", recordedContentType,
+                    "setContentType 显式指定的值应胜出（替换而非追加）");
+        }
+
+        @Test
+        @DisplayName("未设置 Content-Type 时仍走默认值，不产生重复")
+        void defaultContentTypeIsSingle() {
+            HttpUtil.create(10).setUrl(baseUrl).setContentType(null).get();
+
+            assertTrue(recordedContentTypeCount <= 1,
+                    "contentType 为 null 时不应额外追加，实际个数 " + recordedContentTypeCount);
+        }
+
+        private String escape(String s) {
+            return s.replace("\r", "\\r").replace("\n", "\\n");
+        }
+    }
+
+    @Nested
+    @DisplayName("响应体体积上限")
+    class ResponseSizeLimitTest {
+
+        /**
+         * 超过 16MB 上限的响应体大小
+         */
+        private static final int OVER_LIMIT_BYTES = 17 * 1024 * 1024;
+
+        /**
+         * 专门用于测试体积上限的服务器
+         */
+        private HttpServer bigServer;
+
+        /**
+         * 该服务器地址
+         */
+        private String bigUrl;
+
+        @BeforeEach
+        void startBigServer() throws IOException {
+            bigServer = HttpServer.create(new InetSocketAddress(HttpConstant.LOCAL_IP_ADDRESS, 0), 0);
+            bigServer.createContext("/big", exchange -> {
+                exchange.getResponseHeaders().set(HttpConstant.Header.CONTENT_TYPE, "application/octet-stream");
+                exchange.sendResponseHeaders(HttpConstant.Status.OK, OVER_LIMIT_BYTES);
+                byte[] chunk = new byte[64 * 1024];
+                try (OutputStream output = exchange.getResponseBody()) {
+                    int written = 0;
+                    while (written < OVER_LIMIT_BYTES) {
+                        output.write(chunk);
+                        written += chunk.length;
+                    }
+                } catch (IOException ignored) {
+                    // 客户端达到上限后主动中止，服务端写失败属预期
+                }
+            });
+            bigServer.setExecutor(executor);
+            bigServer.start();
+            bigUrl = "http://" + HttpConstant.LOCAL_IP_ADDRESS + ":" + bigServer.getAddress().getPort() + "/big";
+        }
+
+        @AfterEach
+        void stopBigServer() {
+            if (null != bigServer) {
+                bigServer.stop(0);
+            }
+        }
+
+        @Test
+        @DisplayName("响应体超过上限时必须失败而不是把整个 body 读进堆")
+        void oversizedResponseIsRejected() {
+            ServiceException e = assertThrows(ServiceException.class,
+                    () -> HttpUtil.create(30).setUrl(bigUrl).get(),
+                    "BodyHandlers.ofString() 会把整个响应读进堆，转 String 期间两份同时存在，"
+                            + "对端返回大响应即 OOM。必须在流式读取过程中截断");
+
+            assertTrue(e.getMessage().contains("上限"),
+                    "错误信息应说明是响应体超限，实际：" + e.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("中断处理")
+    class InterruptedTest {
+
+        @Test
+        @DisplayName("InterruptedException 必须恢复中断标志位")
+        void interruptFlagIsRestored() {
+            Thread.currentThread().interrupt();
+            try {
+                assertThrows(ServiceException.class,
+                        () -> HttpUtil.create(10).setUrl(baseUrl).get(),
+                        "已置中断位时 send 应失败");
+                assertTrue(Thread.currentThread().isInterrupted(),
+                        "中断标志位必须恢复：不恢复的话 JDK 内部的锁与信号量会跳过等待、"
+                                + "停止响应中断，Spring Boot 收到 SIGTERM 后停机过程会被拖长");
+            } finally {
+                // 清除测试自身设置的中断位，避免污染后续用例
+                Thread.interrupted();
+            }
+        }
+
+        @Test
+        @DisplayName("中断场景的错误信息不应泄露内部细节到 data")
+        void interruptDoesNotLeakIntoData() {
+            Thread.currentThread().interrupt();
+            try {
+                ServiceException e = assertThrows(ServiceException.class,
+                        () -> HttpUtil.create(10).setUrl(baseUrl).get());
+                assertNull(e.getData(),
+                        "异常应落在 cause 上而不是 data，否则 ExceptionInterceptor 会把它序列化进响应体");
+            } finally {
+                Thread.interrupted();
+            }
         }
     }
 }

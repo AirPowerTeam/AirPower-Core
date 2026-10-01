@@ -11,13 +11,19 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 
 import static cn.hamm.airpower.core.enums.HttpMethod.GET;
 
@@ -34,6 +40,21 @@ public class HttpUtil {
      * 默认超时秒
      */
     private static final int DEFAULT_TIMEOUT_SECOND = 5;
+
+    /**
+     * 响应体最大字节数（16MB）
+     * @apiNote 必须在<b>流式读取过程中</b>截断：只检查 Content-Length 拦不住
+     * 「不声明长度、慢速持续输出」的服务端，而这类响应能在超时窗口内灌进几百 MB。
+     * 超出时中止读取并让请求失败，绝不把整个 body 读进堆
+     */
+    private static final int MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+
+    /**
+     * Cookie 名与值里都不允许出现的字符
+     * @apiNote {@code ;} 是 Cookie 对的分隔符，部分实现还把 {@code ,} 当分隔符，
+     * CR/LF 会造成请求头注入
+     */
+    private static final String COOKIE_FORBIDDEN = ";,=\r\n";
 
     /**
      * HTTP 客户端
@@ -254,12 +275,108 @@ public class HttpUtil {
      */
     public final @NotNull HttpResponse<String> send() {
         try {
-            return httpClient.send(getHttpRequest(), HttpResponse.BodyHandlers.ofString());
+            return httpClient.send(getHttpRequest(), boundedStringBodyHandler());
+        } catch (InterruptedException e) {
+            // 优雅停机：Spring Boot 收到 SIGTERM 后会 interrupt 容器线程。
+            // 不恢复中断位的话，JDK 内部的锁与信号量会跳过等待、停止响应中断，
+            // 停机过程会被拖长。必须先恢复中断位再抛
+            Thread.currentThread().interrupt();
+            throw new ServiceException("发起请求被中断，" + e.getMessage(), e);
         } catch (Exception e) {
             // 保留原始异常，便于上层区分超时、连接失败或请求非法。
             // 走 (String, Throwable) 重载：cause 由构造器设置，异常不会被当成 data 回传前端。
             // 不要再调 initCause —— cause 已存在时它会抛 IllegalStateException
             throw new ServiceException("发起请求失败，" + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 带体积上限的字符串响应处理器
+     *
+     * @return 响应处理器
+     * @apiNote 不能用 {@code BodyHandlers.ofString()}：它会把整个 body 读进堆再转 String，
+     * 转换期间 byte[] 与 String 两份同时存在，对端返回大响应即 OOM
+     */
+    private static @NotNull HttpResponse.BodyHandler<String> boundedStringBodyHandler() {
+        return responseInfo -> HttpResponse.BodySubscribers.mapping(
+                new BoundedByteArrayBodySubscriber(MAX_RESPONSE_BYTES),
+                bytes -> new String(bytes, StandardCharsets.UTF_8)
+        );
+    }
+
+    /**
+     * <h1>带上限的响应体收集器</h1>
+     *
+     * <p>累积收到的字节，超过上限立即以异常结束 {@link CompletionStage}。
+     * 必须在 {@code onNext} 里判断——等读完再判断就失去意义了。</p>
+     */
+    private static final class BoundedByteArrayBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {
+        /**
+         * 字节上限
+         */
+        private final int maxBytes;
+
+        /**
+         * 累积缓冲
+         */
+        private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+
+        /**
+         * 结果
+         */
+        private final CompletableFuture<byte[]> result = new CompletableFuture<>();
+
+        /**
+         * 构造
+         *
+         * @param maxBytes 字节上限
+         */
+        private BoundedByteArrayBodySubscriber(int maxBytes) {
+            this.maxBytes = maxBytes;
+        }
+
+        @Override
+        public CompletionStage<byte[]> getBody() {
+            return result;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            // 与 JDK 内置的 BodySubscribers.ofByteArray() 一致：一次性订阅全部。
+            // 上限判断在 onNext 里做，超限即 completeExceptionally，
+            // 后续分片不再累积
+            subscription.request(Long.MAX_VALUE);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> item) {
+            try {
+                for (ByteBuffer chunk : item) {
+                    int remaining = maxBytes - buffer.size();
+                    if (chunk.remaining() > remaining) {
+                        // 超出上限：直接失败，不再读取后续数据
+                        result.completeExceptionally(new IOException(
+                                "响应体超过上限 " + maxBytes + " 字节，已中止读取"));
+                        return;
+                    }
+                    byte[] bytes = new byte[chunk.remaining()];
+                    chunk.get(bytes);
+                    buffer.write(bytes);
+                }
+            } catch (IOException | RuntimeException e) {
+                // ByteArrayOutputStream.write 不抛 IOException，这里一并兜住以防将来改动
+                result.completeExceptionally(e);
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            result.completeExceptionally(throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            result.complete(buffer.toByteArray());
         }
     }
 
@@ -289,16 +406,46 @@ public class HttpUtil {
             case PATCH -> requestBuilder.method("PATCH", bodyPublisher);
         }
         if (Objects.nonNull(cookies) && !cookies.isEmpty()) {
-            List<String> cookieList = new ArrayList<>();
-            cookies.forEach((key, value) -> cookieList.add(key + "=" + value));
+            List<String> cookieList = new ArrayList<>(cookies.size());
+            cookies.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                String val = String.valueOf(value);
+                checkCookiePart(name, "名称");
+                checkCookiePart(val, "值");
+                cookieList.add(name + "=" + val);
+            });
             requestBuilder.setHeader(
                     Header.COOKIE, String.join("; ", cookieList)
             );
         }
         if (Objects.nonNull(contentType)) {
-            requestBuilder.header(Header.CONTENT_TYPE, contentType);
+            // 必须用 setHeader（替换）而不是 header（追加）：
+            // 调用方若用 addHeader("Content-Type", ...) 传过，这里再追加一次，
+            // 同一个请求就会带两个 Content-Type。很多服务端/网关对重复头
+            // 是「取第一个」或直接 400，而第三方 API 往往只报「参数错误」，极难定位
+            requestBuilder.setHeader(Header.CONTENT_TYPE, contentType);
         }
         return requestBuilder.build();
+    }
+
+    /**
+     * 校验 Cookie 的名或值
+     *
+     * @param part Cookie 名或值
+     * @param kind 「名称」或「值」，用于报错信息
+     * @apiNote 直接拼接不做校验时，值里的 {@code ;} 能凭空插入新的 Cookie 对，
+     * CR/LF 则能造成请求头注入。这里选择<b>抛异常</b>而不是静默转义：
+     * 静默转义会改变值的语义，让调用方以为传对了、实际发出去的是另一个值，
+     * 那样比直接报错更难排查
+     */
+    private static void checkCookiePart(String part, String kind) {
+        for (int i = 0; i < part.length(); i++) {
+            char c = part.charAt(i);
+            if (c < 0x20 || c == 0x7F || COOKIE_FORBIDDEN.indexOf(c) >= 0) {
+                throw new ServiceException(
+                        "Cookie " + kind + "包含非法字符（位置 " + i + "），拒绝拼进请求头以防注入");
+            }
+        }
     }
 
     /**
