@@ -336,7 +336,7 @@ public class HttpUtil {
             case POST -> requestBuilder.POST(bodyPublisher);
             case PUT -> requestBuilder.PUT(bodyPublisher);
             case DELETE -> requestBuilder.DELETE();
-            // 枚举里暴露了 PATCH，实现却缺失，此前要运行到才报错
+            // HttpRequest.BodyPublishers 没有 PATCH 的便捷方法，只能用 method
             case PATCH -> requestBuilder.method("PATCH", bodyPublisher);
         }
         if (Objects.nonNull(cookies) && !cookies.isEmpty()) {

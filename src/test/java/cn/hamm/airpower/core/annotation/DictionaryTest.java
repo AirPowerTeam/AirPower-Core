@@ -15,6 +15,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -175,6 +176,28 @@ class DictionaryTest {
                     () -> ValidateUtil.valid(baseModel().setGender(99)),
                     "非法字典值应触发校验失败");
             assertEquals("不允许的枚举字典值", e.getMessage(), "异常消息应为 @Dictionary 的默认 message");
+        }
+
+        @Test
+        @DisplayName("enumClazz 必须是 final 字段")
+        void enumClazzIsFinal() throws NoSuchFieldException {
+            // 验证器实例由框架缓存并在多线程间共享，可变实例字段会引入可见性问题
+            Field field = Dictionary.DictionaryValidator.class.getDeclaredField("enumClazz");
+            assertTrue(Modifier.isFinal(field.getModifiers()),
+                    "enumClazz 应为 final：它只在 initialize() 里写一次，之后只读");
+        }
+
+        @Test
+        @DisplayName("initialize 后 enumClazz 指向注解声明的枚举类")
+        void enumClazzPointsToDeclaredEnum() throws Exception {
+            Dictionary.DictionaryValidator validator = new Dictionary.DictionaryValidator();
+            validator.initialize(dictionaryOf(ValidDemoModel.class, "gender"));
+            Field field = Dictionary.DictionaryValidator.class.getDeclaredField("enumClazz");
+            field.setAccessible(true);
+            Object holder = field.get(validator);
+            // 字段类型是 AtomicReference，取它的值才是真正的枚举类
+            Class<?> actual = (Class<?>) holder.getClass().getMethod("get").invoke(holder);
+            assertSame(Gender.class, actual, "enumClazz 应指向 @Dictionary 声明的枚举类");
         }
     }
 }

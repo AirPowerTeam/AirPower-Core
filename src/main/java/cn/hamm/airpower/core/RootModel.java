@@ -93,9 +93,7 @@ public class RootModel<M extends RootModel<M>> {
             boolean isDesensitize,
             @NotNull Set<RootModel<?>> visited
     ) {
-        // 这里原来完全没有环检测：A→B→A 这类成环模型会一路递归到栈溢出。
-        // 其它三条路径都有 visited，只有白名单分支漏了。
-        // 注意不要在这里 visited.add —— 两个下游方法（excludeNotMetaAll 与
+        // 不要在这里 visited.add：两个下游方法（excludeNotMetaAll 与
         // excludeNotMetaAndDesensitize）自己都会 add，提前 add 会让它们
         // 立刻判定「已访问」而直接返回，递归彻底断掉
         if (whiteList.contains(nested.getClass())) {

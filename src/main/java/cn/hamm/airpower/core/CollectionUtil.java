@@ -97,7 +97,7 @@ public class CollectionUtil {
         if (Objects.isNull(list) || list.isEmpty()) {
             return newCollection(fieldClass);
         }
-        // 方法名承诺"去掉 null"，原实现直接返回原集合，null 元素原样保留
+        // 必须新建集合：直接返回原集合会让 null 元素原样保留，与方法名承诺不符
         Collection<T> result = newCollection(fieldClass);
         for (T item : list) {
             if (Objects.nonNull(item)) {

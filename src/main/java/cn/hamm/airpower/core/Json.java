@@ -294,9 +294,8 @@ public class Json {
                     // 忽略未声明的属性
                     mapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
                     // 全局忽略值为 null 的属性。
-                    // 注意：原先的 configOverride(Map.class).setInclude(NON_EMPTY) 完全不生效——
-                    // 该配置只决定 POJO 属性在未标注 @JsonInclude 时的默认行为，
-                    // 对直接序列化的 Map 对象不起作用，实测 null/空串/空集合都会被原样输出
+                    // 用 setSerializationInclusion 而非 configOverride：后者只决定 POJO 属性
+                    // 在未标注 @JsonInclude 时的默认行为，对被直接序列化的 Map 不生效
                     mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
                     // 忽略没有属性的类
                     mapper.configure(FAIL_ON_EMPTY_BEANS, false);

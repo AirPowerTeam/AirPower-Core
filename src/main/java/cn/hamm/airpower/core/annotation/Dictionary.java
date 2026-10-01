@@ -13,6 +13,7 @@ import org.jetbrains.annotations.NotNull;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -58,7 +59,7 @@ public @interface Dictionary {
          * 可变实例字段会引入跨线程可见性问题；而它的值只在
          * {@link #initialize(Dictionary)} 里写一次，之后只读</p>
          */
-        private Class<? extends IDictionary> enumClazz;
+        private final AtomicReference<Class<? extends IDictionary>> enumClazz = new AtomicReference<>();
 
         /**
          * 验证
@@ -77,11 +78,12 @@ public @interface Dictionary {
             if (null == value) {
                 return true;
             }
-            if (null == enumClazz) {
+            Class<? extends IDictionary> target = enumClazz.get();
+            if (null == target) {
                 throw new ServiceException("@Dictionary 的 value() 未指定字典枚举类，无法校验");
             }
             try {
-                DictionaryUtil.getDictionary(enumClazz, value);
+                DictionaryUtil.getDictionary(target, value);
             } catch (ServiceException e) {
                 return false;
             }
@@ -101,7 +103,7 @@ public @interface Dictionary {
                 throw new ServiceException("@Dictionary 的 value() 必须是 IDictionary 的实现类，当前为 "
                         + dictionary.value().getName());
             }
-            enumClazz = dictionary.value();
+            enumClazz.set(dictionary.value());
         }
     }
 

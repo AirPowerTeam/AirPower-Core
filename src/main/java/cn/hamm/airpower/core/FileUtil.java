@@ -105,7 +105,6 @@ public class FileUtil {
         }
         int index = fileName.lastIndexOf(EXTENSION_SEPARATOR);
         if (index < 0 || index == fileName.length() - EXTENSION_SEPARATOR.length()) {
-            // 原实现会把整个文件名当成扩展名返回
             return "";
         }
         if (index == 0) {
@@ -128,7 +127,7 @@ public class FileUtil {
             throw new ServiceException(String.format(UNKNOWN_FILE_SIZE, size));
         }
         if (size == 0) {
-            // 0 字节是合法的空文件，原实现与负数一起拒绝
+            // 0 字节是合法的空文件，与负数（非法）区别对待
             return "0.00" + UNITS.get(0);
         }
         double fileSize = size;
@@ -403,7 +402,7 @@ public class FileUtil {
             List<String> failures = new ArrayList<>();
             for (Path target : targets) {
                 try {
-                    // 原实现用 File::delete 忽略返回值，删除失败完全无感知
+                    // 用 Files 而非 File#delete：后者忽略返回值，删除失败不会抛异常
                     Files.deleteIfExists(target);
                 } catch (IOException e) {
                     failures.add(target.getFileName() + "(" + e.getMessage() + ")");

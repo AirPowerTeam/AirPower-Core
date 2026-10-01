@@ -78,8 +78,7 @@ public class DesensitizeUtil {
      * 不做脱敏
      */
     public static @NotNull String desensitizeIpv4Address(@Nullable String ipv4, String symbol) {
-        // 脱敏是「尽力而为」的展示逻辑，入参为空时原样返回空串而不是抛异常：
-        // 原来的 @NotNull 契约在这里是假的，ipv4.split() 会直接 NPE
+        // 脱敏是「尽力而为」的展示逻辑，入参为空时返回空串而不是抛异常
         if (!StringUtil.hasText(ipv4)) {
             return Objects.isNull(ipv4) ? "" : ipv4;
         }
