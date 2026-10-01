@@ -61,16 +61,6 @@ public class RsaUtil {
     private String privateKey;
 
     /**
-     * 缓存的 KeyFactory
-     */
-    private KeyFactory cachedKeyFactory;
-
-    /**
-     * 缓存的 KeyFactory 对应的算法，用于检测算法变更后失效
-     */
-    private String cachedAlgorithm;
-
-    /**
      * 禁止外部实例化
      */
     @Contract(pure = true)
@@ -190,27 +180,9 @@ public class RsaUtil {
      */
     public PublicKey getPublicKey(String publicKeyString) throws Exception {
         byte[] encoded = decodeKey(publicKeyString, "RSA 公钥");
-        KeyFactory keyFactory = getKeyFactory();
+        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
         X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(encoded);
         return keyFactory.generatePublic(x509EncodedKeySpec);
-    }
-
-    /**
-     * 获取 KeyFactory（带缓存）
-     *
-     * @return KeyFactory
-     * @throws NoSuchAlgorithmException 异常
-     * @apiNote 缓存随 {@link #cryptAlgorithm} 变化失效，避免切换算法后仍复用旧工厂
-     */
-    private KeyFactory getKeyFactory() throws NoSuchAlgorithmException {
-        KeyFactory cached = cachedKeyFactory;
-        if (cached != null && Objects.equals(cachedAlgorithm, cryptAlgorithm)) {
-            return cached;
-        }
-        KeyFactory created = KeyFactory.getInstance(cryptAlgorithm);
-        cachedAlgorithm = cryptAlgorithm;
-        cachedKeyFactory = created;
-        return created;
     }
 
     /**
@@ -259,7 +231,7 @@ public class RsaUtil {
      */
     public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
         byte[] encoded = decodeKey(privateKeyString, "RSA 私钥");
-        KeyFactory keyFactory = getKeyFactory();
+        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
         PKCS8EncodedKeySpec private8KeySpec = new PKCS8EncodedKeySpec(encoded);
         return keyFactory.generatePrivate(private8KeySpec);
     }

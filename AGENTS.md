@@ -91,10 +91,9 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 | 导出 CSV 字段       | `CollectionUtil.EXPORT_FIELD_CACHE`   | `Class<?>` | `computeIfAbsent` |
 | `DateTimeFormatter` | `DateTimeUtil.FORMATTER_CACHE`        | pattern    | 线程安全          |
 | `HttpClient`        | `HttpUtil.httpClient`                 | 单例       | volatile + DCL    |
-| `KeyFactory`        | `RsaUtil.cachedKeyFactory`            | 单例       | volatile + DCL    |
 
 新增工具如需缓存， **优先 `ConcurrentHashMap.computeIfAbsent`**；单例用 volatile + 双重检查。 **不要缓存
-`javax.crypto.Cipher`**（非线程安全）。
+`javax.crypto.Cipher`**（非线程安全），也 **不要缓存 `java.security.KeyFactory`**（见下）。
 
 ## 9. 已知陷阱
 
@@ -108,6 +107,11 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 - `ReflectUtil.getFieldList(null)` 直接抛 `ServiceException`；其他 `getAnnotation` 重载对 `null` 行为不一，调用前自行判空
 - `ReflectUtil.getLambdaFunctionName` 只去掉方法名开头的 `get` 前缀，方法名中间的 `get` 会保留
 - `AesUtil` 的 `algorithm` / `mode` 不可变（写死 `AES` / `CBC`），仅 `key` / `iv` / `padding` 可变
+- `RsaUtil` **不做任何缓存**（历史上缓存过 `KeyFactory`，已删除，**不要加回来**）：`KeyFactory.getInstance("RSA")` 实测约
+  0.15 µs，而解析私钥 1.6 µs、RSA 私钥运算 540 µs，缓存收益 <0.1%；且 `RsaUtil` 是 `create()` 链式工厂，上层
+  （`airpower-open` 的 `OpenRequest`）每次请求新建实例只做一次运算，命中率天然为 0。缓存还会引入两个问题：普通字段
+  非 `volatile` 的双字段撕裂（ARM 弱内存序下可能返回错误算法的工厂），以及把未承诺线程安全的 SPI 对象共享给多线程。
+  `Cipher` / `Signature` / `KeyFactory` 每次 `getInstance` 都是合规的
 - `FileUtil.formatSize` 固定用 `Locale.ROOT`， **不受 JVM 默认 Locale 影响**（德语环境也输出 `1.00KB`）
 - `ValidateUtil.isXxx(null)` 一律返回 `false`（不会抛 NPE）；`isChina2Identity` 只认 15/18 位，15 位会抛
   `ServiceException`，校验位支持大小写 `X`

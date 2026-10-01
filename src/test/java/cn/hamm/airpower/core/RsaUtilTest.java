@@ -189,24 +189,24 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("KeyFactory 缓存随 cryptAlgorithm 变化失效")
-        void testKeyFactoryInvalidatedOnAlgorithmChange() throws Exception {
+        @DisplayName("KeyFactory 跟随 cryptAlgorithm，不复用旧算法")
+        void testKeyFactoryFollowsCryptAlgorithm() throws Exception {
             RsaUtil instance = RsaUtil.create().setPublicKey(publicKeyBase64);
             assertNotNull(instance.getPublicKey(publicKeyBase64), "首次解析公钥应成功");
 
             instance.setCryptAlgorithm("NotAnAlgorithm");
-            // 原实现缓存不失效，仍复用 RSA 的 KeyFactory，配置变更形同虚设
+            // 不缓存 KeyFactory：每次按当前 cryptAlgorithm 重建，配置变更立即生效
             assertThrows(java.security.NoSuchAlgorithmException.class,
                     () -> instance.getPublicKey(publicKeyBase64),
-                    "切换 cryptAlgorithm 后缓存应失效，按新算法重新创建 KeyFactory 并报错");
+                    "切换 cryptAlgorithm 后应按新算法创建 KeyFactory 并报错");
         }
 
         @Test
-        @DisplayName("KeyFactory 在算法未变时复用缓存，不重复创建")
-        void testKeyFactoryReusedWhenAlgorithmUnchanged() throws Exception {
+        @DisplayName("同一实例多次解析公钥均成功")
+        void testKeyFactoryReusable() throws Exception {
             RsaUtil instance = RsaUtil.create().setPublicKey(publicKeyBase64);
             assertNotNull(instance.getPublicKey(publicKeyBase64), "首次解析应成功");
-            assertNotNull(instance.getPublicKey(publicKeyBase64), "算法未变时应命中缓存并继续成功");
+            assertNotNull(instance.getPublicKey(publicKeyBase64), "算法未变时应继续成功");
         }
     }
 
