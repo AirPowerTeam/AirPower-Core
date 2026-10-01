@@ -160,9 +160,6 @@ public class CollectionUtil {
      * @param out       输出流，方法内部<b>不会</b>关闭它
      * @param <M>       元素类型
      * @throws IOException 写出异常
-     * @apiNote 堆占用只与单行宽度有关，与总行数无关；{@link #toCsvInputStream}
-     * 要返回 byte[]，做不到这一点
-     * @apiNote 输出与 {@link #toCsvInputStream} 逐字节一致：末行不带换行
      */
     public static <M extends RootModel<M>> void writeCsv(
             List<M> list, Class<M> itemClass, @NotNull OutputStream out) throws IOException {

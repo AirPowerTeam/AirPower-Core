@@ -15,11 +15,6 @@ import java.util.Objects;
  *
  * @author Hamm.cn
  * @apiNote 不传错误码时使用 {@link Json#SERVICE_ERROR}
- * @apiNote <b>铁律：{@code data} 绝对不能放异常对象或堆栈。</b>
- * {@code data} 会被 Jackson 序列化进 HTTP 响应体，异常一旦落在里面，
- * 其类型、message 与完整 {@code stackTrace}（类名、文件名、行号）全部泄露给前端。
- * 要保留原始异常请用 {@link #ServiceException(String, Throwable)}，
- * 堆栈需要落盘时由本类统一 {@code log.error} 输出
  */
 @Slf4j
 @NoArgsConstructor
@@ -54,7 +49,6 @@ public class ServiceException extends RuntimeException implements IException<Ser
      *
      * @param message 错误信息
      * @param cause   原始异常，只进 cause，<b>不会</b>回传前端
-     * @apiNote 必须用它而不是 {@code (String, Object)}：后者会把异常当成 data 回传前端
      */
     public ServiceException(String message, Throwable cause) {
         super(message, cause);
@@ -65,11 +59,6 @@ public class ServiceException extends RuntimeException implements IException<Ser
      *
      * @param message 错误信息
      * @param data    错误数据，会随响应体返回给前端
-     * @apiNote <b>禁止把异常对象传进来</b>：{@code data} 会被 Jackson 序列化进响应体，
-     * 异常一旦落在里面，其类型、message 与完整 {@code stackTrace}
-     * （含类名、文件名、行号）都会泄露给前端。
-     * 要保留原始异常请用 {@link #ServiceException(String, Throwable)}，
-     * 堆栈由本类统一 {@code log.error} 输出
      */
     public ServiceException(String message, Object data) {
         super(message);
@@ -115,7 +104,6 @@ public class ServiceException extends RuntimeException implements IException<Ser
      *
      * @param exception 异常
      * @param message   错误信息
-     * @apiNote {@code exception} 为 {@code null} 时沿用默认错误码，不报错
      */
     public ServiceException(IException<?> exception, String message) {
         super(message);

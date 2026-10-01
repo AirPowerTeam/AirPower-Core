@@ -43,14 +43,12 @@ public class HttpUtil {
 
     /**
      * 响应体最大字节数（16MB）
-     * @apiNote 必须在<b>流式读取过程中</b>截断：只检查 Content-Length 拦不住
-     * 「不声明长度、慢速持续输出」的服务端，而这类响应能在超时窗口内灌进几百 MB。
-     * 超出时中止读取并让请求失败，绝不把整个 body 读进堆
      */
-    private static final int MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+    private static final int MAX_RESPONSE_BYTES = 16 * FileUtil.FILE_SCALE * FileUtil.FILE_SCALE;
 
     /**
      * Cookie 名与值里都不允许出现的字符
+     *
      * @apiNote {@code ;} 是 Cookie 对的分隔符，部分实现还把 {@code ,} 当分隔符，
      * CR/LF 会造成请求头注入
      */
@@ -165,6 +163,34 @@ public class HttpUtil {
      */
     public static @NotNull HttpUtil create() {
         return create(null);
+    }
+
+    /**
+     * 带体积上限的字符串响应处理器
+     *
+     * @return 响应处理器
+     */
+    private static @NotNull HttpResponse.BodyHandler<String> boundedStringBodyHandler() {
+        return responseInfo -> HttpResponse.BodySubscribers.mapping(
+                new BoundedByteArrayBodySubscriber(MAX_RESPONSE_BYTES),
+                bytes -> new String(bytes, StandardCharsets.UTF_8)
+        );
+    }
+
+    /**
+     * 校验 Cookie 的名或值
+     *
+     * @param part Cookie 名或值
+     * @param kind 「名称」或「值」，用于报错信息
+     */
+    private static void checkCookiePart(@NotNull String part, String kind) {
+        for (int i = 0; i < part.length(); i++) {
+            char c = part.charAt(i);
+            if (c < 0x20 || c == 0x7F || COOKIE_FORBIDDEN.indexOf(c) >= 0) {
+                throw new ServiceException(
+                        "Cookie " + kind + "包含非法字符（位置 " + i + "），拒绝拼进请求头以防注入");
+            }
+        }
     }
 
     /**
@@ -289,17 +315,64 @@ public class HttpUtil {
     }
 
     /**
-     * 带体积上限的字符串响应处理器
+     * 获取 HttpRequest 对象
      *
-     * @return 响应处理器
-     * @apiNote 不能用 {@code BodyHandlers.ofString()}：它会把整个 body 读进堆再转 String，
-     * 转换期间 byte[] 与 String 两份同时存在，对端返回大响应即 OOM
+     * @return HttpRequest
      */
-    private static @NotNull HttpResponse.BodyHandler<String> boundedStringBodyHandler() {
-        return responseInfo -> HttpResponse.BodySubscribers.mapping(
-                new BoundedByteArrayBodySubscriber(MAX_RESPONSE_BYTES),
-                bytes -> new String(bytes, StandardCharsets.UTF_8)
-        );
+    private HttpRequest getHttpRequest() {
+        if (Objects.isNull(url) || url.isBlank()) {
+            throw new ServiceException("请求地址不能为空");
+        }
+        if (Objects.isNull(body)) {
+            body = "";
+        }
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(timeoutSecond));
+        headers.forEach((key, value) -> requestBuilder.header(key, value.toString()));
+        HttpRequest.BodyPublisher bodyPublisher = HttpRequest.BodyPublishers.ofString(body);
+        switch (method) {
+            case GET -> requestBuilder.GET();
+            case POST -> requestBuilder.POST(bodyPublisher);
+            case PUT -> requestBuilder.PUT(bodyPublisher);
+            case DELETE -> requestBuilder.DELETE();
+            // 枚举里暴露了 PATCH，实现却缺失，此前要运行到才报错
+            case PATCH -> requestBuilder.method("PATCH", bodyPublisher);
+        }
+        if (Objects.nonNull(cookies) && !cookies.isEmpty()) {
+            List<String> cookieList = new ArrayList<>(cookies.size());
+            cookies.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                String val = String.valueOf(value);
+                checkCookiePart(name, "名称");
+                checkCookiePart(val, "值");
+                cookieList.add(name + "=" + val);
+            });
+            requestBuilder.setHeader(
+                    Header.COOKIE, String.join("; ", cookieList)
+            );
+        }
+        if (Objects.nonNull(contentType)) {
+            // 必须用 setHeader（替换）而不是 header（追加）：
+            // 调用方若用 addHeader("Content-Type", ...) 传过，这里再追加一次，
+            // 同一个请求就会带两个 Content-Type。很多服务端/网关对重复头
+            // 是「取第一个」或直接 400，而第三方 API 往往只报「参数错误」，极难定位
+            requestBuilder.setHeader(Header.CONTENT_TYPE, contentType);
+        }
+        return requestBuilder.build();
+    }
+
+    /**
+     * 添加 Header
+     *
+     * @param key   Header 键
+     * @param value Header 值
+     * @return HttpUtil
+     */
+    @Contract("_, _ -> this")
+    public final HttpUtil addHeader(String key, Object value) {
+        headers.put(key, value);
+        return this;
     }
 
     /**
@@ -376,87 +449,6 @@ public class HttpUtil {
         public void onComplete() {
             result.complete(buffer.toByteArray());
         }
-    }
-
-    /**
-     * 获取 HttpRequest 对象
-     *
-     * @return HttpRequest
-     */
-    private HttpRequest getHttpRequest() {
-        if (Objects.isNull(url) || url.isBlank()) {
-            throw new ServiceException("请求地址不能为空");
-        }
-        if (Objects.isNull(body)) {
-            body = "";
-        }
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(timeoutSecond));
-        headers.forEach((key, value) -> requestBuilder.header(key, value.toString()));
-        HttpRequest.BodyPublisher bodyPublisher = HttpRequest.BodyPublishers.ofString(body);
-        switch (method) {
-            case GET -> requestBuilder.GET();
-            case POST -> requestBuilder.POST(bodyPublisher);
-            case PUT -> requestBuilder.PUT(bodyPublisher);
-            case DELETE -> requestBuilder.DELETE();
-            // 枚举里暴露了 PATCH，实现却缺失，此前要运行到才报错
-            case PATCH -> requestBuilder.method("PATCH", bodyPublisher);
-        }
-        if (Objects.nonNull(cookies) && !cookies.isEmpty()) {
-            List<String> cookieList = new ArrayList<>(cookies.size());
-            cookies.forEach((key, value) -> {
-                String name = String.valueOf(key);
-                String val = String.valueOf(value);
-                checkCookiePart(name, "名称");
-                checkCookiePart(val, "值");
-                cookieList.add(name + "=" + val);
-            });
-            requestBuilder.setHeader(
-                    Header.COOKIE, String.join("; ", cookieList)
-            );
-        }
-        if (Objects.nonNull(contentType)) {
-            // 必须用 setHeader（替换）而不是 header（追加）：
-            // 调用方若用 addHeader("Content-Type", ...) 传过，这里再追加一次，
-            // 同一个请求就会带两个 Content-Type。很多服务端/网关对重复头
-            // 是「取第一个」或直接 400，而第三方 API 往往只报「参数错误」，极难定位
-            requestBuilder.setHeader(Header.CONTENT_TYPE, contentType);
-        }
-        return requestBuilder.build();
-    }
-
-    /**
-     * 校验 Cookie 的名或值
-     *
-     * @param part Cookie 名或值
-     * @param kind 「名称」或「值」，用于报错信息
-     * @apiNote 直接拼接不做校验时，值里的 {@code ;} 能凭空插入新的 Cookie 对，
-     * CR/LF 则能造成请求头注入。这里选择<b>抛异常</b>而不是静默转义：
-     * 静默转义会改变值的语义，让调用方以为传对了、实际发出去的是另一个值，
-     * 那样比直接报错更难排查
-     */
-    private static void checkCookiePart(String part, String kind) {
-        for (int i = 0; i < part.length(); i++) {
-            char c = part.charAt(i);
-            if (c < 0x20 || c == 0x7F || COOKIE_FORBIDDEN.indexOf(c) >= 0) {
-                throw new ServiceException(
-                        "Cookie " + kind + "包含非法字符（位置 " + i + "），拒绝拼进请求头以防注入");
-            }
-        }
-    }
-
-    /**
-     * 添加 Header
-     *
-     * @param key   Header 键
-     * @param value Header 值
-     * @return HttpUtil
-     */
-    @Contract("_, _ -> this")
-    public final HttpUtil addHeader(String key, Object value) {
-        headers.put(key, value);
-        return this;
     }
 
     @Data

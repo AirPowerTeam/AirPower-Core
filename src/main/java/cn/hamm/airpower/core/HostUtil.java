@@ -26,18 +26,15 @@ public class HostUtil {
      * 是否已缓存过（含「查到 null」这一结果）
      */
     private static volatile boolean hostNameResolved = false;
+
     /**
      * 获取服务器主机名
      *
      * @return 主机名，所有来源都取不到时为 {@code null}
      * @apiNote 容器里 {@code InetAddress} 常解析不出主机名，因此按
-     * {@code InetAddress} → {@code hostname} 系统属性 → 环境变量的顺序逐级降级，
-     * 任何一级失败都不算错误
+     * {@code InetAddress} → {@code hostname} 系统属性 → 环境变量的顺序逐级降级
      */
     public static @Nullable String getHostName() {
-        // 结果缓存：主机名在进程生命周期内不会变，而每次调用都要做一次
-        // InetAddress 解析（可能触发 DNS/hosts 查询）并读 2 个环境变量。
-        // 注意 null 也要缓存：查不到时若不缓存，下次调用会重复整轮查找
         if (hostNameResolved) {
             return cachedHostName;
         }

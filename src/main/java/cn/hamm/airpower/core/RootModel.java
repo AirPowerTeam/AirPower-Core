@@ -10,7 +10,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -158,8 +157,6 @@ public class RootModel<M extends RootModel<M>> {
      *
      * @param valueMap Map
      * @param action   对每个模型值执行的动作
-     * @apiNote key 与 value 都要遍历，两种写法（{@code Map<String, Entity>} 与
-     * {@code Map<Entity, String>}）在业务里都出现过
      */
     private static void forEachModelValue(@NotNull Map<?, ?> valueMap, @NotNull Consumer<RootModel<?>> action) {
         for (Map.Entry<?, ?> entry : valueMap.entrySet()) {
@@ -223,8 +220,6 @@ public class RootModel<M extends RootModel<M>> {
      * @param clazz 当前类
      * @param field 字段
      * @return 找到返回注解，否则返回 {@code null}
-     * @apiNote getter 名有多个候选（见 {@link ReflectUtil#candidateGetterNames}），
-     * 任一命中即算找到；全部找不到才返回 {@code null}，由调用方按 fail-closed 处理
      */
     private static @Nullable Meta findMetaOnGetter(@NotNull Class<?> clazz, @NotNull Field field) {
         for (String candidate : ReflectUtil.candidateGetterNames(field)) {
@@ -294,69 +289,12 @@ public class RootModel<M extends RootModel<M>> {
     }
 
     /**
-     * 排除只读字段
-     *
-     * @apiNote 递归处理嵌套模型与模型集合，与 {@link #excludeNotMeta()} / {@link #desensitize()}
-     * 保持一致；否则嵌套模型里的只读字段（如创建时间）仍会返回给前端，
-     * 客户端可据此覆盖服务端数据
-     */
-    public final void excludeReadOnly() {
-        excludeReadOnlyAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
-    }
-
-    /**
-     * 脱敏
-     *
-     * @apiNote 先排除非元数据字段，再对所有可达模型中
-     * {@link cn.hamm.airpower.core.annotation.Desensitize} 标记的字段脱敏。
-     * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
-     * 避免"订单 → 收货人"这类结构泄露明文敏感数据
-     */
-    public final void desensitize() {
-        // 先排除非元数据字段：每个模型实例都会走排除分支，自引用由已访问集合拦下
-        excludeNotMetaAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
-        // 再对所有可达模型（含类型不同的嵌套模型）递归脱敏
-        desensitizeAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
-    }
-
-    /**
-     * 排除非元数据字段
-     */
-    public final void excludeNotMeta() {
-        excludeNotMeta(List.of());
-    }
-
-    /**
      * 模型字段值处理
      *
-     * @param whiteList 类白名单
-     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
-     */
-    public final void excludeNotMeta(@NotNull List<Class<? extends RootModel<?>>> whiteList) {
-        excludeNotMetaAndDesensitize(whiteList, false);
-    }
-
-    /**
-     * 模型字段值处理
-     *
-     * @param whiteList     类白名单，为 {@code null} 时按空名单处理
+     * @param model         当前模型
+     * @param whiteList     类白名单
      * @param isDesensitize 是否需要脱敏
-     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
-     */
-    public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
-        excludeNotMetaAndDesensitize(this,
-                Objects.isNull(whiteList) ? List.of() : whiteList,
-                isDesensitize,
-                Collections.newSetFromMap(new IdentityHashMap<>()));
-    }
-
-    /**
-     * 模型字段值处理
-     *
-     * @param model        当前模型
-     * @param whiteList    类白名单
-     * @param isDesensitize 是否需要脱敏
-     * @param visited      已访问的模型，按对象身份去重
+     * @param visited       已访问的模型，按对象身份去重
      * @apiNote {@code visited} 必须按引用传递：成环模型（{@code A→B→A}）会 StackOverflowError
      */
     private static void excludeNotMetaAndDesensitize(
@@ -404,6 +342,63 @@ public class RootModel<M extends RootModel<M>> {
                 desensitizeFieldValue(instance, field, value);
             }
         });
+    }
+
+    /**
+     * 排除只读字段
+     *
+     * @apiNote 递归处理嵌套模型与模型集合，与 {@link #excludeNotMeta()} / {@link #desensitize()}
+     * 保持一致；否则嵌套模型里的只读字段（如创建时间）仍会返回给前端，
+     * 客户端可据此覆盖服务端数据
+     */
+    public final void excludeReadOnly() {
+        excludeReadOnlyAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 脱敏
+     *
+     * @apiNote 先排除非元数据字段，再对所有可达模型中
+     * {@link Desensitize} 标记的字段脱敏。
+     * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
+     * 避免"订单 → 收货人"这类结构泄露明文敏感数据
+     */
+    public final void desensitize() {
+        // 先排除非元数据字段：每个模型实例都会走排除分支，自引用由已访问集合拦下
+        excludeNotMetaAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+        // 再对所有可达模型（含类型不同的嵌套模型）递归脱敏
+        desensitizeAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    /**
+     * 排除非元数据字段
+     */
+    public final void excludeNotMeta() {
+        excludeNotMeta(List.of());
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param whiteList 类白名单
+     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
+     */
+    public final void excludeNotMeta(@NotNull List<Class<? extends RootModel<?>>> whiteList) {
+        excludeNotMetaAndDesensitize(whiteList, false);
+    }
+
+    /**
+     * 模型字段值处理
+     *
+     * @param whiteList     类白名单，为 {@code null} 时按空名单处理
+     * @param isDesensitize 是否需要脱敏
+     * @apiNote 标记了类白名单的实例，不会忽略非元数据字段
+     */
+    public final void excludeNotMetaAndDesensitize(List<Class<? extends RootModel<?>>> whiteList, boolean isDesensitize) {
+        excludeNotMetaAndDesensitize(this,
+                Objects.isNull(whiteList) ? List.of() : whiteList,
+                isDesensitize,
+                Collections.newSetFromMap(new IdentityHashMap<>()));
     }
 
     /**

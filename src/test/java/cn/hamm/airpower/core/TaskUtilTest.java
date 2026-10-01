@@ -313,8 +313,6 @@ class TaskUtilTest {
 
         /**
          * 堵住线程池的阻塞时长（秒）
-         * @apiNote 用带超时的等待而不是无限等待：即使断言失败、清理遗漏，
-         * 池也会自己排空，不会把后续用例一起拖死
          */
         private static final long BLOCK_SECONDS = 10L;
 
@@ -336,11 +334,10 @@ class TaskUtilTest {
         /**
          * 等待线程池排空
          *
+         * @throws InterruptedException 中断异常
          * @apiNote 线程池是全进程共享的静态单例，本用例把它塞满后必须等它排空，
          * 否则紧随其后的用例会撞上 CallerRuns，把「异步任务应跑在线程池线程上」
          * 这类断言弄成偶发失败
-         *
-         * @throws InterruptedException 中断异常
          */
         private void awaitDrain() throws InterruptedException {
             for (int i = 0; i < 400; i++) {

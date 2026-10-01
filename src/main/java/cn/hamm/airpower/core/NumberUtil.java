@@ -67,10 +67,6 @@ public class NumberUtil {
      *
      * @param value 原值
      * @return BigDecimal
-     * @apiNote {@code BigDecimal.valueOf(double)} 对 NaN 与 ±Infinity 会抛裸的
-     * {@link NumberFormatException}（"Character N is neither a decimal digit number"），
-     * 而同一类里的其它失败分支都包成了带中文提示的 {@link ServiceException}，
-     * 裸异常既没有可读信息也会走错异常处理分支
      */
     private static @NotNull BigDecimal toBigDecimal(double value) {
         if (Double.isNaN(value) || Double.isInfinite(value)) {
@@ -84,8 +80,6 @@ public class NumberUtil {
      *
      * @param value 原值
      * @return BigDecimal
-     * @apiNote 单独提供而不是让 long 隐式加宽到 double：超过 2^53 的 long
-     * 转成 double 会丢精度，除法结果会跟着错
      */
     private static @NotNull BigDecimal toBigDecimal(long value) {
         return BigDecimal.valueOf(value);
@@ -267,8 +261,6 @@ public class NumberUtil {
      * @param value  计算结果
      * @param action 操作名称，用于错误提示
      * @return 收窄后的值
-     * @apiNote 直接调用 {@code longValue()} 会静默截断（{@code multiply(MAX, 4)} 会得到
-     * {@code -4}），金额等场景必须显式拦截溢出
      */
     private static long toLongExact(@NotNull BigInteger value, @NotNull String action) {
         if (value.bitLength() > Long.SIZE - 1) {
@@ -306,8 +298,6 @@ public class NumberUtil {
      * @param value 数字
      * @param scale 位数
      * @return 取整后的数字
-     * @apiNote 使用 {@link RoundingMode#FLOOR}。原实现用 {@code DOWN}（向零截断），
-     * 负数结果全错：{@code floor(-1.5, 0)} 会得到 {@code -1}，正确值是 {@code -2}
      */
     public static @NotNull BigDecimal floor(double value, int scale) {
         return round(value, scale, FLOOR);
@@ -319,8 +309,6 @@ public class NumberUtil {
      * @param value 数字
      * @param scale 位数
      * @return 取整后的数字
-     * @apiNote 使用 {@link RoundingMode#CEILING}。原实现用 {@code UP}（远离零），
-     * 负数结果全错：{@code ceil(-1.5, 0)} 会得到 {@code -2}，正确值是 {@code -1}
      */
     public static @NotNull BigDecimal ceil(double value, int scale) {
         return round(value, scale, CEILING);

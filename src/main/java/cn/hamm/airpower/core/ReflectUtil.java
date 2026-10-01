@@ -62,8 +62,6 @@ public class ReflectUtil {
      *
      * @param field 字段
      * @return 候选 Getter 方法名，按可能性从高到低
-     * @apiNote Lombok 对基本类型 {@code boolean isHot} 生成的是 {@code isHot()} 而非
-     * {@code getIsHot()}，只拼一个名字会找不到方法
      */
     public static @NotNull List<String> candidateGetterNames(@NotNull Field field) {
         final String fieldName = field.getName();
@@ -87,9 +85,6 @@ public class ReflectUtil {
      * @param object 对象
      * @param field  属性
      * @return 值
-     * @apiNote 不会在结束时重置 {@code accessible} 标志——该标志是 {@link Field}
-     * 的全局状态，多线程下"设真再设假"会让其他线程的读取随机抛
-     * {@code IllegalAccessException}
      */
     public static @Nullable Object getFieldValue(Object object, @NotNull Field field) {
         try {
@@ -107,8 +102,6 @@ public class ReflectUtil {
      * @param object 对象
      * @param field  属性
      * @param value  值
-     * @apiNote 写入失败时抛出 {@link ServiceException}，不做静默忽略——否则
-     * {@code excludeNotMeta} / {@code desensitize} 的置空动作会被上层误认为已生效
      */
     public static void setFieldValue(Object object, @NotNull Field field, Object value) {
         try {

@@ -34,18 +34,15 @@ public class AesUtil {
      * CBC 模式要求的 IV 长度（字节）
      */
     private static final int IV_LENGTH = 16;
-
+    /**
+     * 默认偏移向量
+     */
+    private static final byte[] DEFAULT_IV = "0000000000000000".getBytes(UTF_8);
     /**
      * 加密算法
      */
     @Setter(AccessLevel.NONE)
     private String algorithm = "AES";
-
-    /**
-     * 默认偏移向量
-     */
-    private static final byte[] DEFAULT_IV = "0000000000000000".getBytes(UTF_8);
-
     /**
      * 密钥
      */
@@ -134,7 +131,6 @@ public class AesUtil {
      *
      * @param iv 偏移向量
      * @return this
-     * @apiNote 与 {@link #setKey(byte[])} 一样做防御性拷贝，避免调用方事后篡改数组
      */
     public AesUtil setIv(byte[] iv) {
         // 传 null 时保持 null（不回落默认值）：null 会在加密时由 IV_LENGTH 校验

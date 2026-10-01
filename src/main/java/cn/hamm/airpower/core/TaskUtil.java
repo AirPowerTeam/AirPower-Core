@@ -59,9 +59,6 @@ public class TaskUtil {
      *
      * @param runnable     任务
      * @param moreRunnable 更多任务
-     * @apiNote 线程池使用 {@code CallerRunsPolicy}，队列满时任务会在<b>调用方线程</b>
-     * 同步执行，此时不再是异步；每个任务各自提交到线程池，彼此不保证先后顺序。
-     * 走调用方线程时<b>不会</b>清理该线程的 TraceID——那是调用方请求自己的标识
      */
     public static void run(Runnable runnable, Runnable... moreRunnable) {
         String traceId = TraceUtil.getTraceId();

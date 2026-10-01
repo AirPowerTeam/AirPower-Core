@@ -62,9 +62,6 @@ public class PatternConstant {
      * 普通字符
      *
      * @apiNote 允许 {@code @ # % - _ + \ /}、a-z A-Z 0-9 与汉字。
-     * 汉字区间与 {@link #CHINESE} 保持一致（\u4e00-\u9fff）：
-     * 原先这里是 \u9fa5，导致 \u9fa6~\u9fff（含大量生僻字与扩展汉字）
-     被本正则接受却被 {@link #CHINESE} 拒绝
      */
     public static final Pattern NORMAL_CODE = compile("^[@#%a-zA-Z0-9\\u4e00-\\u9fff_\\-\\\\/+]+$");
 

@@ -3,12 +3,13 @@ package cn.hamm.airpower.core.interfaces;
 import cn.hamm.airpower.core.StringUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -26,8 +27,31 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
      * @apiNote 固定使用 {@link java.util.Locale#ROOT}，避免土耳其语环境下
      * 大写 I 转成点无点 i 导致比较结果失真
      */
-    private static String normalizeCase(String value) {
+    @Contract(pure = true)
+    private static @NotNull String normalizeCase(@NotNull String value) {
         return value.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 判断「空值」：{@code null}、无有效字符的文本、空集合、空数组
+     *
+     * @param obj 被判断的值
+     * @return 是否为空
+     */
+    private static boolean isEmptyValue(Object obj) {
+        if (Objects.isNull(obj)) {
+            return true;
+        }
+        if (obj instanceof Collection<?> collection) {
+            return collection.isEmpty();
+        }
+        if (obj.getClass().isArray()) {
+            return Array.getLength(obj) == 0;
+        }
+        if (obj instanceof Optional<?> optional) {
+            return optional.isEmpty();
+        }
+        return !StringUtil.hasText(obj.toString());
     }
 
     /**
@@ -292,32 +316,6 @@ public interface IException<T extends IException<T>> extends Supplier<T> {
         if (isEmptyValue(obj)) {
             when(true, message);
         }
-    }
-
-    /**
-     * 判断「空值」：{@code null}、无有效字符的文本、空集合、空数组
-     *
-     * @param obj 被判断的值
-     * @return 是否为空
-     * @apiNote 集合与数组的 {@code toString()} 永远有内容
-     * （{@code new ArrayList<>()} 是 {@code "[]"}、{@code new HashMap<>()} 是 {@code "{}"}），
-     * 只判 toString 会让「校验通过但实际没数据」蒙混过关
-     */
-    @Contract("null -> false")
-    private static boolean isEmptyValue(Object obj) {
-        if (Objects.isNull(obj)) {
-            return true;
-        }
-        if (obj instanceof Collection<?> collection) {
-            return collection.isEmpty();
-        }
-        if (obj.getClass().isArray()) {
-            return Array.getLength(obj) == 0;
-        }
-        if (obj instanceof Optional<?> optional) {
-            return optional.isEmpty();
-        }
-        return !StringUtil.hasText(obj.toString());
     }
 
     /**

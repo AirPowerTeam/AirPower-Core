@@ -86,8 +86,6 @@ class CollectionUtilTest {
      * @param inputStream 文件流
      * @return 去掉 BOM 的 CSV 文本
      * @throws IOException 读取异常
-     * @apiNote 与表格软件的实际行为一致：BOM 只是编码标记，不属于表头内容。
-     * BOM 本身的存在由 {@code toCsvInputStream} 的字节级用例单独断言
      */
     private static String readUtf8(InputStream inputStream) throws IOException {
         String csv = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
@@ -136,6 +134,56 @@ class CollectionUtilTest {
          */
         @Export(value = Export.Type.TEXT, sort = 0)
         private String noDescription;
+    }
+
+    /**
+     * <h1>记录单次写入长度的输出流</h1>
+     *
+     * <p>用于断言「确实是流式写出」：整表拼好再一次性写出的实现，单次
+     * {@code write} 的长度会等于整个文件的体积；流式实现的单次写入不会超过缓冲区。</p>
+     */
+    private static final class RecordingOutputStream extends ByteArrayOutputStream {
+        /**
+         * 单次 write 的最大字节数
+         */
+        private int maxWriteSize;
+
+        /**
+         * 是否被关闭
+         */
+        private boolean closed;
+
+        /**
+         * 统计已写出的换行符个数
+         *
+         * @return 换行符个数
+         */
+        private int newlineCount() {
+            int count = 0;
+            for (byte b : toByteArray()) {
+                if (b == '\n') {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        @Override
+        public synchronized void write(int b) {
+            maxWriteSize = Math.max(maxWriteSize, 1);
+            super.write(b);
+        }
+
+        @Override
+        public synchronized void write(byte[] b, int off, int len) {
+            maxWriteSize = Math.max(maxWriteSize, len);
+            super.write(b, off, len);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 
     @Nested
@@ -231,56 +279,6 @@ class CollectionUtilTest {
             assertThrows(ServiceException.class,
                     () -> CollectionUtil.writeCsv(null, ExportDemoModel.class, new ByteArrayOutputStream()),
                     "与 getCsvValueList 保持一致：集合为 null 应抛业务异常而不是 NPE");
-        }
-    }
-
-    /**
-     * <h1>记录单次写入长度的输出流</h1>
-     *
-     * <p>用于断言「确实是流式写出」：整表拼好再一次性写出的实现，单次
-     * {@code write} 的长度会等于整个文件的体积；流式实现的单次写入不会超过缓冲区。</p>
-     */
-    private static final class RecordingOutputStream extends ByteArrayOutputStream {
-        /**
-         * 单次 write 的最大字节数
-         */
-        private int maxWriteSize;
-
-        /**
-         * 是否被关闭
-         */
-        private boolean closed;
-
-        /**
-         * 统计已写出的换行符个数
-         *
-         * @return 换行符个数
-         */
-        private int newlineCount() {
-            int count = 0;
-            for (byte b : toByteArray()) {
-                if (b == '\n') {
-                    count++;
-                }
-            }
-            return count;
-        }
-
-        @Override
-        public synchronized void write(int b) {
-            maxWriteSize = Math.max(maxWriteSize, 1);
-            super.write(b);
-        }
-
-        @Override
-        public synchronized void write(byte[] b, int off, int len) {
-            maxWriteSize = Math.max(maxWriteSize, len);
-            super.write(b, off, len);
-        }
-
-        @Override
-        public void close() {
-            closed = true;
         }
     }
 
@@ -841,7 +839,7 @@ class CollectionUtilTest {
         @DisplayName("编码：BOM 只在文件头出现一次，剥离后正文不受影响")
         void testBomOnlyOnceAtHead() throws IOException {
             String text = new String(CollectionUtil.toCsvInputStream(
-                            List.of(fullModel(), fullModel()), ExportDemoModel.class).readAllBytes(),
+                    List.of(fullModel(), fullModel()), ExportDemoModel.class).readAllBytes(),
                     StandardCharsets.UTF_8);
 
             assertTrue(text.startsWith(CollectionUtil.UTF8_BOM), "内容应以 BOM 开头");
@@ -1005,7 +1003,7 @@ class CollectionUtilTest {
         @DisplayName("字段值含 CR 时必须被处理，否则一行被拆成两行")
         void carriageReturnIsRemoved() throws IOException {
             byte[] raw = CollectionUtil.toCsvInputStream(
-                    List.of(fullModel().setRemark("第一行\r\n第二行")), ExportDemoModel.class)
+                            List.of(fullModel().setRemark("第一行\r\n第二行")), ExportDemoModel.class)
                     .readAllBytes();
 
             String csv = readUtf8(new ByteArrayInputStream(raw));

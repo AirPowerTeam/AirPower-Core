@@ -28,7 +28,7 @@ public class FileUtil {
     /**
      * 文件大小进制
      */
-    public static final long FILE_SCALE = 1024L;
+    public static final int FILE_SCALE = 1024;
 
     /**
      * 文件单位
@@ -190,10 +190,6 @@ public class FileUtil {
      * @param fileName          文件名
      * @param bytes             文件字节数组
      * @param options           保存选项
-     * @apiNote 传了 {@link StandardOpenOption#APPEND} 却没传 {@code CREATE} 时会自动补上
-     * {@code CREATE}。NIO 的 {@code APPEND} 自身并不蕴含「文件不存在则创建」，
-     * 「首次创建 + 后续追加」这种分页写入的写法只传 {@code APPEND} 时，第一次写就会抛
-     * {@link NoSuchFileException}
      */
     public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName, byte @NotNull [] bytes, OpenOption @NotNull ... options) {
         Path target = resolveSaveTarget(absoluteDirectory, fileName);
@@ -212,8 +208,6 @@ public class FileUtil {
      * @param absoluteDirectory 目录绝对路径
      * @param fileName          文件名
      * @return 规范化后的目标路径
-     * @apiNote 目录会自动创建。这里集中做「穿越、符号链接、文件名白名单」三项校验，
-     * 让 {@code byte[]} 与 {@link InputStream} 两个重载共享同一套安全规则
      */
     private static @NotNull Path resolveSaveTarget(@NotNull String absoluteDirectory, @NotNull String fileName) {
         absoluteDirectory = formatDirectory(absoluteDirectory);
@@ -240,10 +234,6 @@ public class FileUtil {
      *
      * @param options 原始保存选项
      * @return 补齐后的保存选项
-     * @apiNote {@link StandardOpenOption#APPEND} 只声明「从文件末尾写入」，不含创建语义，
-     * 单独使用而文件又不存在时 NIO 会直接抛 {@link NoSuchFileException}。绝大多数调用方
-     * 想要的都是「不存在就创建、存在就追加」，所以在这里补齐；已经带了
-     * {@code CREATE} / {@code CREATE_NEW} 的原样返回
      */
     private static OpenOption @NotNull [] completeAppendOption(OpenOption @NotNull [] options) {
         boolean append = false;
@@ -279,11 +269,6 @@ public class FileUtil {
      * @param fileName          文件名
      * @param inputStream       输入流，方法内部<b>不会</b>关闭它
      * @param options           保存选项
-     * @apiNote 供内容大到不能一次性读进堆里的场景使用。用
-     * {@code readAllBytes()} 再写会同时驻留「源缓冲 + 目标 byte[]」两份，
-     * 这里用固定 8KB 缓冲，堆占用与文件大小无关
-     * @apiNote 路径校验、符号链接拒绝、文件名白名单与 {@code byte[]} 重载完全一致；
-     * 目录不存在时同样自动创建。{@code APPEND} 仍会被补上 {@code CREATE}
      */
     public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName,
                                 @NotNull InputStream inputStream, OpenOption @NotNull ... options) {
@@ -402,6 +387,38 @@ public class FileUtil {
     }
 
     /**
+     * 删除当前文件夹以及当前文件夹内的文件
+     *
+     * @param directory 文件夹路径
+     */
+    public static void deleteDirectory(String directory) {
+        directory = formatDirectory(directory);
+        Path path = Paths.get(directory);
+        if (!Files.exists(path)) {
+            return;
+        }
+        // 逆序保证先删子项再删父目录
+        try (Stream<Path> walk = Files.walk(path)) {
+            List<Path> targets = walk.sorted(Comparator.reverseOrder()).toList();
+            List<String> failures = new ArrayList<>();
+            for (Path target : targets) {
+                try {
+                    // 原实现用 File::delete 忽略返回值，删除失败完全无感知
+                    Files.deleteIfExists(target);
+                } catch (IOException e) {
+                    failures.add(target.getFileName() + "(" + e.getMessage() + ")");
+                }
+            }
+            if (!failures.isEmpty()) {
+                // 部分删除失败时明确报错，避免调用方误以为目录已清空
+                throw new ServiceException("删除文件夹失败，" + failures.size() + " 个条目未删除：" + failures);
+            }
+        } catch (IOException e) {
+            throw new ServiceException("删除文件夹失败，" + e.getMessage());
+        }
+    }
+
+    /**
      * <h1>ZIP 累计字节计数器</h1>
      *
      * <p>非线程安全，仅供单次 {@code zip} 递归过程内使用。</p>
@@ -435,38 +452,6 @@ public class FileUtil {
         private boolean tryAcquire(long bytes, long limit) {
             usedBytes += Math.max(bytes, 0L);
             return usedBytes <= limit;
-        }
-    }
-
-    /**
-     * 删除当前文件夹以及当前文件夹内的文件
-     *
-     * @param directory 文件夹路径
-     */
-    public static void deleteDirectory(String directory) {
-        directory = formatDirectory(directory);
-        Path path = Paths.get(directory);
-        if (!Files.exists(path)) {
-            return;
-        }
-        // 逆序保证先删子项再删父目录
-        try (Stream<Path> walk = Files.walk(path)) {
-            List<Path> targets = walk.sorted(Comparator.reverseOrder()).toList();
-            List<String> failures = new ArrayList<>();
-            for (Path target : targets) {
-                try {
-                    // 原实现用 File::delete 忽略返回值，删除失败完全无感知
-                    Files.deleteIfExists(target);
-                } catch (IOException e) {
-                    failures.add(target.getFileName() + "(" + e.getMessage() + ")");
-                }
-            }
-            if (!failures.isEmpty()) {
-                // 部分删除失败时明确报错，避免调用方误以为目录已清空
-                throw new ServiceException("删除文件夹失败，" + failures.size() + " 个条目未删除：" + failures);
-            }
-        } catch (IOException e) {
-            throw new ServiceException("删除文件夹失败，" + e.getMessage());
         }
     }
 }
