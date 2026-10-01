@@ -337,6 +337,35 @@ class FileUtilTest {
         }
 
         @Test
+        @DisplayName("只传 APPEND 时也应创建文件（分页导出的写法）")
+        void appendCreatesMissingFile() throws IOException {
+            Path dir = tempDir.resolve("append-creates");
+            Path file = dir.resolve("a.csv");
+            // NIO 的 APPEND 不含创建语义，修复前这里必然抛 NoSuchFileException
+            assertDoesNotThrow(() -> FileUtil.saveFile(dir.toString(), "a.csv",
+                            "表头A,表头B\n".getBytes(StandardCharsets.UTF_8), StandardOpenOption.APPEND),
+                    "只传 APPEND 时应自动补上 CREATE，否则分页导出的第一次写表头必然失败");
+            assertTrue(Files.exists(file), "文件应被创建");
+
+            FileUtil.saveFile(dir.toString(), "a.csv", "1,张三\n".getBytes(StandardCharsets.UTF_8), StandardOpenOption.APPEND);
+            assertEquals("表头A,表头B\n1,张三\n",
+                    new String(readBytes(file), StandardCharsets.UTF_8), "首次创建后应继续正常追加");
+        }
+
+        @Test
+        @DisplayName("APPEND 与 CREATE 同时传入不应重复创建")
+        void appendWithExplicitCreate() throws IOException {
+            Path dir = tempDir.resolve("append-and-create");
+            Path file = dir.resolve("a.csv");
+            FileUtil.saveFile(dir.toString(), "a.csv", "第一行\n".getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            FileUtil.saveFile(dir.toString(), "a.csv", "第二行\n".getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            assertEquals("第一行\n第二行\n", new String(readBytes(file), StandardCharsets.UTF_8),
+                    "调用方自己带上 CREATE 时不应改变追加语义");
+        }
+
+        @Test
         @DisplayName("空字节数组应生成空文件")
         void emptyContent() throws IOException {
             Path dir = tempDir.resolve("empty-content");

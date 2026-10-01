@@ -43,6 +43,14 @@ public class CollectionUtil {
     public static final String CSV_ROW_DELIMITER = "\n";
 
     /**
+     * UTF-8 BOM
+     * @apiNote Excel / WPS 在 Windows 上打开无 BOM 的 UTF-8 CSV 时不会用 UTF-8 解码，而是退回
+     * 系统 ANSI 代码页，简体中文环境下整表中文乱码。以 {@code \uFEFF} 形式拼在内容最前，
+     * 经 {@code getBytes(UTF_8)} 之后就是 {@code EF BB BF} 三个字节
+     */
+    public static final String UTF8_BOM = "\uFEFF";
+
+    /**
      * CSV 缩进符号
      */
     private static final String INDENT = "\t";
@@ -128,6 +136,7 @@ public class CollectionUtil {
      * @param valueListFunction 列数据列表函数
      * @param <M>               元素类型
      * @return CSV 文件流
+     * @apiNote 内容前置 {@link #UTF8_BOM}，保证表格软件按 UTF-8 解码
      */
     @Contract("_, _ -> new")
     private static <M extends RootModel<M>> @NotNull InputStream toCsvInputStream(Class<M> itemClass, @NotNull Function<List<Field>, List<String>> valueListFunction) {
@@ -135,7 +144,8 @@ public class CollectionUtil {
         List<String> rowList = getCsvHeaderList(fieldList);
         List<String> valueList = valueListFunction.apply(fieldList);
         rowList.addAll(valueList);
-        return new ByteArrayInputStream(String.join(CSV_ROW_DELIMITER, rowList).getBytes(StandardCharsets.UTF_8));
+        String csv = UTF8_BOM + String.join(CSV_ROW_DELIMITER, rowList);
+        return new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

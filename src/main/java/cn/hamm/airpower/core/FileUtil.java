@@ -149,6 +149,10 @@ public class FileUtil {
      * @param fileName          文件名
      * @param bytes             文件字节数组
      * @param options           保存选项
+     * @apiNote 传了 {@link StandardOpenOption#APPEND} 却没传 {@code CREATE} 时会自动补上
+     * {@code CREATE}。NIO 的 {@code APPEND} 自身并不蕴含「文件不存在则创建」，
+     * 「首次创建 + 后续追加」这种分页写入的写法只传 {@code APPEND} 时，第一次写就会抛
+     * {@link NoSuchFileException}
      */
     public static void saveFile(@NotNull String absoluteDirectory, @NotNull String fileName, byte @NotNull [] bytes, OpenOption @NotNull ... options) {
         absoluteDirectory = formatDirectory(absoluteDirectory);
@@ -168,10 +172,37 @@ public class FileUtil {
         }
         createDirectories(base.toString());
         try {
-            Files.write(target, bytes, options);
+            Files.write(target, bytes, completeAppendOption(options));
         } catch (IOException | IllegalArgumentException e) {
-            throw new ServiceException("文件保存失败，" + e.getMessage());
+            // 带上异常类型：IO 异常的 getMessage() 往往只有路径，缺了类型根本无法判断是权限、
+            // 目录还是文件不存在
+            throw new ServiceException("文件保存失败，[" + e.getClass().getSimpleName() + "] " + e.getMessage());
         }
+    }
+
+    /**
+     * 为「只传了 APPEND」的调用补上 CREATE
+     *
+     * @param options 原始保存选项
+     * @return 补齐后的保存选项
+     * @apiNote {@link StandardOpenOption#APPEND} 只声明「从文件末尾写入」，不含创建语义，
+     * 单独使用而文件又不存在时 NIO 会直接抛 {@link NoSuchFileException}。绝大多数调用方
+     * 想要的都是「不存在就创建、存在就追加」，所以在这里补齐；已经带了
+     * {@code CREATE} / {@code CREATE_NEW} 的原样返回
+     */
+    private static OpenOption @NotNull [] completeAppendOption(OpenOption @NotNull [] options) {
+        boolean append = false;
+        boolean create = false;
+        for (OpenOption option : options) {
+            append |= StandardOpenOption.APPEND == option;
+            create |= StandardOpenOption.CREATE == option || StandardOpenOption.CREATE_NEW == option;
+        }
+        if (!append || create) {
+            return options;
+        }
+        OpenOption[] completed = Arrays.copyOf(options, options.length + 1);
+        completed[options.length] = StandardOpenOption.CREATE;
+        return completed;
     }
 
     /**

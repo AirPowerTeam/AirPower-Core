@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -78,8 +79,18 @@ class CollectionUtilTest {
      * @return UTF-8 字符串
      * @throws IOException 读取异常
      */
+    /**
+     * 按 UTF-8 读取 CSV 内容，并剥掉开头的 UTF-8 BOM
+     *
+     * @param inputStream 文件流
+     * @return 去掉 BOM 的 CSV 文本
+     * @throws IOException 读取异常
+     * @apiNote 与表格软件的实际行为一致：BOM 只是编码标记，不属于表头内容。
+     * BOM 本身的存在由 {@code toCsvInputStream} 的字节级用例单独断言
+     */
     private static String readUtf8(InputStream inputStream) throws IOException {
-        return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        String csv = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        return csv.startsWith(CollectionUtil.UTF8_BOM) ? csv.substring(CollectionUtil.UTF8_BOM.length()) : csv;
     }
 
     /**
@@ -661,6 +672,42 @@ class CollectionUtilTest {
     @Nested
     @DisplayName("toCsvInputStream 集合转换为 CSV 文件流")
     class ToCsvInputStreamTest {
+
+        @Test
+        @DisplayName("编码：输出流应以 UTF-8 BOM 开头，Excel 才不会用系统代码页解码")
+        void testUtf8Bom() throws IOException {
+            byte[] raw = CollectionUtil.toCsvInputStream(List.of(fullModel()), ExportDemoModel.class)
+                    .readAllBytes();
+
+            assertArrayEquals(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF},
+                    Arrays.copyOf(raw, 3), "前三字节必须是 UTF-8 BOM（EF BB BF）");
+        }
+
+        @Test
+        @DisplayName("编码：BOM 只在文件头出现一次，剥离后正文不受影响")
+        void testBomOnlyOnceAtHead() throws IOException {
+            String text = new String(CollectionUtil.toCsvInputStream(
+                            List.of(fullModel(), fullModel()), ExportDemoModel.class).readAllBytes(),
+                    StandardCharsets.UTF_8);
+
+            assertTrue(text.startsWith(CollectionUtil.UTF8_BOM), "内容应以 BOM 开头");
+            assertEquals(1, text.split(CollectionUtil.UTF8_BOM, -1).length - 1,
+                    "全文只能出现一次 BOM，多一个就会在表格中间插入不可见字符");
+            assertEquals(EXPECTED_HEADER + "\n" + EXPECTED_ROW + "\n" + EXPECTED_ROW,
+                    text.substring(CollectionUtil.UTF8_BOM.length()),
+                    "剥离 BOM 后应正好是表头加两行数据");
+        }
+
+        @Test
+        @DisplayName("编码：空集合也要带 BOM，否则只有表头的文件同样会乱码")
+        void testBomOnEmptyList() throws IOException {
+            byte[] raw = CollectionUtil.toCsvInputStream(List.of(), ExportDemoModel.class).readAllBytes();
+
+            assertArrayEquals(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF},
+                    Arrays.copyOf(raw, 3), "即使没有数据行，表头也必须带 BOM");
+            assertEquals(EXPECTED_HEADER, readUtf8(
+                    new ByteArrayInputStream(raw)), "剥离 BOM 后应只剩表头行");
+        }
 
         @Test
         @DisplayName("正常路径：表头 + 数据行，行分隔符为换行")
