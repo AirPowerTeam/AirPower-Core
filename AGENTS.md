@@ -108,7 +108,8 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 ## 9. 已知陷阱
 
 - `RootModel.excludeNotMeta(whiteList)`：白名单必须含 `this.getClass()`，否则 `excludeFieldValueNotMeta` 会把非 `@Meta`
-  字段清空；`desensitize()` 会先排除非元数据字段再脱敏（自身类自动进白名单）
+  字段清空；`desensitize()` **只脱敏、不排除非元数据字段**，两个功能相互独立（都要时依次调用
+  `excludeNotMeta()` 与 `desensitize()`）
 - `HttpUtil`：基于 JDK `java.net.http.HttpClient`，仅适合简单 REST，不支持 HTTP/2 流式 / 复杂重试； **只有设置了
   connectTimeout，没有请求级超时**，服务端不响应时会一直阻塞
 - `RandomUtil` 使用 `ThreadLocalRandom`， **测试不要假设全局序列**

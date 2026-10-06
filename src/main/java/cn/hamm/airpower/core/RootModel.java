@@ -345,15 +345,15 @@ public class RootModel<M extends RootModel<M>> {
     /**
      * 脱敏
      *
-     * @apiNote 先排除非元数据字段，再对所有可达模型中
-     * {@link Desensitize} 标记的字段脱敏。
+     * @apiNote 只负责脱敏，<b>不</b>排除非元数据字段。脱敏与排除元数据是两个相互独立的功能：
+     * 排除会把无 {@link Meta} 的字段整体置空，与脱敏叠加后这类字段只剩「被清空」一种结果，
+     * 脱敏规则等于形同虚设，原值也一并丢失。两个功能都要时由调用方依次调用
+     * {@link #excludeNotMeta()} 与本方法。
      * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
      * 避免"订单 → 收货人"这类结构泄露明文敏感数据
      */
     public final void desensitize() {
-        // 先排除非元数据字段：每个模型实例都会走排除分支，自引用由已访问集合拦下
-        excludeNotMetaAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
-        // 再对所有可达模型（含类型不同的嵌套模型）递归脱敏
+        // 对所有可达模型（含类型不同的嵌套模型）递归脱敏；自引用由已访问集合拦下
         desensitizeAll(this, Collections.newSetFromMap(new IdentityHashMap<>()));
     }
 

@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>本测试以<b>源码实际行为</b>为断言依据，当前行为要点：</p>
  * <ul>
- *     <li>{@link RootModel#desensitize()} 先排除非元数据字段，再递归对
- *     <b>所有可达模型</b>（含类型不同的嵌套模型与模型集合）执行脱敏</li>
+ *     <li>{@link RootModel#desensitize()} 只做脱敏，与排除非元数据字段相互独立；
+ *     它递归对<b>所有可达模型</b>（含类型不同的嵌套模型与模型集合）执行脱敏</li>
  *     <li>{@link RootModel#excludeNotMetaAndDesensitize} 仍按类白名单语义：
  *     白名单外的类型只排除非元数据字段，不做脱敏</li>
  *     <li>白名单分支下不校验 {@code @Meta}，非元数据字段也会被保留</li>
@@ -315,8 +315,29 @@ class RootModelTest {
             model.desensitize();
 
             assertEquals("138****8000", model.getMobile(), "desensitize 已真正脱敏，mobile 应保留前 3 位、后 4 位");
-            assertNull(model.getRemark(), "desensitize 会先排除非元数据字段，remark 应被清空");
+            assertEquals("备注", model.getRemark(), "desensitize 不排除非元数据字段，remark 应保持原值");
             assertEquals("标题", model.getTitle(), "Getter 上有 @Meta 的 title 应被保留");
+        }
+
+        @Test
+        @DisplayName("脱敏与排除元数据是两个独立功能，需要时各自调用")
+        void testDesensitizeIsIndependentOfExcludeNotMeta() {
+            DemoModel child = new DemoModel().setMobile(MOBILE).setRemark("子备注");
+            model.setChild(child);
+
+            model.desensitize();
+
+            // 只脱敏：不碰 @Meta
+            assertEquals("138****8000", model.getMobile(), "脱敏字段应被脱敏");
+            assertEquals("备注", model.getRemark(), "脱敏不应顺带排除非元数据字段");
+            assertEquals("子备注", child.getRemark(), "脱敏不应顺带排除嵌套模型的非元数据字段");
+
+            // 再单独排除：两个功能各自生效，互不依赖调用顺序
+            model.excludeNotMeta();
+
+            assertNull(model.getRemark(), "excludeNotMeta 应清空非元数据字段");
+            assertNull(child.getRemark(), "excludeNotMeta 应递归清空嵌套模型的非元数据字段");
+            assertEquals("138****8000", model.getMobile(), "已脱敏的字段不会被 excludeNotMeta 还原为明文");
         }
 
         @Test
@@ -328,7 +349,7 @@ class RootModelTest {
             model.desensitize();
 
             assertEquals("138****8000", child.getMobile(), "desensitize 会递归脱敏，嵌套模型的 mobile 应被脱敏");
-            assertNull(child.getRemark(), "desensitize 会递归排除非元数据字段，嵌套模型的 remark 应被清空");
+            assertEquals("子备注", child.getRemark(), "desensitize 不排除非元数据字段，嵌套模型的 remark 应保持原值");
         }
 
         @Test
@@ -342,7 +363,7 @@ class RootModelTest {
                     "Integer 类型的 secretNumber 无法在不破坏类型的前提下脱敏，应保持原值而不是被置空"
                             + "（置空会让原地修改的实体一旦 flush 回库就是真实的字段级数据丢失）");
             assertEquals(EMAIL_MASKED, model.getEmail(), "自定义 head=1/tail=1/symbol=# 的 email 应按自定义规则脱敏");
-            assertNull(model.getRemark(), "desensitize 会先排除非元数据字段，remark 应被清空");
+            assertEquals("备注", model.getRemark(), "desensitize 不排除非元数据字段，remark 应保持原值");
             assertEquals("标题", model.getTitle(), "Getter 上有 @Meta 的 title 应被保留");
             assertEquals(1L, model.getId(), "标记了 @Meta 的 id 应被保留");
             assertEquals("Hamm", model.getName(), "标记了 @Meta 的 name 应被保留");
@@ -399,8 +420,8 @@ class RootModelTest {
             assertEquals(child.getEmail(), whiteListChild.getEmail(), "两种方式对嵌套模型 email 的脱敏结果应一致");
             assertEquals(childInList.getMobile(), whiteListChildInList.getMobile(), "两种方式对集合元素 mobile 的脱敏结果应一致");
             assertEquals(childInList.getEmail(), whiteListChildInList.getEmail(), "两种方式对集合元素 email 的脱敏结果应一致");
-            assertNull(child.getRemark(), "desensitize 会先排除非元数据字段，嵌套模型的 remark 应被清空");
-            assertNull(childInList.getRemark(), "desensitize 会先排除非元数据字段，集合元素的 remark 应被清空");
+            assertEquals("子备注", child.getRemark(), "desensitize 不排除非元数据字段，嵌套模型的 remark 应被保留");
+            assertEquals("子备注", childInList.getRemark(), "desensitize 不排除非元数据字段，集合元素的 remark 应被保留");
             assertEquals("子备注", whiteListChild.getRemark(), "白名单分支不排除非元数据字段，嵌套模型的 remark 应被保留");
             assertEquals("子备注", whiteListChildInList.getRemark(), "白名单分支不排除非元数据字段，集合元素的 remark 应被保留");
         }
@@ -654,8 +675,8 @@ class RootModelTest {
 
             assertEquals("138****8000", holder.getChild().getMobile(),
                     "嵌套模型类型与外层不同时，@Desensitize 字段同样必须被脱敏");
-            assertNull(holder.getChild().getRemark(),
-                    "嵌套模型中的非元数据字段同样应被排除");
+            assertEquals("子备注", holder.getChild().getRemark(),
+                    "desensitize 不排除非元数据字段，嵌套模型中的 remark 应被保留");
         }
 
         @Test
