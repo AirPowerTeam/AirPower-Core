@@ -269,9 +269,6 @@ public class RootModel<M extends RootModel<M>> {
             );
             return;
         }
-        // 非 String 保持原值：置 null 会在实体被 flush 回库时造成字段级数据丢失。
-        // 集合同样不逐元素脱敏：String 不可变、Collection<?> 无类型信息，
-        // 逐元素替换要么换掉整个托管集合，要么在不可变集合上抛异常，都更危险
         log.warn("字段({})的 @Desensitize 对类型 {} 不生效，已保持原值；请改用 String 字段",
                 field.getName(), value.getClass().getSimpleName());
     }
@@ -344,13 +341,6 @@ public class RootModel<M extends RootModel<M>> {
 
     /**
      * 脱敏
-     *
-     * @apiNote 只负责脱敏，<b>不</b>排除非元数据字段。脱敏与排除元数据是两个相互独立的功能：
-     * 排除会把无 {@link Meta} 的字段整体置空，与脱敏叠加后这类字段只剩「被清空」一种结果，
-     * 脱敏规则等于形同虚设，原值也一并丢失。两个功能都要时由调用方依次调用
-     * {@link #excludeNotMeta()} 与本方法。
-     * 嵌套模型与模型集合<b>不论类型是否与自身相同</b>都会递归脱敏，
-     * 避免"订单 → 收货人"这类结构泄露明文敏感数据
      */
     public final void desensitize() {
         // 对所有可达模型（含类型不同的嵌套模型）递归脱敏；自引用由已访问集合拦下
