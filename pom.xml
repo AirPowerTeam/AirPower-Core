@@ -159,6 +159,13 @@
                 </executions>
                 <configuration>
                     <doclint>all,-missing</doclint>
+                    <tags>
+                        <tag>
+                            <name>apiNote</name>
+                            <placement>a</placement>
+                            <head>API Note:</head>
+                        </tag>
+                    </tags>
                 </configuration>
             </plugin>
 
