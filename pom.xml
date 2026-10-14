@@ -1,38 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <groupId>cn.hamm</groupId>
     <artifactId>airpower-core</artifactId>
     <name>airpower-core</name>
-    <version>8.0.0</version>
-    <description>
-        AirPower-Core.
-    </description>
+    <version>9.0.0</version>
+    <description>AirPower-Core.</description>
+
     <properties>
         <java.version>17</java.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
+
+        <!-- GPG -->
         <gpg.keyname>5FE4833A28EDA3991EA4F1D239A8BA7AF33610A8</gpg.keyname>
-        <jackson.version>2.20.1</jackson.version>
+
+        <!-- Dependency Versions -->
+        <jackson.version>2.22.3</jackson.version>
         <lombok.version>1.18.42</lombok.version>
         <jakarta.validation.version>3.1.1</jakarta.validation.version>
         <jetbrains.annotations.version>26.0.2</jetbrains.annotations.version>
-        <plugin.maven.publishing.version>0.9.0</plugin.maven.publishing.version>
-        <plugin.maven.source.version>3.4.0</plugin.maven.source.version>
-        <plugin.maven.javadoc.version>3.12.0</plugin.maven.javadoc.version>
-        <plugin.maven.compiler.version>3.10.1</plugin.maven.compiler.version>
-        <plugin.maven.gpg.version>3.2.8</plugin.maven.gpg.version>
         <slf4j.version>2.0.17</slf4j.version>
-        <logback.version>1.5.23</logback.version>
+        <logback.version>1.6.3</logback.version>
         <hibernate-validator.version>8.0.2.Final</hibernate-validator.version>
         <jakarta-el-api.version>4.0.0</jakarta-el-api.version>
         <jakarta-el.version>4.0.2</jakarta-el.version>
+
+        <!-- Plugin Versions -->
+        <plugin.maven.publishing.version>0.9.0</plugin.maven.publishing.version>
+        <plugin.maven.source.version>3.4.0</plugin.maven.source.version>
+        <plugin.maven.javadoc.version>3.12.0</plugin.maven.javadoc.version>
+        <plugin.maven.compiler.version>3.13.0</plugin.maven.compiler.version>
+        <plugin.maven.gpg.version>3.2.4</plugin.maven.gpg.version>
+
+        <!-- Encoding -->
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
+
     <dependencies>
+        <!-- Compile-time only -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -43,29 +54,22 @@
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
             <version>${jetbrains.annotations.version}</version>
-            <!-- @NotNull / @Nullable / @Contract 都是 CLASS 保留期，编译期与 IDE 用，
-                 运行期不需要。留在 compile scope 会进下游 jar 的依赖树，
-                 既占体积又可能与下游的版本冲突 -->
             <scope>provided</scope>
         </dependency>
+
+        <!-- Validation API + Implementation (runtime required by ValidateUtil) -->
         <dependency>
             <groupId>jakarta.validation</groupId>
             <artifactId>jakarta.validation-api</artifactId>
             <version>${jakarta.validation.version}</version>
         </dependency>
-        <!-- Bean Validation 的实现是 ValidateUtil 的运行期必需项，不是测试期依赖。
-             放在 test scope 时，本库自身编译通过，但任何只依赖 airpower-core 的
-             应用第一次调 ValidateUtil.valid() 就会抛
-             HV000183: Unable to initialize 'jakarta.el.ExpressionFactory'——
-             启动不报错、首次校验才炸。
-             版本与 jakarta.validation-api 3.1.1 对齐：8.0.x 才实现 Validation 3.1 -->
         <dependency>
             <groupId>org.hibernate.validator</groupId>
             <artifactId>hibernate-validator</artifactId>
             <version>${hibernate-validator.version}</version>
         </dependency>
-        <!-- Hibernate Validator 的消息插值器依赖 jakarta.el.ExpressionFactory，
-             缺它同样是 HV000183 -->
+
+        <!-- Jakarta EL: required by Hibernate Validator message interpolator -->
         <dependency>
             <groupId>jakarta.el</groupId>
             <artifactId>jakarta.el-api</artifactId>
@@ -76,27 +80,27 @@
             <artifactId>jakarta.el</artifactId>
             <version>${jakarta-el.version}</version>
         </dependency>
+
+        <!-- JSON -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
         </dependency>
-        <!-- Json 自建 ObjectMapper，不会继承 Spring Boot 的自动配置，
-             因此 JSR-310 必须由本库自己注册，否则含 LocalDate/LocalDateTime 的
-             实体被当成普通 POJO 序列化成 {"year":2026,"monthValue":10,...} 这种结构 -->
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
             <version>${jackson.version}</version>
         </dependency>
+
+        <!-- Logging API (implementation left to consumer) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
-        <!-- 日志实现只在测试期用：主源码只依赖 slf4j-api。
-             放在 compile 会把 binding 传递给下游，与下游自选的实现形成
-             "multiple bindings" 或版本打架 -->
+
+        <!-- Test -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
@@ -106,13 +110,14 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.11.0</version>
+            <version>5.11.3</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- Central Publishing -->
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
@@ -123,6 +128,8 @@
                     <autoPublish>true</autoPublish>
                 </configuration>
             </plugin>
+
+            <!-- Sources -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
@@ -136,6 +143,8 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Javadoc -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -149,9 +158,11 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <doclint>none</doclint>
+                    <doclint>all,-missing</doclint>
                 </configuration>
             </plugin>
+
+            <!-- Compiler -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -160,10 +171,11 @@
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                 </configuration>
             </plugin>
+
+            <!-- GPG Signing -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-gpg-plugin</artifactId>
@@ -183,6 +195,7 @@
             </plugin>
         </plugins>
     </build>
+
     <licenses>
         <license>
             <name>The MIT License</name>
@@ -190,18 +203,23 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+
     <url>https://github.com/AirPowerTeam/AirPower-Core</url>
+
     <scm>
         <connection>scm:git:git://github.com/AirPowerTeam/AirPower-Core.git</connection>
         <developerConnection>scm:git:git://github.com/AirPowerTeam/AirPower-Core.git</developerConnection>
         <url>https://github.com/AirPowerTeam/AirPower-Core</url>
         <tag>HEAD</tag>
     </scm>
+
     <developers>
         <developer>
             <id>HammCn</id>
             <name>Hamm</name>
             <email>admin@hamm.cn</email>
+            <organization>AirPowerTeam</organization>
+            <organizationUrl>https://github.com/AirPowerTeam</organizationUrl>
             <roles>
                 <role>developer</role>
             </roles>
