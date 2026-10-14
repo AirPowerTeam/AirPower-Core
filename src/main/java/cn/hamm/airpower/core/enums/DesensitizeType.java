@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * <h1>脱敏方式</h1>
+ * <h2>脱敏方式</h2>
  *
  * @author Hamm.cn
  * @apiNote {@code minHead} / {@code minTail} 是<b>保留下限</b>：即使调用方传入更小的值，

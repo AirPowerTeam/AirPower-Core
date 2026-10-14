@@ -9,7 +9,7 @@ import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
- * <h1>Excel 导出列</h1>
+ * <h2>Excel 导出列</h2>
  *
  * @author Hamm.cn
  */
@@ -33,7 +33,7 @@ public @interface Export {
     boolean remove() default false;
 
     /**
-     * <h1>导出列的数据类型</h1>
+     * <h2>导出列的数据类型</h2>
      *
      * @author Hamm.cn
      */

@@ -11,7 +11,7 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
- * <h1>枚举字典工具类</h1>
+ * <h2>枚举字典工具类</h2>
  *
  * @author Hamm.cn
  */

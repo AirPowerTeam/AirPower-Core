@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 import static java.util.regex.Pattern.compile;
 
 /**
- * <h1>正则常量</h1>
+ * <h2>正则常量</h2>
  *
  * @author Hamm.cn
  */

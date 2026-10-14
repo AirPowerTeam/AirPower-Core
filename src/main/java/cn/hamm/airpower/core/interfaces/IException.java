@@ -13,7 +13,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * <h1>异常断言接口</h1>
+ * <h2>异常断言接口</h2>
  *
  * @param <T> 异常枚举自身类型
  * @author Hamm.cn

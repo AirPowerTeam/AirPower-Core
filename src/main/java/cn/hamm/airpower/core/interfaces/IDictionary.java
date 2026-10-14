@@ -3,7 +3,7 @@ package cn.hamm.airpower.core.interfaces;
 import cn.hamm.airpower.core.ReflectUtil;
 
 /**
- * <h1>字典枚举标准接口</h1>
+ * <h2>字典枚举标准接口</h2>
  *
  * @author Hamm.cn
  * @see ReflectUtil

@@ -13,7 +13,7 @@ import java.util.stream.IntStream;
 import static cn.hamm.airpower.core.constant.PatternConstant.*;
 
 /**
- * <h1>验证器工具类</h1>
+ * <h2>验证器工具类</h2>
  *
  * @author Hamm.cn
  */

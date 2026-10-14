@@ -18,7 +18,7 @@ import java.util.Objects;
 import static cn.hamm.airpower.core.enums.DateTimeFormatter.FULL_DATETIME;
 
 /**
- * <h1>时间日期格式化工具类</h1>
+ * <h2>时间日期格式化工具类</h2>
  *
  * @author Hamm.cn
  */

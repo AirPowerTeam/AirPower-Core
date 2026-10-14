@@ -6,7 +6,7 @@ import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * <h1>日期时间格式化模板</h1>
+ * <h2>日期时间格式化模板</h2>
  *
  * @author Hamm.cn
  */

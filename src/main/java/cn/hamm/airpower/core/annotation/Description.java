@@ -10,7 +10,7 @@ import static java.lang.annotation.ElementType.*;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
- * <h1>类或属性的文案</h1>
+ * <h2>类或属性的文案</h2>
  *
  * @author Hamm.cn
  * @apiNote 配置后可通过 {@link ReflectUtil} 获取

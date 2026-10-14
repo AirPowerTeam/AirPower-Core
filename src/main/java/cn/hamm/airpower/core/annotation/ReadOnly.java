@@ -10,7 +10,7 @@ import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
- * <h1>只读字段</h1>
+ * <h2>只读字段</h2>
  *
  * @author Hamm.cn
  * @apiNote 可在控制器调用 Service 前先调用 {@link RootModel#excludeReadOnly()} 将标记了此注解的字段移除

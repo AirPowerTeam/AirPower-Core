@@ -11,7 +11,7 @@ import java.io.Serial;
 import java.util.Objects;
 
 /**
- * <h1>业务异常</h1>
+ * <h2>业务异常</h2>
  *
  * @author Hamm.cn
  * @apiNote 不传错误码时使用 {@link Json#SERVICE_ERROR}

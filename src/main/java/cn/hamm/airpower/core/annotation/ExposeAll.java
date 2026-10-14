@@ -9,7 +9,7 @@ import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
- * <h1>此接口需要整体暴露的类名</h1>
+ * <h2>此接口需要整体暴露的类名</h2>
  *
  * @author Hamm.cn
  * @see Meta

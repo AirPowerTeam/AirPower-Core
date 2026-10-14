@@ -22,7 +22,7 @@ import static com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKN
 import static com.fasterxml.jackson.databind.SerializationFeature.FAIL_ON_EMPTY_BEANS;
 
 /**
- * <h1>简单 JSON 对象</h1>
+ * <h2>简单 JSON 对象</h2>
  *
  * @author Hamm.cn
  */

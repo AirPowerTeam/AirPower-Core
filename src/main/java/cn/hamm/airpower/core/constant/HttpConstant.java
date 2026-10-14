@@ -3,7 +3,7 @@ package cn.hamm.airpower.core.constant;
 import org.jetbrains.annotations.Contract;
 
 /**
- * <h1>HTTP 常量</h1>
+ * <h2>HTTP 常量</h2>
  *
  * @author Hamm.cn
  */

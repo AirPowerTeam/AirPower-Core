@@ -3,7 +3,7 @@ package cn.hamm.airpower.core.interfaces;
 import java.util.List;
 
 /**
- * <h1>树结构实体标准接口</h1>
+ * <h2>树结构实体标准接口</h2>
  *
  * @param <E> 树节点自身类型
  * @author Hamm.cn

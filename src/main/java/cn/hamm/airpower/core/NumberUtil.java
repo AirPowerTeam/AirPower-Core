@@ -14,7 +14,7 @@ import java.util.function.BiFunction;
 import static java.math.RoundingMode.*;
 
 /**
- * <h1>数字工具类</h1>
+ * <h2>数字工具类</h2>
  *
  * @author Hamm.cn
  */

@@ -19,7 +19,7 @@ import static javax.crypto.Cipher.DECRYPT_MODE;
 import static javax.crypto.Cipher.ENCRYPT_MODE;
 
 /**
- * <h1>AES 工具类</h1>
+ * <h2>AES 工具类</h2>
  *
  * @author Hamm.cn
  */

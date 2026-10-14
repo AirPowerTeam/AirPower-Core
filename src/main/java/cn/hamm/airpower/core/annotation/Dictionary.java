@@ -20,7 +20,7 @@ import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
- * <h1>标记进行字典校验</h1>
+ * <h2>标记进行字典校验</h2>
  *
  * @author Hamm.cn
  * @apiNote 请注意, 请自行做非空验证, 字典必须实现 {@link IDictionary} 接口

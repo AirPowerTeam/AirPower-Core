@@ -28,7 +28,7 @@ import java.util.concurrent.Flow;
 import static cn.hamm.airpower.core.enums.HttpMethod.GET;
 
 /**
- * <h1>HTTP 请求工具类</h1>
+ * <h2>HTTP 请求工具类</h2>
  *
  * @author Hamm.cn
  */
@@ -376,7 +376,7 @@ public class HttpUtil {
     }
 
     /**
-     * <h1>带上限的响应体收集器</h1>
+     * <h2>带上限的响应体收集器</h2>
      *
      * <p>累积收到的字节，超过上限立即以异常结束 {@link CompletionStage}。
      * 必须在 {@code onNext} 里判断——等读完再判断就失去意义了。</p>

@@ -10,7 +10,7 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
- * <h1>树结构处理工具类</h1>
+ * <h2>树结构处理工具类</h2>
  *
  * @author Hamm.cn
  * @apiNote 约定根节点 {@link #ROOT_ID} 为 {@code 0}：父级为 {@code null} 或 {@code 0}

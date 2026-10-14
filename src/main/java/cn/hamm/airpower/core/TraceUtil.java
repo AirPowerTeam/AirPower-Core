@@ -7,7 +7,7 @@ import org.slf4j.MDC;
 import java.util.UUID;
 
 /**
- * <h1>链路追踪工具类</h1>
+ * <h2>链路追踪工具类</h2>
  *
  * @author Hamm.cn
  * @apiNote TraceID 存放在 {@link MDC} 中，与 {@code HttpConstant.Header.TRACE_ID} 同名，

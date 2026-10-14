@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * <h1>随机生成工具类</h1>
+ * <h2>随机生成工具类</h2>
  *
  * @author Hamm.cn
  */

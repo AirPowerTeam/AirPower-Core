@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.function.Function;
 
 /**
- * <h1>带序列化的 {@code Function}</h1>
+ * <h2>带序列化的 {@code Function}</h2>
  *
  * @author Hamm.cn
  * @param <T> 入参类型

@@ -21,7 +21,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * <h1>内置的集合工具类</h1>
+ * <h2>内置的集合工具类</h2>
  *
  * @author Hamm.cn
  * @apiNote 主要负责 CSV 导出：列由 {@link Export} 注解决定，列值转换失败会回退为

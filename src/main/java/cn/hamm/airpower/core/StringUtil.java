@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * <h1>字符串工具类</h1>
+ * <h2>字符串工具类</h2>
  *
  * @author Hamm.cn
  */

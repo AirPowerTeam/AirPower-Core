@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 
 /**
- * <h1>字符串脱敏处理工具类</h1>
+ * <h2>字符串脱敏处理工具类</h2>
  *
  * @author Hamm.cn
  */

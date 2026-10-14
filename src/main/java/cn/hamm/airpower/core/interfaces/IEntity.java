@@ -1,7 +1,7 @@
 package cn.hamm.airpower.core.interfaces;
 
 /**
- * <h1>实体标准接口</h1>
+ * <h2>实体标准接口</h2>
  *
  * @author Hamm.cn
  * @param <E> 实体自身类型，链式赋值后仍返回具体类型
