@@ -45,7 +45,7 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 
 | 类型            | 角色                                                                                   | 关键约束                                                                                                                          |
 |-----------------|----------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `RootModel<M>`  | 数据模型基类，提供 `excludeReadOnly()` / `desensitize()` / `excludeNotMeta(whiteList)` | 集合里元素若是 `RootModel` 子类，会**就地修改**；`whiteList` 必须包含当前类自身，否则识别失败                                     |
+| `RootModel`  | 数据模型基类，提供 `excludeReadOnly()` / `desensitize()` / `excludeNotMeta(whiteList)` | 集合里元素若是 `RootModel` 子类，会**就地修改**；`whiteList` 必须包含当前类自身，否则识别失败                                     |
 | `Json`          | 既是响应包装（`code/message/data/traceId`），又是 Jackson 封装                         | 常量 `SUCCESS_CODE=200` / `SERVICE_ERROR=500` / `UNAUTHORIZED_CODE=401`；不要 `new ObjectMapper()`，统一 `Json.getObjectMapper()` |
 | `IException<T>` | 枚举式异常的 SPI，提供 `when / whenNull / whenEmpty / whenEquals / show()` 等链式断言  | 上层框架会按此接口实现各自的错误枚举                                                                                              |
 
@@ -98,7 +98,7 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 |---------------------|---------------------------------------|------------|-------------------|
 | 字段列表            | `ReflectUtil.FIELD_LIST_MAP`          | `Class<?>` | `computeIfAbsent` |
 | 声明字段            | `ReflectUtil.DECLARED_FIELD_LIST_MAP` | FQN        | `computeIfAbsent` |
-| 导出 CSV 字段       | `CollectionUtil.EXPORT_FIELD_CACHE`   | `Class<?>` | `computeIfAbsent` |
+| 导出 CSV 字段       | `ExportUtil.EXPORT_FIELD_CACHE`   | `Class<?>` | `computeIfAbsent` |
 | `DateTimeFormatter` | `DateTimeUtil.FORMATTER_CACHE`        | pattern    | 线程安全          |
 | `HttpClient`        | `HttpUtil.httpClient`                 | 单例       | volatile + DCL    |
 
@@ -136,14 +136,14 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
   `RootModelTest` 的 "whiteList 为 null" 用例失败 —— 该参数是当前仅剩的插桩暴露点
 - 仍会泄漏裸 `NullPointerException` 的入口（重构未覆盖，测试仍断言 NPE）：
   `Json.error(IException)`、`ReflectUtil.getFieldValue(null, field)`、
-  `CollectionUtil.getExportFieldList(null)`、`DictionaryUtil.getDictionary(cls, null, value)`、
+  `ExportUtil.getExportFieldList(null)`、`DictionaryUtil.getDictionary(cls, null, value)`、
   `DateTimeUtil.formatCurrent((String) null)` / `format(millis, (String) null)`
 
 ## 10. 改动流程
 
 1. 先读 `pom.xml` + `RootModel` + `Json` + `IException`，理解设计再下手
 2. 不要改 §4 列出的三个核心抽象的公共方法签名
-3. 改缓存结构 → 必回归 `RootModelTest` / `CollectionUtilTest`
+3. 改缓存结构 → 必回归 `RootModelTest` / `ExportUtilTest`
 4. 完成 → `mvn -o test`，确保全部测试类通过（本机没有全局 `mvn`；`/Applications/IntelliJ IDEA.app/...`
    路径已失效，IDEA 实际装在 `~/Applications/IntelliJ IDEA Ultimate.app`，推荐直接用 wrapper 缓存里的
    `~/.m2/wrapper/dists/apache-maven-3.9.9-bin/*/apache-maven-3.9.9/bin/mvn`）

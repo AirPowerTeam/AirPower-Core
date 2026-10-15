@@ -26,7 +26,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>CollectionUtil 单元测试</h1>
+ * <h1>ExportUtil 单元测试</h1>
  *
  * <p>本测试以<b>源码实际行为</b>为断言依据，刻意记录以下几处与注释/方法名不一致的行为：</p>
  * <ul>
@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Hamm.cn
  */
-@DisplayName("CollectionUtil 内置集合工具类单元测试")
+@DisplayName("ExportUtil 内置集合工具类单元测试")
 class ExportUtilTest {
 
     /**
