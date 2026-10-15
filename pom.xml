@@ -7,7 +7,7 @@
     <groupId>cn.hamm</groupId>
     <artifactId>airpower-core</artifactId>
     <name>airpower-core</name>
-    <version>10.0.0</version>
+    <version>20.0.0</version>
     <description>AirPower-Core.</description>
 
     <properties>
