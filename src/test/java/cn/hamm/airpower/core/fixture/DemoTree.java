@@ -1,7 +1,7 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.interfaces.IEntity;
-import cn.hamm.airpower.core.interfaces.ITree;
+import cn.hamm.airpower.core.common.IEntity;
+import cn.hamm.airpower.core.tree.ITree;
 import lombok.Data;
 import lombok.experimental.Accessors;
 

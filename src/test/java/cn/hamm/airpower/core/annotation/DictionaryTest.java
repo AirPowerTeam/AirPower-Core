@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core.annotation;
 
-import cn.hamm.airpower.core.ValidateUtil;
+import cn.hamm.airpower.core.validate.ValidateUtil;
+import cn.hamm.airpower.core.dictionary.Dictionary;
 import cn.hamm.airpower.core.fixture.Gender;
 import cn.hamm.airpower.core.fixture.ValidDemoModel;
 import jakarta.validation.Constraint;

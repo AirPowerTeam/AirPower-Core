@@ -1,8 +1,9 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.constant.HttpConstant;
-import cn.hamm.airpower.core.enums.HttpMethod;
+import cn.hamm.airpower.core.http.HttpConstant;
+import cn.hamm.airpower.core.http.HttpMethod;
 import cn.hamm.airpower.core.exception.ServiceException;
+import cn.hamm.airpower.core.http.HttpUtil;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;

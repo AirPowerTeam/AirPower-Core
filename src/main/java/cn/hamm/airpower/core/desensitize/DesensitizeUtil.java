@@ -1,0 +1,179 @@
+package cn.hamm.airpower.core.desensitize;
+
+import cn.hamm.airpower.core.StringUtil;
+import cn.hamm.airpower.core.exception.ServiceException;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
+
+/**
+ * <h2>字符串脱敏处理工具类</h2>
+ *
+ * @author Hamm.cn
+ */
+public class DesensitizeUtil {
+    /**
+     * IPv4 地址的段数
+     */
+    private static final int IPV4_PART_COUNT = 4;
+
+    /**
+     * 默认脱敏符号（星号）
+     */
+    private static final String DEFAULT_SYMBOL = "*";
+
+    /**
+     * IPv4 地址分隔符
+     */
+    private static final String IP_DELIMITER = ".";
+
+    /**
+     * 禁止外部实例化
+     */
+    @Contract(pure = true)
+    private DesensitizeUtil() {
+    }
+
+    /**
+     * 字符串替换
+     *
+     * @param text   原始字符串
+     * @param head   头部保留长度
+     * @param tail   尾部保留长度
+     * @param symbol 中间替换的单个符号
+     * @return 替换后的字符串
+     * @apiNote {@code head + tail} 达到或超过原文长度时<b>整串</b>替换为符号，
+     * 不做截断；{@code symbol} 为空时回退为 {@code *}
+     */
+    public static @NotNull String replace(String text, int head, int tail, String symbol) {
+        if (Objects.isNull(text)) {
+            throw new ServiceException("待脱敏文本不能为 null");
+        }
+        if (!StringUtil.hasText(symbol)) {
+            // 符号为空会导致原文被静默删除（symbol.repeat 抛 NPE，或空串拼接丢数据）
+            symbol = DEFAULT_SYMBOL;
+        }
+        if (head < 0 || tail < 0 || head + tail >= text.length()) {
+            return symbol.repeat(text.length());
+        }
+        StringBuilder stringBuilder = new StringBuilder(text.length());
+        stringBuilder.append(text, 0, head);
+        int repeatCount = text.length() - head - tail;
+        if (repeatCount > 0) {
+            stringBuilder.append(symbol.repeat(repeatCount));
+        }
+        stringBuilder.append(text, text.length() - tail, text.length());
+        return stringBuilder.toString();
+    }
+
+    /**
+     * IPv4 地址脱敏
+     *
+     * @param ipv4   IPv4 地址
+     * @param symbol 符号
+     * @return 脱敏后的 IPv4 地址
+     * @apiNote 只保留首尾两段，中间两段整体替换；传入内容不是合法 IPv4 时<b>原样返回</b>，
+     * 不做脱敏
+     */
+    public static @NotNull String desensitizeIpv4Address(@Nullable String ipv4, String symbol) {
+        // 脱敏是「尽力而为」的展示逻辑，入参为空时返回空串而不是抛异常
+        if (!StringUtil.hasText(ipv4)) {
+            return Objects.isNull(ipv4) ? "" : ipv4;
+        }
+        if (!StringUtil.hasText(symbol)) {
+            symbol = DEFAULT_SYMBOL;
+        }
+        String[] strings = ipv4.split("\\" + IP_DELIMITER);
+        if (strings.length != IPV4_PART_COUNT) {
+            return ipv4;
+        }
+        strings[1] = symbol + symbol + symbol;
+        strings[2] = strings[1];
+        return String.join(IP_DELIMITER, strings);
+    }
+
+    /**
+     * IPv4 地址脱敏
+     *
+     * @param ipv4 IPv4 地址
+     * @return 脱敏后的 IPv4 地址
+     */
+    public static @NotNull String desensitizeIpv4Address(@Nullable String ipv4) {
+        return desensitizeIpv4Address(ipv4, DEFAULT_SYMBOL);
+    }
+
+    /**
+     * 文本脱敏
+     *
+     * @param text 原始文本
+     * @param type 脱敏类型
+     * @param head 头部保留
+     * @param tail 尾部保留
+     * @return 脱敏后的文本
+     */
+    @Contract(pure = true)
+    public static @NotNull String desensitize(String text, DesensitizeType type, int head, int tail) {
+        return desensitize(text, type, head, tail, DEFAULT_SYMBOL);
+    }
+
+    /**
+     * 文本脱敏
+     *
+     * @param valueString 原始文本
+     * @param type        脱敏类型
+     * @param head        头部保留
+     * @param tail        尾部保留
+     * @param symbol      脱敏符号
+     * @return 脱敏后的文本
+     * @apiNote {@code head} / {@code tail} 是下限而非最终值：多数类型会与
+     * {@link DesensitizeType} 自带的保留位数取较大者，调用方无法通过传更小的值
+     * 让敏感位暴露出来
+     */
+    @Contract(pure = true)
+    public static @NotNull String desensitize(
+            String valueString, DesensitizeType type, int head, int tail, String symbol
+    ) {
+        if (Objects.isNull(valueString)) {
+            throw new ServiceException("待脱敏文本不能为 null");
+        }
+        if (Objects.isNull(type)) {
+            throw new ServiceException("脱敏类型不能为 null");
+        }
+        if (!StringUtil.hasText(symbol)) {
+            // 脱敏符号为空时会导致原文被静默删除，统一回退为默认符号
+            symbol = DEFAULT_SYMBOL;
+        }
+        switch (type) {
+            case BANK_CARD,
+                 ID_CARD,
+                 MOBILE,
+                 ADDRESS,
+                 CAR_NUMBER,
+                 EMAIL -> {
+                head = Math.max(type.getMinHead(), head);
+                tail = Math.max(type.getMinTail(), tail);
+            }
+            case IP_V4 -> {
+                return desensitizeIpv4Address(valueString, symbol);
+            }
+            case CHINESE_NAME -> {
+                head = Math.max(type.getMinHead(), head);
+                tail = Math.max(type.getMinTail(), tail);
+                if (valueString.length() <= head + tail) {
+                    tail = 0;
+                }
+            }
+            case TELEPHONE -> {
+                // 包含区号 前后各留4 不包含则各留2
+                int isContainRegionCode = valueString.length() > 8 ? 4 : 2;
+                head = Math.max(isContainRegionCode, head);
+                tail = Math.max(isContainRegionCode, tail);
+            }
+            default -> {
+            }
+        }
+        return replace(valueString, head, tail, symbol);
+    }
+}

@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core.constant;
 
-import cn.hamm.airpower.core.ValidateUtil;
+import cn.hamm.airpower.core.validate.PatternConstant;
+import cn.hamm.airpower.core.validate.ValidateUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -1,6 +1,6 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.interfaces.IDictionary;
+import cn.hamm.airpower.core.dictionary.IDictionary;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

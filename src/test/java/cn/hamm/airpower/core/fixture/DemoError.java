@@ -1,6 +1,6 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.interfaces.IException;
+import cn.hamm.airpower.core.exception.IException;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

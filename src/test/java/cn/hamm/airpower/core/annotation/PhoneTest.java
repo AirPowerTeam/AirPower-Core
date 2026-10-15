@@ -1,7 +1,8 @@
 package cn.hamm.airpower.core.annotation;
 
-import cn.hamm.airpower.core.RootModel;
-import cn.hamm.airpower.core.ValidateUtil;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.validate.Phone;
+import cn.hamm.airpower.core.validate.ValidateUtil;
 import cn.hamm.airpower.core.fixture.ValidDemoModel;
 import jakarta.validation.Constraint;
 import jakarta.validation.ValidationException;
@@ -62,7 +63,7 @@ class PhoneTest {
     /**
      * 一个 {@code mobile = false, tel = false} 的场景，用于覆盖「两种格式都不允许」的分支
      */
-    static class NeverPhoneModel extends RootModel<NeverPhoneModel> {
+    static class NeverPhoneModel extends RootModel {
         @Phone(mobile = false, tel = false)
         private String contact;
     }

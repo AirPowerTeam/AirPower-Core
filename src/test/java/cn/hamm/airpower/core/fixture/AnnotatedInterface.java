@@ -1,6 +1,6 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.annotation.Description;
+import cn.hamm.airpower.core.reflect.Description;
 
 /**
  * 把 {@link Description} 挂在方法上的接口

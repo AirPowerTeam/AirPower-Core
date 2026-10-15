@@ -1,11 +1,11 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.RootModel;
-import cn.hamm.airpower.core.annotation.Description;
-import cn.hamm.airpower.core.annotation.Desensitize;
-import cn.hamm.airpower.core.annotation.Meta;
-import cn.hamm.airpower.core.annotation.ReadOnly;
-import cn.hamm.airpower.core.enums.DesensitizeType;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.reflect.Description;
+import cn.hamm.airpower.core.desensitize.Desensitize;
+import cn.hamm.airpower.core.common.Meta;
+import cn.hamm.airpower.core.common.ReadOnly;
+import cn.hamm.airpower.core.desensitize.DesensitizeType;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
@@ -26,7 +26,7 @@ import java.util.List;
 @Data
 @Accessors(chain = true)
 @EqualsAndHashCode(callSuper = true)
-public class DemoModel extends RootModel<DemoModel> {
+public class DemoModel extends RootModel {
     /**
      * 主键
      */

@@ -2,7 +2,6 @@ package cn.hamm.airpower.core.exception;
 
 import cn.hamm.airpower.core.Json;
 import cn.hamm.airpower.core.fixture.DemoError;
-import cn.hamm.airpower.core.interfaces.IException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

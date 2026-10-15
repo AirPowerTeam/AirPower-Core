@@ -1,5 +1,7 @@
 package cn.hamm.airpower.core.enums;
 
+import cn.hamm.airpower.core.desensitize.DesensitizeType;
+import cn.hamm.airpower.core.http.HttpMethod;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

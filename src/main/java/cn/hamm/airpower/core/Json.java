@@ -1,8 +1,8 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.annotation.Description;
+import cn.hamm.airpower.core.reflect.Description;
 import cn.hamm.airpower.core.exception.ServiceException;
-import cn.hamm.airpower.core.interfaces.IException;
+import cn.hamm.airpower.core.exception.IException;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -298,7 +298,7 @@ public class Json {
                     // 全局忽略值为 null 的属性。
                     // 用 setSerializationInclusion 而非 configOverride：后者只决定 POJO 属性
                     // 在未标注 @JsonInclude 时的默认行为，对被直接序列化的 Map 不生效
-                    mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+                    mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
                     // 忽略没有属性的类
                     mapper.configure(FAIL_ON_EMPTY_BEANS, false);
                     // 必须注册 JSR-310：否则 LocalDate / LocalDateTime / Instant 被当成普通 POJO

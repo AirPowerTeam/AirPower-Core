@@ -1,8 +1,11 @@
 package cn.hamm.airpower.core.interfaces;
 
-import cn.hamm.airpower.core.TreeUtil;
+import cn.hamm.airpower.core.common.IEntity;
+import cn.hamm.airpower.core.reflect.IFunction;
+import cn.hamm.airpower.core.tree.TreeUtil;
 import cn.hamm.airpower.core.fixture.DemoTree;
 import cn.hamm.airpower.core.fixture.Gender;
+import cn.hamm.airpower.core.tree.ITree;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

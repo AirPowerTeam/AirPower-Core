@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.enums.DesensitizeType;
+import cn.hamm.airpower.core.desensitize.DesensitizeType;
+import cn.hamm.airpower.core.desensitize.DesensitizeUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

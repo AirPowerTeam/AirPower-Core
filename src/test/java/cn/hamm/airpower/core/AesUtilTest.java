@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.crypto.AesUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

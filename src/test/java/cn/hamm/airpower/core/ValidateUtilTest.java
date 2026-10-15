@@ -1,8 +1,10 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.constant.PatternConstant;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.validate.PatternConstant;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.ValidDemoModel;
+import cn.hamm.airpower.core.validate.ValidateUtil;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -58,7 +60,7 @@ class ValidateUtilTest {
     /**
      * 一个完全没有任何约束注解的模型，用于验证「无注解模型不抛异常」
      */
-    static class EmptyModel extends RootModel<EmptyModel> {
+    static class EmptyModel extends RootModel {
     }
 
     @Nested

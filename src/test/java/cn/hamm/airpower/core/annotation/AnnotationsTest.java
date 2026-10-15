@@ -1,8 +1,17 @@
 package cn.hamm.airpower.core.annotation;
 
-import cn.hamm.airpower.core.RootModel;
-import cn.hamm.airpower.core.enums.DesensitizeType;
+import cn.hamm.airpower.core.common.Meta;
+import cn.hamm.airpower.core.common.ReadOnly;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.desensitize.Desensitize;
+import cn.hamm.airpower.core.desensitize.DesensitizeIgnore;
+import cn.hamm.airpower.core.desensitize.DesensitizeType;
+import cn.hamm.airpower.core.dictionary.Dictionary;
+import cn.hamm.airpower.core.export.Export;
+import cn.hamm.airpower.core.export.ExposeAll;
 import cn.hamm.airpower.core.fixture.Gender;
+import cn.hamm.airpower.core.reflect.Description;
+import cn.hamm.airpower.core.validate.Phone;
 import jakarta.validation.Constraint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -55,7 +64,7 @@ class AnnotationsTest {
     /**
      * 用于读取注解成员的样例模型
      */
-    static class AnnotationModel extends RootModel<AnnotationModel> {
+    static class AnnotationModel extends RootModel {
         @Description("描述文案")
         private String descriptionField;
 

@@ -1,9 +1,9 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.RootModel;
-import cn.hamm.airpower.core.annotation.Description;
-import cn.hamm.airpower.core.annotation.Dictionary;
-import cn.hamm.airpower.core.annotation.Phone;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.reflect.Description;
+import cn.hamm.airpower.core.dictionary.Dictionary;
+import cn.hamm.airpower.core.validate.Phone;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -25,7 +25,7 @@ import lombok.experimental.Accessors;
 @Data
 @Accessors(chain = true)
 @EqualsAndHashCode(callSuper = true)
-public class ValidDemoModel extends RootModel<ValidDemoModel> {
+public class ValidDemoModel extends RootModel {
     /**
      * 名称（非空校验）
      */

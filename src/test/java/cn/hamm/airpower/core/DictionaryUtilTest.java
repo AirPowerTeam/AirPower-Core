@@ -1,9 +1,10 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.dictionary.DictionaryUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.Gender;
-import cn.hamm.airpower.core.interfaces.IDictionary;
-import cn.hamm.airpower.core.interfaces.IFunction;
+import cn.hamm.airpower.core.dictionary.IDictionary;
+import cn.hamm.airpower.core.reflect.IFunction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

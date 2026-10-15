@@ -4,7 +4,7 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.DemoError;
 import cn.hamm.airpower.core.fixture.DemoModel;
 import cn.hamm.airpower.core.fixture.TimeModel;
-import cn.hamm.airpower.core.interfaces.IException;
+import cn.hamm.airpower.core.exception.IException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Data;
 import org.junit.jupiter.api.DisplayName;

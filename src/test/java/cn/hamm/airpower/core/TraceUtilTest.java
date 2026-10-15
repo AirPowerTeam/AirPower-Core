@@ -1,6 +1,6 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.constant.HttpConstant;
+import cn.hamm.airpower.core.http.HttpConstant;
 import org.junit.jupiter.api.*;
 import org.slf4j.MDC;
 

@@ -1,5 +1,8 @@
 package cn.hamm.airpower.core.constant;
 
+import cn.hamm.airpower.core.common.Constant;
+import cn.hamm.airpower.core.http.HttpConstant;
+import cn.hamm.airpower.core.validate.PatternConstant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

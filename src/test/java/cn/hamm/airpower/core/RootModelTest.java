@@ -1,8 +1,9 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.annotation.Desensitize;
-import cn.hamm.airpower.core.annotation.Meta;
-import cn.hamm.airpower.core.enums.DesensitizeType;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.desensitize.Desensitize;
+import cn.hamm.airpower.core.common.Meta;
+import cn.hamm.airpower.core.desensitize.DesensitizeType;
 import cn.hamm.airpower.core.fixture.DemoModel;
 import cn.hamm.airpower.core.fixture.ExportDemoModel;
 import lombok.Data;
@@ -58,7 +59,7 @@ class RootModelTest {
     /**
      * 包含 DemoModel 自身的白名单，只有白名单命中当前类才会走“递归嵌套模型 / 脱敏”分支
      */
-    private static final List<Class<? extends RootModel<?>>> WHITE_LIST = List.of(DemoModel.class);
+    private static final List<Class<? extends RootModel>> WHITE_LIST = List.of(DemoModel.class);
 
     /**
      * 待测模型
@@ -449,7 +450,7 @@ class RootModelTest {
         @Test
         @DisplayName("边界值：白名单不含当前类时等价于排除非元数据字段")
         void testWithOtherClassWhiteList() {
-            List<Class<? extends RootModel<?>>> otherWhiteList = List.of(ExportDemoModel.class);
+            List<Class<? extends RootModel>> otherWhiteList = List.of(ExportDemoModel.class);
             model.excludeNotMetaAndDesensitize(otherWhiteList, true);
 
             assertNull(model.getRemark(), "白名单未命中当前类时走排除非元数据分支，remark 应被清空");
@@ -736,7 +737,7 @@ class RootModelTest {
     @Data
     @EqualsAndHashCode(callSuper = true)
     @Accessors(chain = true)
-    static class NestedHolder extends RootModel<NestedHolder> {
+    static class NestedHolder extends RootModel {
         /**
          * 嵌套模型
          */
@@ -756,7 +757,7 @@ class RootModelTest {
     @Data
     @EqualsAndHashCode(callSuper = true)
     @Accessors(chain = true)
-    static class ContactModel extends RootModel<ContactModel> {
+    static class ContactModel extends RootModel {
         /**
          * 手机号
          */
@@ -876,7 +877,7 @@ class RootModelTest {
     @Data
     @EqualsAndHashCode(callSuper = true)
     @Accessors(chain = true)
-    static class CycleModel extends RootModel<CycleModel> {
+    static class CycleModel extends RootModel {
         /**
          * 同类模型
          */

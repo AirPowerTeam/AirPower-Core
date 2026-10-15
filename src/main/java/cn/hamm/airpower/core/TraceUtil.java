@@ -1,6 +1,6 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.constant.HttpConstant;
+import cn.hamm.airpower.core.http.HttpConstant;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.MDC;
 
@@ -10,8 +10,7 @@ import java.util.UUID;
  * <h2>链路追踪工具类</h2>
  *
  * @author Hamm.cn
- * @apiNote TraceID 存放在 {@link MDC} 中，与 {@code HttpConstant.Header.TRACE_ID} 同名，
- * 保证日志与请求头里的追踪 ID 一致
+ * @apiNote TraceID 存放在 {@link MDC} 中
  */
 public class TraceUtil {
 

@@ -1,5 +1,6 @@
 package cn.hamm.airpower.core.interfaces;
 
+import cn.hamm.airpower.core.dictionary.IDictionary;
 import cn.hamm.airpower.core.fixture.Gender;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

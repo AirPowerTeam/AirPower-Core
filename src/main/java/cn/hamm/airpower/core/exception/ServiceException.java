@@ -1,7 +1,6 @@
 package cn.hamm.airpower.core.exception;
 
 import cn.hamm.airpower.core.Json;
-import cn.hamm.airpower.core.interfaces.IException;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

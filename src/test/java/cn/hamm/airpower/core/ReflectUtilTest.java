@@ -1,8 +1,10 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.annotation.Description;
-import cn.hamm.airpower.core.annotation.Meta;
+import cn.hamm.airpower.core.reflect.Description;
+import cn.hamm.airpower.core.common.Meta;
+import cn.hamm.airpower.core.common.RootModel;
 import cn.hamm.airpower.core.exception.ServiceException;
+import cn.hamm.airpower.core.export.ExportUtil;
 import cn.hamm.airpower.core.fixture.AnnotatedImpl;
 import cn.hamm.airpower.core.fixture.AnnotatedInterface;
 import cn.hamm.airpower.core.fixture.DemoModel;
@@ -10,7 +12,8 @@ import cn.hamm.airpower.core.fixture.DemoTree;
 import cn.hamm.airpower.core.fixture.Gender;
 import cn.hamm.airpower.core.fixture.InheritedImpl;
 import cn.hamm.airpower.core.fixture.SameNameProbe;
-import cn.hamm.airpower.core.interfaces.IFunction;
+import cn.hamm.airpower.core.reflect.IFunction;
+import cn.hamm.airpower.core.reflect.ReflectUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -198,7 +201,7 @@ class ReflectUtilTest {
     /**
      * 只有有参构造器的模型
      */
-    static class WithArgsModel extends RootModel<WithArgsModel> {
+    static class WithArgsModel extends RootModel {
         /**
          * 有参构造器
          *
@@ -233,7 +236,7 @@ class ReflectUtilTest {
     /**
      * 抽象模型
      */
-    abstract static class AbstractModel extends RootModel<AbstractModel> {
+    abstract static class AbstractModel extends RootModel {
     }
 
     /**
@@ -1226,7 +1229,7 @@ class ReflectUtilTest {
             // @Export 标在字段上，getExportFieldList 会先按 Getter 名找注解再回退到字段。
             // Getter 名一旦被土耳其语规则污染，这条查找链就断了
             withDefaultLocale(new Locale("tr", "TR"), () -> {
-                assertNotNull(CollectionUtil.getExportFieldList(
+                assertNotNull(ExportUtil.getExportFieldList(
                                 cn.hamm.airpower.core.fixture.ExportDemoModel.class).stream()
                                 .filter(field -> "id".equals(field.getName()))
                                 .findFirst().orElse(null),
