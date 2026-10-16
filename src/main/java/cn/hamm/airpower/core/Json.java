@@ -198,6 +198,9 @@ public class Json {
      * @return 目标类的实例
      */
     public static <T> T parse(String json, Class<T> clazz) {
+        if ("null".equalsIgnoreCase(json)){
+            throw new ServiceException("不是有效的 JSON 格式");
+        }
         try {
             return getObjectMapper().readValue(json, clazz);
         } catch (Exception e) {
