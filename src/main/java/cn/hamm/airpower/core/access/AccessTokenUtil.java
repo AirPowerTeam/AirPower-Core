@@ -247,10 +247,13 @@ public class AccessTokenUtil {
         if (millisecond <= 0) {
             throw new ServiceException("过期毫秒数必须大于0");
         }
-        // 用 addExact 做溢出保护：当前时间约 1.78e12，传 Long.MAX_VALUE 时
-        // 普通加法会溢出成负数，令牌一签发就过期。
-        // setExpireSecond 早已用 multiplyExact 做了同类保护，这里漏了
-        verifiedToken.setExpireTimestamps(Math.addExact(System.currentTimeMillis(), millisecond));
+        final long expireAt;
+        try {
+            expireAt = Math.addExact(System.currentTimeMillis(), millisecond);
+        } catch (ArithmeticException e) {
+            throw new ServiceException("过期毫秒数过大，超出可表示范围：" + millisecond);
+        }
+        verifiedToken.setExpireTimestamps(expireAt);
         return this;
     }
 
