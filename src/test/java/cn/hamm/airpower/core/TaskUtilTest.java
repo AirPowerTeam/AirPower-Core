@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @DisplayName("TaskUtil 异步任务工具类单元测试")
 @Timeout(15)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@TestClassOrder(ClassOrderer.OrderAnnotation.class)
 class TaskUtilTest {
 
     /**
@@ -44,8 +46,87 @@ class TaskUtilTest {
         MDC.clear();
     }
 
+    /**
+     * 池与队列的总容量：最大线程数 + 有界队列长度，与 TaskUtil 的配置一致
+     */
+    private static final int SATURATION = Math.max(2, Runtime.getRuntime().availableProcessors()) * 2 + 1000;
+
+    /**
+     * 灌满线程池与队列
+     *
+     * @param release 解除阻塞的闸门
+     * @apiNote 循环中途被拒说明已经饱和，正是饱和用例要的前置条件，直接收手
+     */
+    private static void fill(CountDownLatch release) {
+        for (int i = 0; i < SATURATION; i++) {
+            try {
+                // 无限期阻塞：带超时的阻塞会让先入队的任务在断言之前自行超时结束，
+                // 队列腾出空位，「必须被拒绝」就变成偶发失败。释放时机由用例的 finally 决定。
+                TaskUtil.run(() -> {
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            } catch (ServiceException e) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * 等待线程池进入饱和（探测任务被拒绝）
+     *
+     * @throws InterruptedException 中断异常
+     */
+    private static void awaitSaturation() throws InterruptedException {
+        for (int i = 0; i < 200; i++) {
+            if (isRejected()) {
+                return;
+            }
+            Thread.sleep(50L);
+        }
+        fail("线程池在预期时间内没有进入饱和状态，无法验证拒绝路径");
+    }
+
+    /**
+     * 等待线程池排空
+     *
+     * @throws InterruptedException 中断异常
+     * @apiNote 线程池是全进程共享的静态单例，塞满后必须等它排空，
+     * 否则后续用例会撞上拒绝，把「异步任务应跑在线程池线程上」这类断言
+     * 弄成偶发失败
+     */
+    private static void awaitDrain() throws InterruptedException {
+        for (int i = 0; i < 400; i++) {
+            if (TaskUtil.isIdle()) {
+                return;
+            }
+            Thread.sleep(50L);
+        }
+        fail("线程池在预期时间内没有排空，会影响后续用例");
+    }
+
+    /**
+     * 判断线程池当前是否已饱和（任务提交即被拒绝）
+     *
+     * @return 是否已饱和
+     * @apiNote 探测任务不阻塞：即使被拒绝也只是抛异常，不会占用调用方线程
+     */
+    private static boolean isRejected() {
+        try {
+            TaskUtil.run(() -> {
+            });
+            return false;
+        } catch (ServiceException e) {
+            return true;
+        }
+    }
+
     @Nested
     @DisplayName("run 异步执行任务")
+    @Order(1)
     class RunTest {
 
         @Test
@@ -138,6 +219,7 @@ class TaskUtilTest {
 
     @Nested
     @DisplayName("异常处理")
+    @Order(2)
     class ExceptionTest {
 
         @Test
@@ -210,6 +292,7 @@ class TaskUtilTest {
 
     @Nested
     @DisplayName("TraceID 传递")
+    @Order(3)
     class TraceIdTest {
 
         @Test
@@ -305,88 +388,8 @@ class TaskUtilTest {
 
     @Nested
     @DisplayName("饱和拒绝路径")
+    @Order(4)
     class SaturationTest {
-
-        /**
-         * 池与队列的总容量：最大线程数 + 有界队列长度，与 TaskUtil 的配置一致
-         */
-        private static final int SATURATION = Math.max(2, Runtime.getRuntime().availableProcessors()) * 2 + 1000;
-
-        /**
-         * 堵住线程池的阻塞时长（秒）
-         */
-        private static final long BLOCK_SECONDS = 10L;
-
-        /**
-         * 等待线程池进入饱和（探测任务被拒绝）
-         *
-         * @throws InterruptedException 中断异常
-         */
-        private void awaitSaturation() throws InterruptedException {
-            for (int i = 0; i < 200; i++) {
-                if (isRejected()) {
-                    return;
-                }
-                Thread.sleep(50L);
-            }
-            fail("线程池在预期时间内没有进入饱和状态，无法验证拒绝路径");
-        }
-
-        /**
-         * 等待线程池排空
-         *
-         * @throws InterruptedException 中断异常
-         * @apiNote 线程池是全进程共享的静态单例，本用例把它塞满后必须等它排空，
-         * 否则紧随其后的用例会撞上拒绝，把「异步任务应跑在线程池线程上」
-         * 这类断言弄成偶发失败
-         */
-        private void awaitDrain() throws InterruptedException {
-            for (int i = 0; i < 400; i++) {
-                if (TaskUtil.isIdle()) {
-                    return;
-                }
-                Thread.sleep(50L);
-            }
-            fail("线程池在预期时间内没有排空，会影响后续用例");
-        }
-
-        /**
-         * 灌满线程池与队列
-         *
-         * @param release 解除阻塞的闸门
-         * @apiNote 循环中途被拒说明已经饱和，正是本用例要的前置条件，直接收手
-         */
-        private void fill(CountDownLatch release) {
-            for (int i = 0; i < SATURATION; i++) {
-                try {
-                    TaskUtil.run(() -> {
-                        try {
-                            release.await(BLOCK_SECONDS, TimeUnit.SECONDS);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    });
-                } catch (ServiceException e) {
-                    return;
-                }
-            }
-        }
-
-        /**
-         * 判断线程池当前是否已饱和（任务提交即被拒绝）
-         *
-         * @return 是否已饱和
-         * @apiNote 探测任务不阻塞：即使被拒绝也只是抛异常，不会占用调用方线程
-         */
-        private boolean isRejected() {
-            try {
-                TaskUtil.run(() -> {
-                });
-                return false;
-            } catch (ServiceException e) {
-                return true;
-            }
-        }
 
         @Test
         @DisplayName("队列满时抛业务异常，而不是回退到调用方线程执行")
@@ -433,6 +436,113 @@ class TaskUtilTest {
                 release.countDown();
                 awaitDrain();
                 MDC.clear();
+            }
+        }
+    }
+
+    /**
+     * <h2>isIdle 线程池空闲判定</h2>
+     *
+     * <p>仅凭「提交一次成功」判断排空不可靠：那一刻队列里可能还压着任务，
+     * 所以饱和判定必须同时看运行中任务数与队列长度。</p>
+     */
+    @Nested
+    @DisplayName("isIdle 空闲判定")
+    @Order(5)
+    class IdleTest {
+
+        @Test
+        @DisplayName("没有任务时为空闲")
+        void idleWhenNoTask() throws InterruptedException {
+            // 先确认上一组用例留下的任务已经排空，否则本断言会依赖执行顺序
+            for (int i = 0; i < 200 && !TaskUtil.isIdle(); i++) {
+                Thread.sleep(50L);
+            }
+            assertTrue(TaskUtil.isIdle(), "无运行任务且队列为空时才算空闲");
+        }
+
+        @Test
+        @DisplayName("任务在队列中等待时不算空闲")
+        void notIdleWhenQueued() throws InterruptedException {
+            CountDownLatch release = new CountDownLatch(1);
+            try {
+                fill(release);
+                awaitSaturation();
+                assertFalse(TaskUtil.isIdle(), "队列里压着任务时不得判定为空闲");
+            } finally {
+                release.countDown();
+                awaitDrain();
+            }
+        }
+    }
+
+    /**
+     * <h2>shutdownAndAwait 优雅停机</h2>
+     *
+     * <p>本组用例会真正关掉<b>全进程共享</b>的线程池，且关掉后不可复原，
+     * 因此必须排在本类的最后执行（靠 {@code @Order} + {@code @TestMethodOrder} 保证）。</p>
+     */
+    @Nested
+    @Order(6)
+    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+    @DisplayName("shutdownAndAwait 优雅停机")
+    class ShutdownTest {
+
+        @Test
+        @Order(1)
+        @DisplayName("等待在途任务排空后返回 true")
+        void drainsInFlightTasks() throws InterruptedException {
+            AtomicInteger done = new AtomicInteger();
+            TaskUtil.run(() -> {
+                try {
+                    Thread.sleep(200L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                done.incrementAndGet();
+            });
+            assertTrue(TaskUtil.shutdownAndAwait(AWAIT_SECONDS, TimeUnit.SECONDS),
+                    "在途任务应在超时前排空并返回 true");
+            assertEquals(1, done.get(), "停机返回前在途任务必须已经执行完毕");
+        }
+
+        @Test
+        @Order(2)
+        @DisplayName("关闭后提交任务按「系统繁忙」拒绝，而不是静默丢弃")
+        void runAfterShutdownIsRejected() {
+            AtomicReference<Boolean> executed = new AtomicReference<>(Boolean.FALSE);
+            ServiceException e = assertThrows(ServiceException.class,
+                    () -> TaskUtil.run(() -> executed.set(Boolean.TRUE)),
+                    "线程池已关闭时提交必须让调用方感知");
+            assertTrue(e.getMessage().contains("繁忙"), "异常消息应说明是繁忙导致，具体为：" + e.getMessage());
+            assertEquals(Boolean.FALSE, executed.get(), "被拒绝的任务绝不能被执行");
+        }
+
+        @Test
+        @Order(3)
+        @DisplayName("线程池已关闭时重复调用同样返回 true")
+        void idempotentAfterShutdown() {
+            assertTrue(TaskUtil.shutdownAndAwait(AWAIT_SECONDS, TimeUnit.SECONDS),
+                    "已终止的线程池再次 awaitTermination 立即返回 true");
+        }
+
+        @Test
+        @Order(4)
+        @DisplayName("调用方已处于中断态时，中断位不得被吞掉")
+        void interruptFlagIsNotSwallowed() {
+            // 线程池已终止时 awaitTermination 在第一次状态检查就返回，不会进入
+            // 可中断的等待，因此本用例只能锁定「中断位不被清除」这一条；
+            // 返回 false 的分支要求线程池仍处于 SHUTDOWN 但未 TERMINATED，
+            // 也就是必须还有在途任务——而停机不可逆，同一 JVM 里无法再构造。
+            Thread.currentThread().interrupt();
+            try {
+                TaskUtil.shutdownAndAwait(AWAIT_SECONDS, TimeUnit.SECONDS);
+                assertTrue(Thread.currentThread().isInterrupted(),
+                        "停机等待不得清除调用方的中断位：被清除后 JDK 内部的锁与信号量"
+                                + "会停止响应中断，优雅停机会被拖长");
+            } finally {
+                Thread.interrupted();
             }
         }
     }

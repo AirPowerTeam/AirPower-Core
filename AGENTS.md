@@ -38,14 +38,18 @@ src/main/java/cn/hamm/airpower/core/
 ├── exception/ServiceException.java
 └── interfaces/    （5 个 SPI：IDictionary / IEntity / IException / IFunction / ITree）
 src/main/resources/logback.xml    # 默认日志格式（带 TRACE_ID 占位）
-src/test/java/...                  # 21 个 *Test.java，与公共类一一对应
+src/test/java/cn/hamm/airpower/core/    # 目录结构与主代码镜像，一个公共类一个 *Test
+├── *Test.java                    # 根包类（Json / HostUtil / NumberUtil / RandomUtil / StringUtil / TaskUtil / TraceUtil）
+├── access/ common/ crypto/ datetime/ desensitize/ dictionary/ exception/ export/ file/
+├── http/ reflect/ tree/ validate/
+└── fixture/                      # 跨包共享的测试模型，不是测试类
 ```
 
 ## 4. 三个核心抽象（最容易被外部继承/依赖，禁止改签名）
 
 | 类型            | 角色                                                                                   | 关键约束                                                                                                                          |
 |-----------------|----------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `RootModel`  | 数据模型基类，提供 `excludeReadOnly()` / `desensitize()` / `excludeNotMeta(whiteList)` | 集合里元素若是 `RootModel` 子类，会**就地修改**；`whiteList` 必须包含当前类自身，否则识别失败                                     |
+| `RootModel`     | 数据模型基类，提供 `excludeReadOnly()` / `desensitize()` / `excludeNotMeta(whiteList)` | 集合里元素若是 `RootModel` 子类，会**就地修改**；`whiteList` 必须包含当前类自身，否则识别失败                                     |
 | `Json`          | 既是响应包装（`code/message/data/traceId`），又是 Jackson 封装                         | 常量 `SUCCESS_CODE=200` / `SERVICE_ERROR=500` / `UNAUTHORIZED_CODE=401`；不要 `new ObjectMapper()`，统一 `Json.getObjectMapper()` |
 | `IException<T>` | 枚举式异常的 SPI，提供 `when / whenNull / whenEmpty / whenEquals / show()` 等链式断言  | 上层框架会按此接口实现各自的错误枚举                                                                                              |
 
@@ -71,7 +75,7 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 - `AesUtil`：算法 `AES/CBC/PKCS5Padding`，`key` 必须是 16 / 24 / 32 字节；每次操作新建 `Cipher`（ **不要缓存**，
   `Cipher` 非线程安全，缓存会在并发下出错）；`key` / `Base64` 密钥非法时统一抛 `ServiceException`
 - `RsaUtil`：RSA 2048 + `SHA256withRSA`，支持 PEM（Base64 字符串）密钥注入，分段加解密
-  （按**实际**密钥长度算 `- 11` / 无偏移，并与配置的 `keySize` 校验一致，不一致直接报错）；
+  （按 **实际**密钥长度算 `- 11` / 无偏移，并与配置的 `keySize` 校验一致，不一致直接报错）；
   私钥 PEM 头尾是 `PRIVATE KEY`（PKCS#8，与 `PKCS8EncodedKeySpec` 解析一致， **不要**改成 `RSA PRIVATE KEY`）
 - `Json.parse*` 失败统一包装为 `ServiceException`（不是 Jackson 原生异常），便于上层拦截器统一处理；`parse*` /
   `toString` 均捕获 `Exception`，因此 `null` 入参也会被包装
@@ -79,18 +83,25 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
   HTTP 响应体（`ExceptionInterceptor` 直接 `setData(exception.getData())`），异常一旦落在里面，
   其类型、message 与完整 `stackTrace`（类名、文件名、行号）全部泄露给前端。
   要保留原始异常用 `new ServiceException(msg, cause)`（`Throwable` 重载），堆栈需要落盘时由
-  `log.error(msg, cause)` 输出，**不要**抛给前端。
+  `log.error(msg, cause)` 输出， **不要**抛给前端。
   两个 `data` 重载已加运行期兜底：实参是 `Throwable` 时一律拒收并改挂 `cause`
 - **注释与日志只写约束，不写审计过程。** 写「为什么必须这样」和维护者无法从代码推得的
-  事实（如某个 JDK / Lombok 行为、某个 NIO 语义），**不要**写「原实现错在哪」「考虑过哪些方案」
+  事实（如某个 JDK / Lombok 行为、某个 NIO 语义）， **不要**写「原实现错在哪」「考虑过哪些方案」
   「实测如何如何」这类修复过程的叙述——那属于提交信息与 issue 档案，不属于代码
 
 ## 7. 测试约定
 
 - 框架： **JUnit 5 (`jupiter`) 5.11.0**；测试类名严格对应公共类（`XxxTest`）
+- **测试目录与主代码目录一一镜像**：主类的包路径即测试类的包路径（`cn.hamm.airpower.core.<pkg>`）；
+  跨包共享的测试模型统一放 `fixture/`，它们不是测试类
 - 修改 / 新增公共方法 **必须**附带测试，覆盖：正常路径、`null`、空集合 / 空串、最大最小边界、嵌套 `RootModel`
 - `ValidateUtil.valid(...)` 失败抛 `jakarta.validation.ValidationException`（ **不**是 `ServiceException`），调用方需自行处理
 - `RootModelTest` 是参考模板（嵌套 / 集合 / 边界场景齐全）
+- **`TaskUtil` 的线程池是全进程共享的静态单例**：`shutdownAndAwait` 会真正关掉它且不可复原，
+  相关用例必须靠 `@TestClassOrder` + `@Order` 排在最后，嵌套类内部还要各自加 `@TestMethodOrder`
+  （外层的排序注解不作用于嵌套类）
+- **断言必须与实际行为一致**：想锁定现状就在注释里写明「当前行为」，不要写成对 API 承诺的断言
+  （例如 `HostUtil.getHostName()` 在所有来源都失败时返回 `null`，就不该断言非空）
 
 ## 8. 缓存策略速查
 
@@ -98,7 +109,7 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 |---------------------|---------------------------------------|------------|-------------------|
 | 字段列表            | `ReflectUtil.FIELD_LIST_MAP`          | `Class<?>` | `computeIfAbsent` |
 | 声明字段            | `ReflectUtil.DECLARED_FIELD_LIST_MAP` | FQN        | `computeIfAbsent` |
-| 导出 CSV 字段       | `ExportUtil.EXPORT_FIELD_CACHE`   | `Class<?>` | `computeIfAbsent` |
+| 导出 CSV 字段       | `ExportUtil.EXPORT_FIELD_CACHE`       | `Class<?>` | `computeIfAbsent` |
 | `DateTimeFormatter` | `DateTimeUtil.FORMATTER_CACHE`        | pattern    | 线程安全          |
 | `HttpClient`        | `HttpUtil.httpClient`                 | 单例       | volatile + DCL    |
 
@@ -110,15 +121,15 @@ src/test/java/...                  # 21 个 *Test.java，与公共类一一对�
 - `RootModel.excludeNotMeta(whiteList)`：白名单必须含 `this.getClass()`，否则 `excludeFieldValueNotMeta` 会把非 `@Meta`
   字段清空；`desensitize()` **只脱敏、不排除非元数据字段**，两个功能相互独立（都要时依次调用
   `excludeNotMeta()` 与 `desensitize()`）
-- `HttpUtil`：基于 JDK `java.net.http.HttpClient`，仅适合简单 REST，不支持 HTTP/2 流式 / 复杂重试； **只有设置了
-  connectTimeout，没有请求级超时**，服务端不响应时会一直阻塞
-- `RandomUtil` 使用 `ThreadLocalRandom`， **测试不要假设全局序列**
+- `HttpUtil`：基于 JDK `java.net.http.HttpClient`，仅适合简单 REST，不支持 HTTP/2 流式 / 复杂重试；
+  `timeoutSecond` 同时用作建连超时与 **请求级超时**，服务端接受连接后不响应会被中断
+- `RandomUtil` 使用 `SecureRandom`（单个共享静态实例）， **测试不要假设全局序列或可复现**
 - `TaskUtil`：守护线程池，`corePoolSize = max(2, availableProcessors())`，JVM 退出前无需 `shutdown`；
   任务结束会 `TraceUtil.clearTraceId()` 清理 MDC
 - `ReflectUtil.getFieldList(null)` 直接抛 `ServiceException`；其他 `getAnnotation` 重载对 `null` 行为不一，调用前自行判空
 - `ReflectUtil.getLambdaFunctionName` 只去掉方法名开头的 `get` 前缀，方法名中间的 `get` 会保留
 - `AesUtil` 的 `algorithm` / `mode` 不可变（写死 `AES` / `CBC`），仅 `key` / `iv` / `padding` 可变
-- `RsaUtil` **不做任何缓存**（历史上缓存过 `KeyFactory`，已删除，**不要加回来**）：`KeyFactory.getInstance("RSA")` 实测约
+- `RsaUtil` **不做任何缓存**（历史上缓存过 `KeyFactory`，已删除， **不要加回来**）：`KeyFactory.getInstance("RSA")` 实测约
   0.15 µs，而解析私钥 1.6 µs、RSA 私钥运算 540 µs，缓存收益 <0.1%；且 `RsaUtil` 是 `create()` 链式工厂，上层
   （`airpower-open` 的 `OpenRequest`）每次请求新建实例只做一次运算，命中率天然为 0。缓存还会引入两个问题：普通字段
   非 `volatile` 的双字段撕裂（ARM 弱内存序下可能返回错误算法的工厂），以及把未承诺线程安全的 SPI 对象共享给多线程。

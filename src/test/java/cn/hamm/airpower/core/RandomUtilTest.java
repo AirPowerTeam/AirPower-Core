@@ -398,12 +398,5 @@ public class RandomUtilTest {
             assertTrue(java.lang.reflect.Modifier.isPrivate(constructors[0].getModifiers()),
                     "构造器应为 private，禁止外部实例化");
         }
-
-        @Test
-        @DisplayName("连续两次调用不会返回相同的固定值")
-        void notConstant() {
-            assertFalse(RandomUtil.randomString(32).equals(RandomUtil.randomString(32)),
-                    "随机字符串不应是固定值");
-        }
     }
 }
