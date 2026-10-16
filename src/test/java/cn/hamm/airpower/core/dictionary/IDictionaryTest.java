@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>枚举字典标准接口单元测试</h1>
+ * <h2>枚举字典标准接口单元测试</h2>
  *
  * @author Hamm.cn
  * @see IDictionary

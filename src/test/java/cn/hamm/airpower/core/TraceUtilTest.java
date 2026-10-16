@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>TraceUtil 单元测试</h1>
+ * <h2>TraceUtil 单元测试</h2>
  *
  * <p>MDC 为线程本地存储，因此所有读写断言均在同一线程内完成，异步线程场景单独通过 CountDownLatch 等待结果。</p>
  *

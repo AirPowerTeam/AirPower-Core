@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>TaskUtil 单元测试</h1>
+ * <h2>TaskUtil 单元测试</h2>
  *
  * <p>任务在线程池中异步执行，统一使用 CountDownLatch 等待结果，并为每个用例设置 15 秒超时防止挂死。</p>
  *

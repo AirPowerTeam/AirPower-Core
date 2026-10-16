@@ -26,7 +26,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>ExportUtil 单元测试</h1>
+ * <h2>ExportUtil 单元测试</h2>
  *
  * <p>本测试以<b>源码实际行为</b>为断言依据，刻意记录以下几处与注释/方法名不一致的行为：</p>
  * <ul>
@@ -97,7 +97,7 @@ class ExportUtilTest {
     }
 
     /**
-     * <h1>覆盖 @Export.Type 边界分支的辅助导出模型</h1>
+     * <h2>覆盖 @Export.Type 边界分支的辅助导出模型</h2>
      *
      * <p>仅用于验证“类型不匹配 / 缺少 @Dictionary”等分支，均被源码的异常吞噬逻辑回退为原值。</p>
      */
@@ -141,7 +141,7 @@ class ExportUtilTest {
     }
 
     /**
-     * <h1>记录单次写入长度的输出流</h1>
+     * <h2>记录单次写入长度的输出流</h2>
      *
      * <p>用于断言「确实是流式写出」：整表拼好再一次性写出的实现，单次
      * {@code write} 的长度会等于整个文件的体积；流式实现的单次写入不会超过缓冲区。</p>

@@ -9,7 +9,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>HTTP 请求方式枚举测试</h1>
+ * <h2>HTTP 请求方式枚举测试</h2>
  *
  * <p>{@link HttpUtil#getHttpRequest()} 用 {@code switch} 直接枚举全部取值，
  * 增删枚举值会静默改变请求方法，因此锁定数量、名称与顺序。</p>

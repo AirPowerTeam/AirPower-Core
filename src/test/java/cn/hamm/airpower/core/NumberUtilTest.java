@@ -11,7 +11,7 @@ import java.math.RoundingMode;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>NumberUtil 单元测试</h1>
+ * <h2>NumberUtil 单元测试</h2>
  *
  * <p>覆盖 {@code NumberUtil} 的 14 个 public 方法：
  * add / subtract / multiply 各 2 个重载（含可变参数的三种调用形态）、

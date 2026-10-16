@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>HostUtil 单元测试</h1>
+ * <h2>HostUtil 单元测试</h2>
  *
  * <p>主机名按 {@code InetAddress} → {@code hostname} 系统属性 → 环境变量逐级降级，
  * 三个来源都与运行环境相关，测试只能锁定源码自身保证的契约：</p>

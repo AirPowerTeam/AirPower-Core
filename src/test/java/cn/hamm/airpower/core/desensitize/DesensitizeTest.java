@@ -9,7 +9,7 @@ import static java.lang.annotation.ElementType.FIELD;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>字段脱敏注解测试</h1>
+ * <h2>字段脱敏注解测试</h2>
  *
  * <p>{@code @Desensitize} 的默认值与 {@code replace} 开关共同决定
  * {@code RootModel.desensitize()} 的输出；{@code head} / {@code tail} 只是下限，

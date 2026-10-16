@@ -59,7 +59,7 @@ src/test/java/cn/hamm/airpower/core/    # 目录结构与主代码镜像，一�
 2. **静态工具类**：`private XxxUtil() {}` + `@Contract(pure = true)`
 3. **Lombok**：常用 `@Slf4j` / `@Getter` / `@Setter` / `@Accessors(chain=true)` / `@Data`； **禁止 `@SneakyThrows`**
 4. **JetBrains 注解**：所有公开方法参数 / 返回值标 `@NotNull` / `@Nullable` / `@Contract`
-5. **中文 Javadoc + 中文注释**：公共 API 必带 `<h1>` 标题；`doclint=none` 已开启，标点无需转义
+5. **中文 Javadoc + 中文注释**：公共 API 必带 `<h2>` 标题；`doclint=none` 已开启，标点无需转义
 6. **返回集合**：用 `Collections.unmodifiableList` 或 `@Unmodifiable`
 7. **不要新增运行时依赖** —— 依赖受控；需新增先与维护者确认（保持库精简）
 
@@ -160,7 +160,7 @@ src/test/java/cn/hamm/airpower/core/    # 目录结构与主代码镜像，一�
    `~/.m2/wrapper/dists/apache-maven-3.9.9-bin/*/apache-maven-3.9.9/bin/mvn`）
     - 纯离线还需加 `-Dmaven.legacyLocalRepo=true`：本地仓库里 `surefire-junit-platform` 等构件的
       `_remote.repositories` 记录的仓库 ID 已失效，否则 `-o` 会报 "present, but unavailable"
-5. 改了公共 API → 更新 Javadoc（含 `<h1>` 标题）
+5. 改了公共 API → 更新 Javadoc（含 `<h2>` 标题）
 6. 测试断言必须与 **实际行为**一致；若断言的是缺陷行为，请在注释里写明原因
 
 ## 11. 文件改动索引

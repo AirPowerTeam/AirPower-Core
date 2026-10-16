@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * <h1>通用常量单元测试</h1>
+ * <h2>通用常量单元测试</h2>
  *
  * @author Hamm.cn
  */

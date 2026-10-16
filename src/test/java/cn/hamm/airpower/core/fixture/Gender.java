@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * <h1>测试用的枚举字典</h1>
+ * <h2>测试用的枚举字典</h2>
  *
  * @author Hamm.cn
  */

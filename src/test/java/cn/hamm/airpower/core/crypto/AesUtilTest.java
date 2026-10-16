@@ -12,7 +12,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>AES 加解密工具类测试</h1>
+ * <h2>AES 加解密工具类测试</h2>
  * <p>
  * 覆盖：链式工厂、密钥/偏移向量/填充模式配置、加解密往返、{@code null} 入参、
  * 密钥与偏移向量长度边界、非法 Base64、异常分支。

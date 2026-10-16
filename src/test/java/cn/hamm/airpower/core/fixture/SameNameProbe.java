@@ -4,7 +4,7 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 
 /**
- * <h1>同名类隔离加载测试用模型</h1>
+ * <h2>同名类隔离加载测试用模型</h2>
  *
  * <p>仅供 {@code ReflectUtilTest} 用自定义 {@code ClassLoader} 重复加载，
  * 用于验证字段缓存以 {@code Class} 为键时不会发生同名类串号。

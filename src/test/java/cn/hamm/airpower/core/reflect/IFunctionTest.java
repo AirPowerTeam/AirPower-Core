@@ -11,7 +11,7 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>可序列化函数接口测试</h1>
+ * <h2>可序列化函数接口测试</h2>
  *
  * @author Hamm.cn
  */

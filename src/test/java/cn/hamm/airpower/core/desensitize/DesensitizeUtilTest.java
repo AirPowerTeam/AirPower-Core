@@ -11,7 +11,7 @@ import java.lang.reflect.Modifier;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>DesensitizeUtil 单元测试</h1>
+ * <h2>DesensitizeUtil 单元测试</h2>
  *
  * <p>断言严格对齐 {@link DesensitizeUtil} 的实际实现行为，包括各类脱敏类型的最小保留长度抬升逻辑。</p>
  *

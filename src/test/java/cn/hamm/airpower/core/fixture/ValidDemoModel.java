@@ -13,7 +13,7 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 /**
- * <h1>校验测试用的数据模型</h1>
+ * <h2>校验测试用的数据模型</h2>
  *
  * <p>覆盖 {@code ValidateUtil.valid(...)} 需要的各种约束：
  * {@code @NotBlank} / {@code @NotNull} / {@code @Min} / {@code @Max} /

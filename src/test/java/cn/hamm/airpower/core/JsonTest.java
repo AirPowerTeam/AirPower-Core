@@ -24,7 +24,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>{@link Json} 的单元测试</h1>
+ * <h2>{@link Json} 的单元测试</h2>
  *
  * <p>覆盖：常量、{@code create}、{@code success}、{@code data}、{@code error} 的全部重载、
  * {@code show}、序列化 {@code toString}、反序列化 {@code parse}/{@code parseList}/

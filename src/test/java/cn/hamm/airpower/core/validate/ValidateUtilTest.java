@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>验证器工具类测试</h1>
+ * <h2>验证器工具类测试</h2>
  *
  * <p>所有断言均与 {@link ValidateUtil} / {@code PatternConstant} 源码实际行为对齐。</p>
  *

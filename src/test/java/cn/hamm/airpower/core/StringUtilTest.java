@@ -9,7 +9,7 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>StringUtil 单元测试</h1>
+ * <h2>StringUtil 单元测试</h2>
  *
  * <p>覆盖 {@code StringUtil} 的 9 个 public 方法（含同名重载），
  * 重点验证 {@code null} / 空串 / 纯空白 / 非 String 类型 {@link CharSequence} /

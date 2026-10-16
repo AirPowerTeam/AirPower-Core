@@ -18,7 +18,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>AccessToken 身份令牌工具类测试</h1>
+ * <h2>AccessToken 身份令牌工具类测试</h2>
  * <p>
  * 覆盖：链式配置、负载增删、过期时间设置、令牌生成与校验、
  * 各类异常分支，以及 {@link AccessTokenUtil.VerifiedToken} 的取值方法。

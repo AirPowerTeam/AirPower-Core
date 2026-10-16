@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>PatternConstant 单元测试</h1>
+ * <h2>PatternConstant 单元测试</h2>
  *
  * <p>直接覆盖每个预编译正则的边界行为。原先这些正则只能经 {@code ValidateUtil}
  * 间接触达，而 {@code ValidateUtilTest} 只测了其中五个方法，

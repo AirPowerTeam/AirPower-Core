@@ -10,7 +10,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>枚举单元测试</h1>
+ * <h2>枚举单元测试</h2>
  *
  * <p>覆盖 {@link DesensitizeType} 的取值与保留下限。{@code minHead} / {@code minTail}
  * 是脱敏的<b>保留下限</b>，被调小会让敏感位暴露出来，因此逐个断言。</p>

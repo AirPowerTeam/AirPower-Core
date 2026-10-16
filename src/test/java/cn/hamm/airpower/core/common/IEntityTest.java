@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * <h1>实体标准接口测试</h1>
+ * <h2>实体标准接口测试</h2>
  *
  * @author Hamm.cn
  */

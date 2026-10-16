@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>ServiceException 单元测试</h1>
+ * <h2>ServiceException 单元测试</h2>
  *
  * <p>覆盖全部构造器、{@code getCode} / {@code getData} / {@code getMessage} 读取，
  * 以及 {@code IException} 默认方法 {@code get} / {@code show} 的实现行为。</p>

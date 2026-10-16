@@ -10,7 +10,7 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>树结构处理工具类单元测试</h1>
+ * <h2>树结构处理工具类单元测试</h2>
  *
  * @author Hamm.cn
  * @see TreeUtil

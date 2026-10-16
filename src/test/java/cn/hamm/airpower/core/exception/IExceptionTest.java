@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>IException 单元测试</h1>
+ * <h2>IException 单元测试</h2>
  *
  * <p>使用测试夹具 {@link DemoError} 枚举，覆盖 {@code IException} 的全部默认方法与重载。</p>
  *

@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>RandomUtil 单元测试</h1>
+ * <h2>RandomUtil 单元测试</h2>
  *
  * <p>覆盖 {@code RandomUtil} 的 8 个 public 方法。随机类只断言
  * <b>长度 / 取值范围 / 字符集</b> 这类确定性性质，不比较具体随机值。</p>

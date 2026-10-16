@@ -9,7 +9,7 @@ import static java.lang.annotation.ElementType.METHOD;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>不脱敏标记注解测试</h1>
+ * <h2>不脱敏标记注解测试</h2>
  *
  * @author Hamm.cn
  */

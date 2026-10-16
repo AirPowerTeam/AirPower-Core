@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * <h1>HTTP 常量单元测试</h1>
+ * <h2>HTTP 常量单元测试</h2>
  *
  * <p>覆盖 {@link HttpConstant} 与全部内部常量类。这些常量直接参与请求拼装与响应判定，
  * 一旦被误改，线上会表现为「请求头莫名多一个」或「错误码判定失效」。</p>

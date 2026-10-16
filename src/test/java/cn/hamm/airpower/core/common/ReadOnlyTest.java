@@ -9,7 +9,7 @@ import static java.lang.annotation.ElementType.FIELD;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>只读标记注解测试</h1>
+ * <h2>只读标记注解测试</h2>
  *
  * <p>{@code @ReadOnly} 会被 {@code RootModel.excludeReadOnly()} 清空，只允许标在字段上。</p>
  *

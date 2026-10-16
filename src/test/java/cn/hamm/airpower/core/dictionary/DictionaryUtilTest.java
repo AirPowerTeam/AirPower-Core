@@ -15,7 +15,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>枚举字典工具类单元测试</h1>
+ * <h2>枚举字典工具类单元测试</h2>
  *
  * @author Hamm.cn
  * @see DictionaryUtil

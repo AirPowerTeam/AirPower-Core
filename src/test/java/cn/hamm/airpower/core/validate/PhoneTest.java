@@ -20,7 +20,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>电话验证注解测试</h1>
+ * <h2>电话验证注解测试</h2>
  *
  * @author Hamm.cn
  */

@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <h1>HttpUtil 单元测试</h1>
+ * <h2>HttpUtil 单元测试</h2>
  *
  * <p>使用 JDK 自带的 {@link com.sun.net.httpserver.HttpServer} 在本机随机端口启动测试服务器，
  * 覆盖工厂方法、链式赋值、请求头 / Cookie 透传、真实 GET / POST / PUT / DELETE 请求以及异常分支。</p>
