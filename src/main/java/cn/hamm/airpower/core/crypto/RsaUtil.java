@@ -1,6 +1,7 @@
 package cn.hamm.airpower.core.crypto;
 
 import cn.hamm.airpower.core.exception.ServiceException;
+import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -8,13 +9,17 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 /**
@@ -26,31 +31,41 @@ import java.util.concurrent.Callable;
 @Accessors(chain = true)
 public class RsaUtil {
     /**
-     * RSA
+     * RSA 加解密 transformation
      */
-    private static final String RSA = "RSA";
+    private static final String RSA = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
 
     /**
-     * PKCS#1 v1.5 填充占用的字节数
+     * 密钥算法名
      */
-    private static final int PKCS1_PADDING_BYTES = 11;
+    private static final String KEY_ALGORITHM = "RSA";
+
+    /**
+     * OAEP 填充占用的字节数（SHA-256 摘要为 32 字节，两次各占 32，加 2 字节头部）
+     */
+    private static final int OAEP_PADDING_BYTES = 2 * 32 + 2;
+
+    /**
+     * RSA 密钥最小长度
+     */
+    private static final int MIN_KEY_SIZE = 2048;
+
+    /**
+     * 允许的签名算法白名单
+     */
+    private static final Set<String> ALLOWED_SIGN_ALGORITHMS =
+            Set.of("SHA256withRSA", "SHA384withRSA", "SHA512withRSA", "SHA3-256withRSA", "SHA3-384withRSA", "SHA3-512withRSA");
 
     /**
      * 加密算法 KEY 长度
      */
-    @Setter
+    @Setter(AccessLevel.NONE)
     private int keySize = 2048;
-
-    /**
-     * 加密算法
-     */
-    @Setter
-    private String cryptAlgorithm = RSA;
 
     /**
      * 签名算法
      */
-    @Setter
+    @Setter(AccessLevel.NONE)
     private String signAlgorithm = "SHA256withRSA";
 
     /**
@@ -164,19 +179,54 @@ public class RsaUtil {
      * @param action 具体的加解密动作
      * @param <T>    返回类型
      * @return 动作结果
-     * @apiNote 统一在消息里拼一次前缀。注意这<b>并没有</b>避免「异常嵌套」：
-     * 内部若已抛 {@link ServiceException}，这里会把它重新包一层，消息变成
-     * "RSA 私钥加密失败，RSA 私钥未设置"。这是既有的重复文案行为，
-     * 修复需要改内部各处的抛异常方式，不在本次范围内
      */
     private static <T> T wrapException(@NotNull String prefix, @NotNull Callable<T> action) {
         try {
             return action.call();
+        } catch (ServiceException e) {
+            throw e;
         } catch (Exception e) {
-            // 保留原始异常作为 cause，同时只在消息里拼一次前缀，避免嵌套重复文案
-            // 走 (String, Throwable) 重载：异常只进 cause，不会被当成 data 回传前端
-            throw new ServiceException(prefix + "，" + e.getMessage(), e);
+            throw new ServiceException(prefix, e);
         }
+    }
+
+    /**
+     * 从密钥对象取实际密钥长度
+     *
+     * @param key 密钥
+     * @return 比特数
+     */
+    private static int keySizeOf(@NotNull java.security.interfaces.RSAKey key) {
+        return key.getModulus().bitLength();
+    }
+
+    /**
+     * 设置密钥长度
+     *
+     * @param keySize 密钥长度（位）
+     * @return 当前对象
+     */
+    public RsaUtil setKeySize(int keySize) {
+        if (keySize < MIN_KEY_SIZE) {
+            throw new ServiceException("RSA 密钥长度不得小于 " + MIN_KEY_SIZE + " 位，当前为 " + keySize + " 位");
+        }
+        this.keySize = keySize;
+        return this;
+    }
+
+    /**
+     * 设置签名算法
+     *
+     * @param signAlgorithm 签名算法
+     * @return 当前对象
+     */
+    public RsaUtil setSignAlgorithm(String signAlgorithm) {
+        if (!ALLOWED_SIGN_ALGORITHMS.contains(signAlgorithm)) {
+            throw new ServiceException("不支持的签名算法：" + signAlgorithm
+                    + "，允许的算法为 " + ALLOWED_SIGN_ALGORITHMS);
+        }
+        this.signAlgorithm = signAlgorithm;
+        return this;
     }
 
     /**
@@ -188,7 +238,7 @@ public class RsaUtil {
      */
     public PublicKey getPublicKey(String publicKeyString) throws Exception {
         byte[] encoded = decodeKey(publicKeyString, "RSA 公钥");
-        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        KeyFactory keyFactory = KeyFactory.getInstance(KEY_ALGORITHM);
         X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(encoded);
         return keyFactory.generatePublic(x509EncodedKeySpec);
     }
@@ -199,7 +249,7 @@ public class RsaUtil {
      * @return {@code KeyPair}
      */
     public KeyPair generateKeyPair() throws NoSuchAlgorithmException {
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(cryptAlgorithm);
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(KEY_ALGORITHM);
         keyPairGenerator.initialize(keySize);
         return keyPairGenerator.generateKeyPair();
     }
@@ -239,19 +289,9 @@ public class RsaUtil {
      */
     public @NotNull PrivateKey getPrivateKey(String privateKeyString) throws Exception {
         byte[] encoded = decodeKey(privateKeyString, "RSA 私钥");
-        KeyFactory keyFactory = KeyFactory.getInstance(cryptAlgorithm);
+        KeyFactory keyFactory = KeyFactory.getInstance(KEY_ALGORITHM);
         PKCS8EncodedKeySpec private8KeySpec = new PKCS8EncodedKeySpec(encoded);
         return keyFactory.generatePrivate(private8KeySpec);
-    }
-
-    /**
-     * 从密钥对象取实际密钥长度
-     *
-     * @param key 密钥
-     * @return 比特数
-     */
-    private static int keySizeOf(@NotNull java.security.interfaces.RSAKey key) {
-        return key.getModulus().bitLength();
     }
 
     /**
@@ -259,11 +299,9 @@ public class RsaUtil {
      *
      * @param key 密钥
      * @return 字节数
-     * @apiNote 按<b>实际</b>密钥长度计算：PKCS#1 v1.5 填充固定占 11 字节，
-     * 分块大小与密钥长度强相关，用配置值推算会与实际密钥不符
      */
     private int encryptBlockSize(@NotNull Key key) {
-        return checkKeySizeMatchesConfig(key) / 8 - PKCS1_PADDING_BYTES;
+        return checkKeySizeMatchesConfig(key) / 8 - OAEP_PADDING_BYTES;
     }
 
     /**
@@ -318,19 +356,6 @@ public class RsaUtil {
     }
 
     /**
-     * 私钥加密
-     *
-     * @param sourceContent 原文
-     * @return 密文
-     */
-    public final String privateKeyEncrypt(String sourceContent) {
-        return wrapException("RSA 私钥加密失败", () -> {
-            PrivateKey key = getPrivateKey(privateKey);
-            return encrypt(sourceContent, key, encryptBlockSize(key));
-        });
-    }
-
-    /**
      * 私钥签名
      *
      * @param sourceContent 原文
@@ -352,19 +377,6 @@ public class RsaUtil {
     }
 
     /**
-     * 公钥解密
-     *
-     * @param encryptedContent 密文
-     * @return 原文
-     */
-    public final @NotNull String publicKeyDecrypt(String encryptedContent) {
-        return wrapException("RSA 公钥解密失败", () -> {
-            int blockSize = keySize / 8;
-            return decrypt(encryptedContent, getPublicKey(publicKey), blockSize);
-        });
-    }
-
-    /**
      * 公私钥解密
      *
      * @param encryptedContent 密文
@@ -373,12 +385,12 @@ public class RsaUtil {
      * @return 明文
      */
     @Contract("_, _, _ -> new")
-    private @NotNull String decrypt(String encryptedContent, Key key, int blockSize) throws Exception {
+    private @NotNull String decrypt(String encryptedContent, Key key, int blockSize)
+            throws Exception {
         if (Objects.isNull(encryptedContent)) {
             throw new ServiceException("待解密的密文不能为 null");
         }
-        Cipher deCipher = Cipher.getInstance(cryptAlgorithm);
-        deCipher.init(Cipher.DECRYPT_MODE, key);
+        Cipher deCipher = initCipher(Cipher.DECRYPT_MODE, key);
         byte[] resultBytes = rsaDoFinal(deCipher, Base64.getDecoder().decode(encryptedContent), blockSize);
         // 固定 UTF-8：使用平台默认字符集会导致跨平台解密得到乱码
         return new String(resultBytes, StandardCharsets.UTF_8);
@@ -392,12 +404,25 @@ public class RsaUtil {
      * @param blockSize     区块大小
      * @return 密文
      */
-    private String encrypt(@NotNull String sourceContent, Key key, int blockSize) throws Exception {
-        Cipher cipher = Cipher.getInstance(cryptAlgorithm);
-        cipher.init(Cipher.ENCRYPT_MODE, key);
-        // 固定 UTF-8：sign/verify 已固定 UTF-8，加解密也必须一致
+    private String encrypt(@NotNull String sourceContent, Key key, int blockSize)
+            throws Exception {
+        Cipher cipher = initCipher(Cipher.ENCRYPT_MODE, key);
         byte[] resultBytes = rsaDoFinal(cipher, sourceContent.getBytes(StandardCharsets.UTF_8), blockSize);
         return Base64.getEncoder().encodeToString(resultBytes);
+    }
+
+    /**
+     * 创建并初始化 {@link Cipher}
+     *
+     * @param mode 加解密模式
+     * @param key  密钥
+     * @return 已初始化的 Cipher
+     */
+    private @NotNull Cipher initCipher(int mode, Key key) throws Exception {
+        Cipher cipher = Cipher.getInstance(RSA);
+        cipher.init(mode, key, new OAEPParameterSpec(
+                "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT));
+        return cipher;
     }
 
     /**

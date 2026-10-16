@@ -95,8 +95,13 @@ public class StringUtilTest {
                     "全角空格与制表符均视为空白，不包含有效字符");
             assertTrue(StringUtil.hasText((CharSequence) " a "), "两端有空格但中间有字符，应包含有效字符");
             assertTrue(StringUtil.hasText((CharSequence) "中文"), "中文应视为有效字符");
-            assertTrue(StringUtil.hasText((CharSequence) NBSP),
-                    "不间断空格不被 Character.isWhitespace 视为空白，应算作有效字符");
+            // 行为变更：NBSP(U+00A0) 语义上就是空白，必须计入 hasText=false。
+            // 否则 32 个不间断空格能同时通过「非空」与「长度>=32」两道检查，
+            // 构成一个零熵的「密钥」
+            assertFalse(StringUtil.hasText((CharSequence) NBSP),
+                    "不间断空格(U+00A0)语义上就是空白，不应算作有效字符");
+            assertFalse(StringUtil.hasText((CharSequence) "  "),
+                    "U+202F 窄不间断空格同样应视为空白");
         }
 
         @Test
@@ -109,7 +114,8 @@ public class StringUtilTest {
             assertFalse(StringUtil.hasText(FULL_WIDTH_SPACE), "仅含全角空格不应包含有效字符");
             assertTrue(StringUtil.hasText(" a "), "两端有空格但中间有字符，应包含有效字符");
             assertTrue(StringUtil.hasText("中文"), "中文应视为有效字符");
-            assertTrue(StringUtil.hasText(NBSP), "不间断空格不被 String.isBlank 视为空白，应算作有效字符");
+            assertFalse(StringUtil.hasText(NBSP),
+                    "不间断空格(U+00A0)语义上就是空白，不应算作有效字符");
         }
 
         @Test

@@ -1,9 +1,9 @@
 package cn.hamm.airpower.core.dictionary;
 
-import cn.hamm.airpower.core.reflect.ReflectUtil;
 import cn.hamm.airpower.core.StringUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.reflect.IFunction;
+import cn.hamm.airpower.core.reflect.ReflectUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -114,7 +114,7 @@ public class DictionaryUtil {
                 try {
                     item.put(StringUtil.uncapitalize(ReflectUtil.getLambdaFunctionName(lambda)), lambda.apply(enumItem));
                 } catch (Exception e) {
-                    log.error("获取字典可选项失败, {}", e.getMessage());
+                    throw new ServiceException("获取字典可选项失败, " + e.getMessage(), e);
                 }
             });
             mapList.add(item);

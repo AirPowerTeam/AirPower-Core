@@ -1,7 +1,7 @@
 package cn.hamm.airpower.core.tree;
 
-import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.common.IEntity;
+import cn.hamm.airpower.core.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.*;
 
@@ -18,15 +18,14 @@ import java.util.function.Function;
 @Slf4j
 public class TreeUtil {
     /**
-     * 树递归深度上限
-     * <p>超过这个深度就截断并告警。正常业务的树（部门、分类、BOM 工序）远远用不到，
-     * 而没有上限时一条脏数据造成的深链就会 StackOverflowError</p>
-     */
-    private static final int MAX_TREE_DEPTH = 1000;
-    /**
      * 根节点 ID
      */
     public static final long ROOT_ID = 0L;
+
+    /**
+     * 树递归深度上限
+     */
+    private static final int MAX_TREE_DEPTH = 200;
 
     /**
      * 禁止外部实例化
@@ -58,11 +57,11 @@ public class TreeUtil {
      * @param parentId 父级 ID
      * @param <E>      树节点类型
      * @return 树结构列表
-     * @apiNote 使用 Map 预构建 parentId -> children 映射，将时间复杂度从 O(n²) 优化到 O(n)
      */
     private static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeListOptimized(
             @NotNull List<E> list, long parentId
     ) {
+        @SuppressWarnings("AlibabaCollectionInitShouldAssignCapacity")
         Map<Long, List<E>> parentMap = new HashMap<>();
         Set<Long> declaredIds = new HashSet<>();
         for (E item : list) {

@@ -1,9 +1,9 @@
 package cn.hamm.airpower.core.fixture;
 
 import cn.hamm.airpower.core.common.RootModel;
-import cn.hamm.airpower.core.reflect.Description;
 import cn.hamm.airpower.core.dictionary.Dictionary;
 import cn.hamm.airpower.core.export.Export;
+import cn.hamm.airpower.core.reflect.Description;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -17,7 +17,7 @@ import lombok.experimental.Accessors;
  */
 @Data
 @Accessors(chain = true)
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = false)
 public class ExportDemoModel extends RootModel {
     /**
      * 主键

@@ -196,24 +196,28 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("异常分支：段数为 3 时原样返回")
+        @DisplayName("异常分支：段数为 3 时整串掩码（fail-closed）")
         void testIpv4WithThreeParts() {
-            assertEquals("1.2.3", DesensitizeUtil.desensitizeIpv4Address("1.2.3", "*"),
-                    "不是 4 段时应原样返回");
+            // 行为变更：不再原样返回，而是 fail-closed 整串掩码。
+            // 原样返回会让 IPv6 / CIDR / 域名 / 任意文本在标注了 @Desensitize(IP_V4)
+            // 的字段里明文外泄，而调用方看到注解完全有理由认为已脱敏——
+            // 静默不脱敏却看起来像成功，是脱敏工具最坏的失败模式
+            assertEquals("*****", DesensitizeUtil.desensitizeIpv4Address("1.2.3", "*"),
+                    "不是 4 段时必须整串掩码，不得原样返回");
         }
 
         @Test
-        @DisplayName("异常分支：段数为 5 时原样返回")
+        @DisplayName("异常分支：段数为 5 时整串掩码（fail-closed）")
         void testIpv4WithFiveParts() {
-            assertEquals("1.2.3.4.5", DesensitizeUtil.desensitizeIpv4Address("1.2.3.4.5", "*"),
-                    "超过 4 段时应原样返回");
+            assertEquals("*********", DesensitizeUtil.desensitizeIpv4Address("1.2.3.4.5", "*"),
+                    "超过 4 段时必须整串掩码，不得原样返回");
         }
 
         @Test
-        @DisplayName("异常分支：非 IP 文本原样返回")
+        @DisplayName("异常分支：非 IP 文本整串掩码（fail-closed）")
         void testIpv4WithPlainText() {
-            assertEquals("abc", DesensitizeUtil.desensitizeIpv4Address("abc"),
-                    "不含分隔符的文本应原样返回");
+            assertEquals("***", DesensitizeUtil.desensitizeIpv4Address("abc"),
+                    "非 IP 文本必须整串掩码，不得原样返回");
         }
 
         @Test
@@ -223,10 +227,10 @@ class DesensitizeUtilTest {
         }
 
         @Test
-        @DisplayName("边界值：多个分隔符原样返回")
+        @DisplayName("边界值：多个分隔符整串掩码（fail-closed）")
         void testIpv4WithOnlyDelimiters() {
-            assertEquals("...", DesensitizeUtil.desensitizeIpv4Address("..."),
-                    "全为分隔符时切分结果不足 4 段，应原样返回");
+            assertEquals("***", DesensitizeUtil.desensitizeIpv4Address("..."),
+                    "全为分隔符必须整串掩码，不得原样返回");
         }
 
         @Test
@@ -536,7 +540,7 @@ class DesensitizeUtilTest {
         @DisplayName("ipv4 为空串或纯空白时按原样返回")
         void blankIpv4ReturnsAsIs() {
             assertEquals("", DesensitizeUtil.desensitizeIpv4Address(""), "空串应原样返回");
-            assertEquals("   ", DesensitizeUtil.desensitizeIpv4Address("   "), "纯空白应原样返回");
+            assertEquals("", DesensitizeUtil.desensitizeIpv4Address("   "), "纯空白应归一为串");
         }
 
         @Test

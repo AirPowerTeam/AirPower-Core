@@ -1,9 +1,9 @@
 package cn.hamm.airpower.core;
 
 import cn.hamm.airpower.core.common.RootModel;
-import cn.hamm.airpower.core.validate.PatternConstant;
 import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.ValidDemoModel;
+import cn.hamm.airpower.core.validate.PatternConstant;
 import cn.hamm.airpower.core.validate.ValidateUtil;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.DisplayName;
@@ -166,20 +166,22 @@ class ValidateUtilTest {
         @Test
         @DisplayName("是否座机电话: 正反例（注意区号必须带连字符）")
         void isTelPhone() {
-            // TEL_PHONE = ^(((0\d{2,3})-)?((\d{7,8})|(400\d{7})|(800\d{7}))(-(\d{1,4}))?)$
-            // 区号分支中的「-」是必填的，没有 ? 量词，因此 "01012345678" 并不匹配
+            // TEL_PHONE = ^(?:\+?86)?(?:0\d{2,3}-?)?(?:\d{7,8}|400\d{7}|800\d{7})(?:-\d{1,4})?$
+            // 区号后的连字符改为可选：中文座机本来就常写成 01012345678，旧正则要求必带「-」是缺陷。
+            // 但分机前的连字符必须保留，否则 11 位手机号会被拆成「8 位号码 + 3 位分机」而误判通过
             assertTrue(ValidateUtil.isTelPhone("12345678"), "8 位纯号码应识别为座机");
             assertTrue(ValidateUtil.isTelPhone("1234567"), "7 位纯号码应识别为座机");
             assertTrue(ValidateUtil.isTelPhone("010-12345678"), "带连字符的区号应识别为座机");
             assertTrue(ValidateUtil.isTelPhone("0755-12345678-123"), "带分机号应识别为座机");
             assertTrue(ValidateUtil.isTelPhone("4001234567"), "400 客服号应识别为座机");
             assertTrue(ValidateUtil.isTelPhone("8001234567"), "800 客服号应识别为座机");
-            assertFalse(ValidateUtil.isTelPhone("01012345678"), "区号后缺连字符不匹配（源码正则缺陷）");
+            assertTrue(ValidateUtil.isTelPhone("01012345678"), "区号后缺连字符现在应识别为座机（已修复的正则缺陷）");
             assertFalse(ValidateUtil.isTelPhone("12345"), "位数不足 7 位");
-            assertFalse(ValidateUtil.isTelPhone("0101234567"), "区号后缺连字符且整体位数不足");
             assertFalse(ValidateUtil.isTelPhone("40012345678"), "400 号码固定 10 位，多一位不匹配");
             assertFalse(ValidateUtil.isTelPhone("010-123456789"), "分机号超过 4 位");
             assertFalse(ValidateUtil.isTelPhone("+8613800138000"), "手机号不是座机");
+            // 关键回归：分机连字符一旦变可选，手机号会被「8 位 + 3 位分机」吃掉
+            assertFalse(ValidateUtil.isTelPhone("13812345678"), "11 位手机号不得被当成分机拆开而通过");
         }
 
         @Test
@@ -421,10 +423,13 @@ class ValidateUtilTest {
     class Valid {
 
         @Test
-        @DisplayName("模型为 null 时直接返回，不抛异常")
+        @DisplayName("模型为 null 时抛 ServiceException（fail-closed，不再静默放行）")
         void nullModel() {
             ValidDemoModel model = null;
-            assertDoesNotThrow(() -> ValidateUtil.valid(model), "模型为 null 时应直接返回");
+            // 旧行为是静默 return，等于对 null 无条件放行：
+            // 「先判断再校验」的调用方会拿到一个虚假的通过，随后 NPE 或写入半成品实体
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                    () -> ValidateUtil.valid(model), "模型为 null 时必须拒绝，而不是静默通过");
         }
 
         @Test

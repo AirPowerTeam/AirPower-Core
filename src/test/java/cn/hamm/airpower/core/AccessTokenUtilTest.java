@@ -766,9 +766,10 @@ class AccessTokenUtilTest {
             // 修复前这里是普通加法，会静默回绕成负数，令牌一签发就过期
             long overflowingSecond = Long.MAX_VALUE / DateTimeUtil.MILLISECONDS_PER_SECOND;
 
-            assertThrows(ArithmeticException.class,
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
                     () -> AccessTokenUtil.create().setExpireSecond(overflowingSecond),
-                    "总时间越过 Long.MAX_VALUE 时必须抛异常，而不是静默回绕成一个负的过期时间");
+                    "总时间越过 Long.MAX_VALUE 时必须抛 ServiceException，"
+                            + "而不是静默回绕成一个负的过期时间或抛出裸 ArithmeticException");
         }
     }
 
@@ -830,9 +831,10 @@ class AccessTokenUtilTest {
         void addExactProtectsAgainstWrap() {
             // 当前时间约 1.78e12，传 Long.MAX_VALUE 时普通加法会溢出成负数，
             // 令牌一签发就过期，而且没有任何异常
-            assertThrows(ArithmeticException.class,
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
                     () -> AccessTokenUtil.create().setPayloadId(1L).setExpireMillisecond(Long.MAX_VALUE),
-                    "溢出必须抛异常：静默回绕成负数会让令牌立刻失效");
+                    "溢出必须抛 ServiceException：静默回绕成负数会让令牌立刻失效，"
+                            + "而裸 ArithmeticException 会逃逸 @ExceptionHandler(ServiceException)");
         }
 
         @Test

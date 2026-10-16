@@ -1,8 +1,8 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.common.Meta;
 import cn.hamm.airpower.core.common.RootModel;
 import cn.hamm.airpower.core.desensitize.Desensitize;
-import cn.hamm.airpower.core.common.Meta;
 import cn.hamm.airpower.core.desensitize.DesensitizeType;
 import cn.hamm.airpower.core.fixture.DemoModel;
 import cn.hamm.airpower.core.fixture.ExportDemoModel;
@@ -78,6 +78,78 @@ class RootModelTest {
                 .setSecret("secret-value")
                 .setSecretNumber(1234)
                 .setEmail(EMAIL);
+    }
+
+    /**
+     * 外层模型：用于验证与自身类型不同的嵌套模型也能被脱敏
+     */
+    @Data
+    @EqualsAndHashCode(callSuper = false)
+    @Accessors(chain = true)
+    static class NestedHolder extends RootModel {
+        /**
+         * 嵌套模型
+         */
+        @Meta
+        private ContactModel child;
+
+        /**
+         * 模型集合
+         */
+        @Meta
+        private List<ContactModel> children;
+    }
+
+    /**
+     * 联系人模型：含脱敏字段与非元数据字段
+     */
+    @Data
+    @EqualsAndHashCode(callSuper = false)
+    @Accessors(chain = true)
+    static class ContactModel extends RootModel {
+        /**
+         * 手机号
+         */
+        @Meta
+        @Desensitize(value = DesensitizeType.MOBILE)
+        private String mobile;
+
+        /**
+         * 非元数据字段
+         */
+        private String remark;
+
+        /**
+         * 嵌套的联系人
+         */
+        @Meta
+        private ContactModel child;
+
+        /**
+         * 联系人集合
+         */
+        @Meta
+        private List<ContactModel> children;
+    }
+
+    /**
+     * 用于验证环检测的模型：{@code peer} 可指向自身或另一个同类模型
+     */
+    @Data
+    @EqualsAndHashCode(callSuper = false)
+    @Accessors(chain = true)
+    static class CycleModel extends RootModel {
+        /**
+         * 同类模型
+         */
+        @Meta
+        private CycleModel peer;
+
+        /**
+         * 姓名
+         */
+        @Meta
+        private String name;
     }
 
     @Nested
@@ -731,58 +803,6 @@ class RootModelTest {
         }
     }
 
-    /**
-     * 外层模型：用于验证与自身类型不同的嵌套模型也能被脱敏
-     */
-    @Data
-    @EqualsAndHashCode(callSuper = true)
-    @Accessors(chain = true)
-    static class NestedHolder extends RootModel {
-        /**
-         * 嵌套模型
-         */
-        @Meta
-        private ContactModel child;
-
-        /**
-         * 模型集合
-         */
-        @Meta
-        private List<ContactModel> children;
-    }
-
-    /**
-     * 联系人模型：含脱敏字段与非元数据字段
-     */
-    @Data
-    @EqualsAndHashCode(callSuper = true)
-    @Accessors(chain = true)
-    static class ContactModel extends RootModel {
-        /**
-         * 手机号
-         */
-        @Meta
-        @Desensitize(value = DesensitizeType.MOBILE)
-        private String mobile;
-
-        /**
-         * 非元数据字段
-         */
-        private String remark;
-
-        /**
-         * 嵌套的联系人
-         */
-        @Meta
-        private ContactModel child;
-
-        /**
-         * 联系人集合
-         */
-        @Meta
-        private List<ContactModel> children;
-    }
-
     @Nested
     @DisplayName("Map 容器内的模型也必须被过滤")
     class MapValueTest {
@@ -869,25 +889,5 @@ class RootModelTest {
             assertDoesNotThrow(() -> a.excludeNotMetaAndDesensitize(List.of(), true),
                     "空白名单走 excludeNotMetaAll 分支，同样依赖 visited 拦环");
         }
-    }
-
-    /**
-     * 用于验证环检测的模型：{@code peer} 可指向自身或另一个同类模型
-     */
-    @Data
-    @EqualsAndHashCode(callSuper = true)
-    @Accessors(chain = true)
-    static class CycleModel extends RootModel {
-        /**
-         * 同类模型
-         */
-        @Meta
-        private CycleModel peer;
-
-        /**
-         * 姓名
-         */
-        @Meta
-        private String name;
     }
 }

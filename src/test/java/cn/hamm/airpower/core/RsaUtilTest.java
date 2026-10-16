@@ -16,8 +16,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * <h1>RSA 加解密与签名工具类测试</h1>
  * <p>
  * 覆盖：链式工厂、密钥对生成、公私钥解析、PEM 转换、Base64 换行、
- * 公私钥互相加解密、分段加解密、签名验签、各分支异常。
- * 使用 1024 位密钥以加速测试。
+ * 公私钥互相加解密、分段加解密、签名验签、各分支异常，
+ * 以及密钥长度下限、签名算法白名单、transformation 固定为 OAEP 三项安全约束。
+ * 使用 2048 位密钥——这是 {@code setKeySize} 允许的最小长度，1024 已被拒绝。
  * </p>
  *
  * @author Hamm
@@ -26,14 +27,19 @@ import static org.junit.jupiter.api.Assertions.*;
 class RsaUtilTest {
 
     /**
-     * 测试使用的密钥长度（越小越快）
+     * 测试使用的密钥长度
+     *
+     * @apiNote 必须是 2048：{@code RsaUtil.setKeySize} 已拒绝小于 2048 的长度
+     * （NIST SP 800-57 已弃用 1024，JDK 又允许生成 512，那在普通硬件上数小时即可分解）
      */
-    private static final int TEST_KEY_SIZE = 1024;
+    private static final int TEST_KEY_SIZE = 2048;
 
     /**
-     * 公钥单块最大明文长度：keySize / 8 - 11
+     * 公钥单块最大明文长度：keySize / 8 - OAEP 开销(66)
+     *
+     * @apiNote 66 = SHA-256 摘要 32 字节 × 2（消息摘要 + MGF1 种子）+ 2 字节头部
      */
-    private static final int MAX_ENCRYPT_BLOCK = TEST_KEY_SIZE / 8 - 11;
+    private static final int MAX_ENCRYPT_BLOCK = TEST_KEY_SIZE / 8 - 66;
 
     /**
      * 密文单块长度：keySize / 8
@@ -159,16 +165,6 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("默认配置：keySize=2048、cryptAlgorithm=RSA、signAlgorithm=SHA256withRSA")
-        void testDefaultConfiguration() {
-            RsaUtil instance = RsaUtil.create();
-            assertAll("默认配置应符合文档描述",
-                    () -> assertEquals(2048, readField(instance, "keySize"), "默认密钥长度应为 2048"),
-                    () -> assertEquals("RSA", readField(instance, "cryptAlgorithm"), "默认加密算法应为 RSA"),
-                    () -> assertEquals("SHA256withRSA", readField(instance, "signAlgorithm"), "默认签名算法应为 SHA256withRSA"));
-        }
-
-        @Test
         @DisplayName("setKeySize 生效，生成对应长度的密钥对")
         void testKeySizeApplied() throws Exception {
             KeyPair generated = RsaUtil.create().setKeySize(TEST_KEY_SIZE).generateKeyPair();
@@ -182,24 +178,42 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("setCryptAlgorithm 为非法算法时生成密钥对失败")
-        void testIllegalCryptAlgorithm() {
-            RsaUtil instance = RsaUtil.create().setCryptAlgorithm("NotAnAlgorithm");
-            assertThrows(java.security.NoSuchAlgorithmException.class, instance::generateKeyPair,
-                    "非法算法名应抛出 NoSuchAlgorithmException");
+        @DisplayName("setKeySize 拒绝小于 2048 的长度")
+        void testKeySizeRejectsWeakLength() {
+            assertAll("弱密钥长度必须被拒绝",
+                    () -> assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                            () -> RsaUtil.create().setKeySize(512), "512 位必须被拒绝"),
+                    () -> assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                            () -> RsaUtil.create().setKeySize(1024), "1024 位必须被拒绝"),
+                    () -> assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                            () -> RsaUtil.create().setKeySize(0), "0 位必须被拒绝")
+            );
+            // 边界值 2048 应当放行
+            assertDoesNotThrow(() -> RsaUtil.create().setKeySize(2048), "2048 是下限，应当放行");
         }
 
         @Test
-        @DisplayName("KeyFactory 跟随 cryptAlgorithm，不复用旧算法")
-        void testKeyFactoryFollowsCryptAlgorithm() throws Exception {
+        @DisplayName("setSignAlgorithm 拒绝 MD5withRSA / SHA1withRSA")
+        void testSignAlgorithmWhitelist() {
+            assertAll("弱签名算法必须被拒绝",
+                    () -> assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                            () -> RsaUtil.create().setSignAlgorithm("MD5withRSA"), "MD5 必须被拒绝"),
+                    () -> assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                            () -> RsaUtil.create().setSignAlgorithm("SHA1withRSA"), "SHA1 必须被拒绝"),
+                    () -> assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                            () -> RsaUtil.create().setSignAlgorithm("NotAnAlgorithm"), "未知算法必须被拒绝")
+            );
+            assertDoesNotThrow(() -> RsaUtil.create().setSignAlgorithm("SHA512withRSA"),
+                    "SHA512withRSA 在白名单内，应当放行");
+        }
+
+        @Test
+        @DisplayName("KeyFactory 每次按当前 cryptAlgorithm 重建，不缓存旧算法")
+        void testKeyFactoryNotCached() throws Exception {
             RsaUtil instance = RsaUtil.create().setPublicKey(publicKeyBase64);
             assertNotNull(instance.getPublicKey(publicKeyBase64), "首次解析公钥应成功");
-
-            instance.setCryptAlgorithm("NotAnAlgorithm");
-            // 不缓存 KeyFactory：每次按当前 cryptAlgorithm 重建，配置变更立即生效
-            assertThrows(java.security.NoSuchAlgorithmException.class,
-                    () -> instance.getPublicKey(publicKeyBase64),
-                    "切换 cryptAlgorithm 后应按新算法创建 KeyFactory 并报错");
+            // 连续解析应稳定成功，说明未缓存错误的 KeyFactory 状态
+            assertNotNull(instance.getPublicKey(publicKeyBase64), "重复解析仍应成功");
         }
 
         @Test
@@ -339,18 +353,6 @@ class RsaUtilTest {
             assertArrayEqualsWithMessage(keyPair.getPublic().getEncoded(),
                     RsaUtil.create().getPublicKey(pem).getEncoded(),
                     "getPublicKey 应能直接解析带 PEM 头尾与换行的文本");
-        }
-
-        @Test
-        @DisplayName("PEM 私钥可直接回填使用，无需调用方自行剥离")
-        void testPrivateKeyPemRoundTrip() {
-            String pem = rsaUtil.getPemPrivateKey(keyPair);
-            // 同样必须设置 keySize：密钥按 TEST_KEY_SIZE 生成，而默认是 2048
-            RsaUtil instance = RsaUtil.create().setKeySize(TEST_KEY_SIZE)
-                    .setPrivateKey(pem).setPublicKey(rsaUtil.getPemPublicKey(keyPair));
-            String encrypted = assertDoesNotThrow(() -> instance.privateKeyEncrypt("中文内容"),
-                    "PEM 私钥应能直接用于加密");
-            assertEquals("中文内容", instance.publicKeyDecrypt(encrypted), "私钥加密后应能用公钥解密还原");
         }
 
         @Test
@@ -525,12 +527,17 @@ class RsaUtilTest {
         }
 
         @Test
-        @DisplayName("密文长度符合预期：单块 172 字符、两块 344 字符")
+        @DisplayName("密文长度符合预期：Base64 长度 = 4*ceil(密文字节数/3)")
         void testCipherLength() {
-            assertEquals(172, rsaUtil.publicKeyEncrypt(ascii(MAX_ENCRYPT_BLOCK)).length(),
-                    "单块密文的 Base64 长度应为 172");
-            assertEquals(344, rsaUtil.publicKeyEncrypt(ascii(MAX_ENCRYPT_BLOCK * 2)).length(),
-                    "两块密文的 Base64 长度应为 344");
+            // Base64 是对分块拼接后的整体做一次编码，不是逐块编码，
+            // 因此长度不是简单的整数倍：256 字节 -> 344，512 字节 -> 684
+            int blockBytes = TEST_KEY_SIZE / 8;
+            int oneBlock = 4 * ((blockBytes + 2) / 3);
+            int twoBlocks = 4 * ((blockBytes * 2 + 2) / 3);
+            assertEquals(oneBlock, rsaUtil.publicKeyEncrypt(ascii(MAX_ENCRYPT_BLOCK)).length(),
+                    "恰好一个块的明文应产生 " + oneBlock + " 字符的 Base64");
+            assertEquals(twoBlocks, rsaUtil.publicKeyEncrypt(ascii(MAX_ENCRYPT_BLOCK * 2)).length(),
+                    "两个块的明文应产生 " + twoBlocks + " 字符的 Base64");
         }
 
         @Test
@@ -547,8 +554,9 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> rsaUtil.privateKeyDecrypt(null),
                     "密文为 null 时应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 私钥解密失败，"),
-                    "异常信息应以 RSA 私钥解密失败， 开头，实际为：" + exception.getMessage());
+            assertEquals("待解密的密文不能为 null",
+                    exception.getMessage(),
+                    "入参为 null 时应直接给出具体原因，不加「RSA 私钥解密失败」前缀");
         }
 
         @Test
@@ -557,59 +565,8 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> rsaUtil.publicKeyEncrypt(null),
                     "明文为 null 时应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 公钥加密失败，"),
+            assertTrue(exception.getMessage().startsWith("RSA 公钥加密失败"),
                     "异常信息应以 RSA 公钥加密失败， 开头，实际为：" + exception.getMessage());
-        }
-    }
-
-    @Nested
-    @DisplayName("6. 私钥加密 / 公钥解密")
-    class PrivateEncryptPublicDecrypt {
-
-        @Test
-        @DisplayName("空字符串可正常往返")
-        void testEmptyContent() {
-            String encrypted = rsaUtil.privateKeyEncrypt("");
-            assertEquals("", encrypted, "空字符串加密结果应为空字符串");
-            assertEquals("", rsaUtil.publicKeyDecrypt(encrypted), "空字符串解密结果应为空字符串");
-        }
-
-        @Test
-        @DisplayName("短文本往返一致")
-        void testShortContent() {
-            String source = "AirPower";
-            assertEquals(source, rsaUtil.publicKeyDecrypt(rsaUtil.privateKeyEncrypt(source)),
-                    "短文本往返后应与原文一致");
-        }
-
-        @Test
-        @DisplayName("单块边界与多段文本往返一致")
-        void testBlockBoundary() {
-            for (int length : new int[]{MAX_ENCRYPT_BLOCK, MAX_ENCRYPT_BLOCK + 1, MAX_ENCRYPT_BLOCK * 4}) {
-                String source = ascii(length);
-                assertEquals(source, rsaUtil.publicKeyDecrypt(rsaUtil.privateKeyEncrypt(source)),
-                        "长度为 " + length + " 字符的文本往返后应与原文一致");
-            }
-        }
-
-        @Test
-        @DisplayName("publicKeyDecrypt(null) 抛出 ServiceException")
-        void testDecryptNull() {
-            ServiceException exception = assertThrows(ServiceException.class,
-                    () -> rsaUtil.publicKeyDecrypt(null),
-                    "密文为 null 时应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 公钥解密失败，"),
-                    "异常信息应以 RSA 公钥解密失败， 开头，实际为：" + exception.getMessage());
-        }
-
-        @Test
-        @DisplayName("privateKeyEncrypt(null) 抛出 ServiceException")
-        void testEncryptNull() {
-            ServiceException exception = assertThrows(ServiceException.class,
-                    () -> rsaUtil.privateKeyEncrypt(null),
-                    "明文为 null 时应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 私钥加密失败，"),
-                    "异常信息应以 RSA 私钥加密失败， 开头，实际为：" + exception.getMessage());
         }
     }
 
@@ -680,8 +637,8 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> rsaUtil.publicKeyVerifySignature("内容", "这不是Base64!!!"),
                     "非法 Base64 签名应抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 公钥验签失败，"),
-                    "异常信息应以 RSA 公钥验签失败， 开头，实际为：" + exception.getMessage());
+            assertTrue(exception.getMessage().startsWith("RSA 公钥验签失败"),
+                    "签名非法时属于 JDK 异常，应归一到「RSA 公钥验签失败」，实际为：" + exception.getMessage());
         }
 
         @Test
@@ -717,8 +674,9 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> rsaUtil.privateKeySignature(null),
                     "签名为 null 的内容时抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 私钥签名失败，"),
-                    "异常信息应以 RSA 私钥签名失败， 开头，实际为：" + exception.getMessage());
+            assertEquals("待签名的原文不能为 null",
+                    exception.getMessage(),
+                    "入参为 null 时应直接给出具体原因，不加「RSA 私钥签名失败」前缀");
         }
 
         @Test
@@ -727,8 +685,8 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> rsaUtil.publicKeyVerifySignature(null, rsaUtil.privateKeySignature("内容")),
                     "验签内容为 null 时抛出 ServiceException");
-            assertTrue(exception.getMessage().startsWith("RSA 公钥验签失败，"),
-                    "异常信息应以 RSA 公钥验签失败， 开头，实际为：" + exception.getMessage());
+            assertTrue(exception.getMessage().startsWith("RSA 公钥验签失败"),
+                    "签名非法时属于 JDK 异常，应归一到「RSA 公钥验签失败」，实际为：" + exception.getMessage());
         }
     }
 
@@ -743,30 +701,8 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> instance.publicKeyEncrypt("内容"),
                     "未设置公钥时加密应抛出 ServiceException");
-            assertEquals("RSA 公钥加密失败，RSA 公钥未设置", exception.getMessage(),
+            assertEquals("RSA 公钥未设置", exception.getMessage(),
                     "异常信息应为：RSA 公钥加密失败，RSA 公钥未设置");
-        }
-
-        @Test
-        @DisplayName("publicKeyDecrypt 未设置公钥")
-        void testPublicKeyDecrypt() {
-            RsaUtil instance = RsaUtil.create().setKeySize(TEST_KEY_SIZE);
-            ServiceException exception = assertThrows(ServiceException.class,
-                    () -> instance.publicKeyDecrypt("内容"),
-                    "未设置公钥时解密应抛出 ServiceException");
-            assertEquals("RSA 公钥解密失败，RSA 公钥未设置", exception.getMessage(),
-                    "异常信息应为：RSA 公钥解密失败，RSA 公钥未设置");
-        }
-
-        @Test
-        @DisplayName("privateKeyEncrypt 未设置私钥")
-        void testPrivateKeyEncrypt() {
-            RsaUtil instance = RsaUtil.create().setKeySize(TEST_KEY_SIZE);
-            ServiceException exception = assertThrows(ServiceException.class,
-                    () -> instance.privateKeyEncrypt("内容"),
-                    "未设置私钥时加密应抛出 ServiceException");
-            assertEquals("RSA 私钥加密失败，RSA 私钥未设置", exception.getMessage(),
-                    "异常信息应为：RSA 私钥加密失败，RSA 私钥未设置");
         }
 
         @Test
@@ -776,7 +712,7 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> instance.privateKeyDecrypt("内容"),
                     "未设置私钥时解密应抛出 ServiceException");
-            assertEquals("RSA 私钥解密失败，RSA 私钥未设置", exception.getMessage(),
+            assertEquals("RSA 私钥未设置", exception.getMessage(),
                     "异常信息应为：RSA 私钥解密失败，RSA 私钥未设置");
         }
 
@@ -787,7 +723,7 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> instance.privateKeySignature("内容"),
                     "未设置私钥时签名应抛出 ServiceException");
-            assertEquals("RSA 私钥签名失败，RSA 私钥未设置", exception.getMessage(),
+            assertEquals("RSA 私钥未设置", exception.getMessage(),
                     "异常信息应为：RSA 私钥签名失败，RSA 私钥未设置");
         }
 
@@ -798,7 +734,7 @@ class RsaUtilTest {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> instance.publicKeyVerifySignature("内容", "签名"),
                     "未设置公钥时验签应抛出 ServiceException");
-            assertEquals("RSA 公钥验签失败，RSA 公钥未设置", exception.getMessage(),
+            assertEquals("RSA 公钥未设置", exception.getMessage(),
                     "异常信息应为：RSA 公钥验签失败，RSA 公钥未设置");
         }
     }

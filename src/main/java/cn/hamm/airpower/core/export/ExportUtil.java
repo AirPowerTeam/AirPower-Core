@@ -1,13 +1,13 @@
 package cn.hamm.airpower.core.export;
 
-import cn.hamm.airpower.core.common.RootModel;
 import cn.hamm.airpower.core.StringUtil;
-import cn.hamm.airpower.core.reflect.Description;
-import cn.hamm.airpower.core.dictionary.Dictionary;
+import cn.hamm.airpower.core.common.RootModel;
 import cn.hamm.airpower.core.datetime.DateTimeUtil;
+import cn.hamm.airpower.core.dictionary.Dictionary;
 import cn.hamm.airpower.core.dictionary.DictionaryUtil;
-import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.dictionary.IDictionary;
+import cn.hamm.airpower.core.exception.ServiceException;
+import cn.hamm.airpower.core.reflect.Description;
 import cn.hamm.airpower.core.reflect.ReflectUtil;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -83,6 +83,11 @@ public class ExportUtil {
     private static final ConcurrentHashMap<Class<?>, List<Field>> EXPORT_FIELD_CACHE = new ConcurrentHashMap<>();
 
     /**
+     * 导出字段缓存的容量上限
+     */
+    private static final int EXPORT_FIELD_CACHE_LIMIT = 512;
+
+    /**
      * 禁止外部实例化
      */
     @Contract(pure = true)
@@ -118,6 +123,7 @@ public class ExportUtil {
      * @param <T>        数据类型
      * @return 空集合
      */
+    @Contract("null -> new")
     private static <T> @NotNull Collection<T> newCollection(Class<?> fieldClass) {
         // 必须用 isAssignableFrom：调用方传的是运行时实际类（data.getClass()），
         // HashSet / TreeSet / PersistentSet 都不等于 Set.class
@@ -296,6 +302,9 @@ public class ExportUtil {
      * @apiNote 结果按类缓存，同一个类重复导出不重复扫描字段
      */
     public static <M extends RootModel> @Unmodifiable @NotNull List<Field> getExportFieldList(Class<M> itemClass) {
+        if (EXPORT_FIELD_CACHE.size() > EXPORT_FIELD_CACHE_LIMIT) {
+            EXPORT_FIELD_CACHE.clear();
+        }
         //noinspection unchecked
         return EXPORT_FIELD_CACHE.computeIfAbsent(itemClass, clazz -> buildExportFieldList((Class<M>) clazz));
     }

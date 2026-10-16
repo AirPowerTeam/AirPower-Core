@@ -1,9 +1,9 @@
 package cn.hamm.airpower.core.http;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.file.FileUtil;
 import cn.hamm.airpower.core.http.HttpConstant.Header;
-import cn.hamm.airpower.core.exception.ServiceException;
-import lombok.Data;
+import lombok.*;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
@@ -32,8 +32,11 @@ import static cn.hamm.airpower.core.http.HttpMethod.GET;
  * @author Hamm.cn
  */
 @Slf4j
-@Data
+@Getter
+@Setter
 @Accessors(chain = true, makeFinal = true)
+@ToString(exclude = {"httpClient", "headers", "cookies", "body"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class HttpUtil {
     /**
      * 默认超时秒
@@ -54,8 +57,19 @@ public class HttpUtil {
     private static final String COOKIE_FORBIDDEN = ";,=\r\n";
 
     /**
-     * HTTP 客户端
+     * 共享的 HTTP 客户端
      */
+    private static final HttpClient SHARED_HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(DEFAULT_TIMEOUT_SECOND))
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+
+    /**
+     * HTTP 客户端
+     *
+     * @apiNote 仅由 {@link #create(ProxyConfig, int)} 赋值，不对外暴露 setter
+     */
+    @Setter(AccessLevel.NONE)
     private HttpClient httpClient;
 
     /**
@@ -86,6 +100,7 @@ public class HttpUtil {
     /**
      * 超时时间（秒），同时用作建连超时与请求级超时
      */
+    @Setter(AccessLevel.NONE)
     private int timeoutSecond = DEFAULT_TIMEOUT_SECOND;
 
     /**
@@ -112,23 +127,27 @@ public class HttpUtil {
             throw new ServiceException("超时时间必须大于0秒，当前为 " + timeoutSecond + " 秒");
         }
         HttpUtil httpUtil = new HttpUtil();
+        if (Objects.isNull(proxyConfig)) {
+            httpUtil.timeoutSecond = timeoutSecond;
+            httpUtil.httpClient = SHARED_HTTP_CLIENT;
+            return httpUtil;
+        }
         HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
         // 添加 proxy 代理
-        if (Objects.nonNull(proxyConfig)) {
-            httpClientBuilder.proxy(new ProxySelector() {
-                @Override
-                public List<Proxy> select(URI uri) {
-                    return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
-                }
+        httpClientBuilder.proxy(new ProxySelector() {
+            @Override
+            public List<Proxy> select(URI uri) {
+                return List.of(new Proxy(proxyConfig.getType(), new InetSocketAddress(proxyConfig.getHost(), proxyConfig.getPort())));
+            }
 
-                @Override
-                public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-                    // 代理不可用时至少留下告警，否则上层只会看到一个没有上下文的连接失败
-                    log.warn("通过代理({})访问({})失败, {}", proxyConfig.getHost(), uri, ioe.getMessage());
-                }
-            });
-        }
+            @Override
+            public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+                // 代理不可用时至少留下告警，否则上层只会看到一个没有上下文的连接失败
+                log.warn("通过代理({})访问({})失败, {}", proxyConfig.getHost(), uri, ioe.getMessage());
+            }
+        });
         httpClientBuilder.connectTimeout(Duration.ofSeconds(timeoutSecond));
+        httpClientBuilder.followRedirects(HttpClient.Redirect.NEVER);
         // 同时作为请求级超时，避免服务端接受连接后不响应导致调用线程永久挂起
         httpUtil.timeoutSecond = timeoutSecond;
         httpUtil.httpClient = httpClientBuilder.build();
@@ -169,6 +188,7 @@ public class HttpUtil {
      *
      * @return 响应处理器
      */
+    @Contract(pure = true)
     private static @NotNull HttpResponse.BodyHandler<String> boundedStringBodyHandler() {
         return responseInfo -> HttpResponse.BodySubscribers.mapping(
                 new BoundedByteArrayBodySubscriber(MAX_RESPONSE_BYTES),
@@ -190,6 +210,20 @@ public class HttpUtil {
                         "Cookie " + kind + "包含非法字符（位置 " + i + "），拒绝拼进请求头以防注入");
             }
         }
+    }
+
+    /**
+     * 设置超时时间（秒）
+     *
+     * @param timeoutSecond 超时秒数
+     * @return 当前对象
+     */
+    public HttpUtil setTimeoutSecond(int timeoutSecond) {
+        if (timeoutSecond <= 0) {
+            throw new ServiceException("超时时间必须大于0秒，当前为 " + timeoutSecond + " 秒");
+        }
+        this.timeoutSecond = timeoutSecond;
+        return this;
     }
 
     /**
@@ -299,17 +333,26 @@ public class HttpUtil {
      * @return HttpResponse
      */
     public final @NotNull HttpResponse<String> send() {
+        HttpRequest request = getHttpRequest();
         try {
-            return httpClient.send(getHttpRequest(), boundedStringBodyHandler());
+            return httpClient.send(request, boundedStringBodyHandler());
         } catch (InterruptedException e) {
             // 必须恢复中断位，否则 JDK 内部的锁与信号量会停止响应中断，拖长优雅停机
             Thread.currentThread().interrupt();
-            throw new ServiceException("发起请求被中断，" + e.getMessage(), e);
+            throw new ServiceException("发起请求被中断", e);
+        } catch (ServiceException e) {
+            throw e;
+        } catch (IOException e) {
+            Throwable cause = e.getCause();
+            while (Objects.nonNull(cause)) {
+                if (cause instanceof ServiceException serviceException) {
+                    throw serviceException;
+                }
+                cause = cause.getCause();
+            }
+            throw new ServiceException("发起请求失败", e);
         } catch (Exception e) {
-            // 保留原始异常，便于上层区分超时、连接失败或请求非法。
-            // 走 (String, Throwable) 重载：cause 由构造器设置，异常不会被当成 data 回传前端。
-            // 不要再调 initCause —— cause 已存在时它会抛 IllegalStateException
-            throw new ServiceException("发起请求失败，" + e.getMessage(), e);
+            throw new ServiceException("发起请求失败", e);
         }
     }
 
@@ -325,8 +368,17 @@ public class HttpUtil {
         if (Objects.isNull(body)) {
             body = "";
         }
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException("非法的请求地址: " + url, e);
+        }
+        if (Objects.isNull(uri.getHost())) {
+            throw new ServiceException("非法的请求地址: " + url);
+        }
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                .uri(URI.create(url))
+                .uri(uri)
                 .timeout(Duration.ofSeconds(timeoutSecond));
         headers.forEach((key, value) -> requestBuilder.header(key, value.toString()));
         HttpRequest.BodyPublisher bodyPublisher = HttpRequest.BodyPublishers.ofString(body);
@@ -337,6 +389,7 @@ public class HttpUtil {
             case DELETE -> requestBuilder.DELETE();
             // HttpRequest.BodyPublishers 没有 PATCH 的便捷方法，只能用 method
             case PATCH -> requestBuilder.method("PATCH", bodyPublisher);
+            default -> throw new ServiceException("不支持的 HTTP 方法: " + method);
         }
         if (Objects.nonNull(cookies) && !cookies.isEmpty()) {
             List<String> cookieList = new ArrayList<>(cookies.size());
@@ -352,10 +405,6 @@ public class HttpUtil {
             );
         }
         if (Objects.nonNull(contentType)) {
-            // 必须用 setHeader（替换）而不是 header（追加）：
-            // 调用方若用 addHeader("Content-Type", ...) 传过，这里再追加一次，
-            // 同一个请求就会带两个 Content-Type。很多服务端/网关对重复头
-            // 是「取第一个」或直接 400，而第三方 API 往往只报「参数错误」，极难定位
             requestBuilder.setHeader(Header.CONTENT_TYPE, contentType);
         }
         return requestBuilder.build();
@@ -376,9 +425,6 @@ public class HttpUtil {
 
     /**
      * <h2>带上限的响应体收集器</h2>
-     *
-     * <p>累积收到的字节，超过上限立即以异常结束 {@link CompletionStage}。
-     * 必须在 {@code onNext} 里判断——等读完再判断就失去意义了。</p>
      */
     private static final class BoundedByteArrayBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {
         /**
@@ -397,6 +443,14 @@ public class HttpUtil {
         private final CompletableFuture<byte[]> result = new CompletableFuture<>();
 
         /**
+         * 底层订阅
+         *
+         * @apiNote onSubscribe 由 JDK 的 HTTP 客户端线程调用，onNext 由其数据线程调用，
+         * 用 volatile 保证可见性；不 volatile 的话 onNext 可能看到 null 而跳过 cancel
+         */
+        private volatile Flow.Subscription subscription;
+
+        /**
          * 构造
          *
          * @param maxBytes 字节上限
@@ -412,9 +466,11 @@ public class HttpUtil {
 
         @Override
         public void onSubscribe(Flow.Subscription subscription) {
+            // 必须把 subscription 存下来：不存就永远无法 cancel()，
+            // 「限制响应体大小」就只限制了本方的堆占用，管不住网络传输本身
+            this.subscription = subscription;
             // 与 JDK 内置的 BodySubscribers.ofByteArray() 一致：一次性订阅全部。
-            // 上限判断在 onNext 里做，超限即 completeExceptionally，
-            // 后续分片不再累积
+            // 上限判断在 onNext 里做，超限即 cancel + completeExceptionally
             subscription.request(Long.MAX_VALUE);
         }
 
@@ -424,8 +480,12 @@ public class HttpUtil {
                 for (ByteBuffer chunk : item) {
                     int remaining = maxBytes - buffer.size();
                     if (chunk.remaining() > remaining) {
-                        // 超出上限：直接失败，不再读取后续数据
-                        result.completeExceptionally(new IOException(
+                        // 超出上限：先取消订阅真正停掉传输，再让 future 失败。
+                        // cancel() 幂等，重复调用安全。
+                        // 这里刻意抛 ServiceException 而不是 IOException：
+                        // send() 会对 ServiceException 原样上抛，这条消息正是写给调用方看的
+                        cancelSubscription();
+                        result.completeExceptionally(new ServiceException(
                                 "响应体超过上限 " + maxBytes + " 字节，已中止读取"));
                         return;
                     }
@@ -436,6 +496,16 @@ public class HttpUtil {
             } catch (IOException | RuntimeException e) {
                 // ByteArrayOutputStream.write 不抛 IOException，这里一并兜住以防将来改动
                 result.completeExceptionally(e);
+            }
+        }
+
+        /**
+         * 取消底层订阅，真正停止数据传输
+         */
+        private void cancelSubscription() {
+            Flow.Subscription current = subscription;
+            if (Objects.nonNull(current)) {
+                current.cancel();
             }
         }
 

@@ -4,10 +4,8 @@ import cn.hamm.airpower.core.exception.ServiceException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Locale;
+import java.security.SecureRandom;
 import java.util.Objects;
-import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -23,27 +21,20 @@ public class RandomUtil {
     private static final int DEFAULT_LENGTH = 32;
 
     /**
-     * 小写字母
-     */
-    private static final String BASE_CHAR = "abcdefghijklmnopqrstuvwxyz";
-
-    /**
      * 数字
      */
     private static final String BASE_NUMBER = "0123456789";
 
     /**
-     * 小写字母和数字
+     * 密码学安全随机源
      */
-    private static final String BASE_CHAR_NUMBER_LOWER = BASE_CHAR + BASE_NUMBER;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
-     * 大写和小写字母
-     *
-     * @apiNote 固定 {@link Locale#ROOT}：土耳其语环境下 "i".toUpperCase() 得到
-     * 带点的 "İ"，产出的随机串会混入非 ASCII 字符
+     * 安全字符表表
      */
-    private static final String BASE_CHAR_NUMBER = BASE_CHAR.toUpperCase(Locale.ROOT) + BASE_CHAR_NUMBER_LOWER;
+    private static final String SAFE_CHARS =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     /**
      * 禁止外部实例化
@@ -54,7 +45,7 @@ public class RandomUtil {
     }
 
     /**
-     * 获取随机字节数组
+     * 获取密码学安全的随机字节数组
      *
      * @param length 长度（字节）
      * @return 随机字节数组
@@ -64,15 +55,12 @@ public class RandomUtil {
             throw new ServiceException("随机字节数组长度不能小于0");
         }
         byte[] bytes = new byte[length];
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int i = 0; i < length; i++) {
-            bytes[i] = (byte) random.nextInt(256);
-        }
+        SECURE_RANDOM.nextBytes(bytes);
         return bytes;
     }
 
     /**
-     * 获取 {@code 32} 字节的随机字节数组
+     * 获取 {@code 32} 字节的密码学安全随机字节数组
      *
      * @return 随机字节数组
      */
@@ -81,7 +69,24 @@ public class RandomUtil {
     }
 
     /**
-     * 获取 {@code 32} 个字符的随机字符串（大小写字母 + 数字）
+     * 获取密码学安全的随机字符串
+     *
+     * @param length 长度（字符）
+     * @return 随机字符串，字符集为 URL/文件名安全的 base64url
+     */
+    public static @NotNull String randomString(int length) {
+        if (length <= 0) {
+            throw new ServiceException("随机字符串长度不能为负数");
+        }
+        StringBuilder builder = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            builder.append(SAFE_CHARS.charAt(SECURE_RANDOM.nextInt(SAFE_CHARS.length())));
+        }
+        return builder.toString();
+    }
+
+    /**
+     * 获取 {@code 32} 位的密码学安全随机字符串
      *
      * @return 随机字符串
      */
@@ -90,13 +95,12 @@ public class RandomUtil {
     }
 
     /**
-     * 获取指定位数的随机字符串
+     * 获取密码学安全的随机 {@code int}
      *
-     * @param length 字符串的长度
-     * @return 随机字符串
+     * @return 随机 int
      */
-    public static @NotNull String randomString(final int length) {
-        return randomString(BASE_CHAR_NUMBER, length);
+    public static int randomInt() {
+        return SECURE_RANDOM.nextInt();
     }
 
     /**
@@ -132,24 +136,16 @@ public class RandomUtil {
     }
 
     /**
-     * 获取一个随机整数
-     *
-     * @return 随机数
-     * @apiNote 无上界版本，<b>返回值可能为负数</b>，需要非负请用带下界的重载
-     * @see Random#nextInt()
-     */
-    public static int randomInt() {
-        return getRandom().nextInt();
-    }
-
-    /**
      * 获得 {@code [0, upperBound)} 范围内的随机数
      *
      * @param upperBound 上界（不包含）
      * @return 随机数
      */
     public static int randomInt(final int upperBound) {
-        return getRandom().nextInt(upperBound);
+        if (upperBound <= 0) {
+            throw new ServiceException("随机数上界必须大于0，当前为 " + upperBound);
+        }
+        return randomInt(0, upperBound, true, false);
     }
 
     /**
@@ -173,21 +169,16 @@ public class RandomUtil {
      * @return 随机数
      */
     public static int randomInt(int min, int max, final boolean includeMin, final boolean includeMax) {
-        if (!includeMin) {
-            min++;
+        long origin = includeMin ? min : (long) min + 1;
+        long bound = includeMax ? (long) max + 1 : max;
+        if (bound <= origin) {
+            throw new ServiceException("随机数区间非法，min=" + min + "，max=" + max
+                    + "，includeMin=" + includeMin + "，includeMax=" + includeMax);
         }
-        if (includeMax) {
-            max++;
+        if (bound > Integer.MAX_VALUE) {
+            throw new ServiceException("随机数区间的开区间上界超出 int 可表示范围，min=" + min + "，max=" + max
+                    + "，includeMin=" + includeMin + "，includeMax=" + includeMax);
         }
-        return getRandom().nextInt(min, max);
-    }
-
-    /**
-     * 获取当前线程的随机数生成器
-     *
-     * @return 随机数生成器
-     */
-    private static ThreadLocalRandom getRandom() {
-        return ThreadLocalRandom.current();
+        return SECURE_RANDOM.nextInt((int) origin, (int) bound);
     }
 }

@@ -273,9 +273,41 @@ class FileUtilTest {
         }
 
         @Test
-        @DisplayName("空串会变成一个分隔符")
+        @DisplayName("空串必须被拒绝（不再静默变成根目录 /）")
         void emptyString() {
-            assertEquals(File.separator, FileUtil.formatDirectory(""), "空串应变成一个分隔符");
+            // 旧行为是 formatDirectory("") -> "/"，而后续的 startsWith(base) 校验
+            // 在 base 为 "/" 时恒真，等于把写入位置悄悄改到了文件系统根目录
+            assertThrows(ServiceException.class, () -> FileUtil.formatDirectory(""),
+                    "空串必须抛异常，不能变成根目录");
+        }
+
+        @Test
+        @DisplayName("根目录 / 应被拒绝作为写入基准目录")
+        void rootDirectoryRejectedAsBase() {
+            // formatDirectory 只是字符串拼接，不校验语义；但作为写入根目录时必须走 assertSafeBaseDirectory
+            assertEquals(File.separator, FileUtil.formatDirectory(File.separator),
+                    "字符串格式化层面根目录原样返回");
+            assertThrows(ServiceException.class, () -> FileUtil.assertSafeBaseDirectory(File.separator),
+                    "根目录不得作为写入基准目录");
+            assertThrows(ServiceException.class, () -> FileUtil.assertSafeBaseDirectory("/"),
+                    "根目录不得作为写入基准目录");
+            assertThrows(ServiceException.class, () -> FileUtil.assertSafeBaseDirectory(""),
+                    "空串不得作为写入基准目录");
+            assertThrows(ServiceException.class, () -> FileUtil.assertSafeBaseDirectory("  "),
+                    "空白串不得作为写入基准目录");
+            assertThrows(ServiceException.class, () -> FileUtil.assertSafeBaseDirectory("relative/dir"),
+                    "相对路径不得作为写入基准目录");
+            assertDoesNotThrow(() -> FileUtil.assertSafeBaseDirectory(tempDir.toString()),
+                    "绝对的非根目录应当放行");
+        }
+
+        @Test
+        @DisplayName("saveFile 写入根目录时被拒绝，不会落到 /")
+        void saveFileRejectsFilesystemRoot() {
+            // 旧实现在 macOS 上会被 SIP 拦下（只读文件系统），Linux/root 容器里会真的写成功
+            assertThrows(ServiceException.class,
+                    () -> FileUtil.saveFile(File.separator, "audit_should_not_exist.txt", "x".getBytes()),
+                    "以根目录为基准的写入必须被拒绝");
         }
 
         @Test

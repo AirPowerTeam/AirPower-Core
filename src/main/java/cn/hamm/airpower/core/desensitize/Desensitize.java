@@ -35,17 +35,15 @@ public @interface Desensitize {
     /**
      * 脱敏符号
      *
-     * @apiNote <ul>
-     * <li>{@link #replace()} == {@code false} 提交的数据包含脱敏符号，则该类数据不更新到数据库</li>
-     * <li>{@link #replace()} == {@code true} 提交的数据和脱敏符号一致，则该类数据不更新到数据库</li>
-     * </ul>
+     * @apiNote 掩码字符
      */
     String symbol() default "*";
 
     /**
-     * 是否替换
+     * 是否整体替换
      *
-     * @apiNote 如标记为 {@code true}, 则整体脱敏为符号，而不是单个字符替换
+     * @apiNote {@code false}（默认）按 {@link DesensitizeType} 的 head/tail 做部分掩码，
+     * 例如 {@code 138****5678}；{@code true} 则把整个字段值替换为 {@link #symbol()}
      */
     boolean replace() default false;
 

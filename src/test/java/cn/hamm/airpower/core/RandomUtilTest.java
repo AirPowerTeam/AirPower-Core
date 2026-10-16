@@ -271,12 +271,12 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("randomInt(exclude) 在 exclude 小于等于 0 时抛 IllegalArgumentException")
+        @DisplayName("randomInt(exclude) 在 exclude 小于等于 0 时抛 ServiceException")
         void withNonPositiveExclude() {
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(0),
-                    "exclude 为 0 时 ThreadLocalRandom.nextInt 要求 bound 为正");
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(-1),
-                    "exclude 为负数时同样抛 IllegalArgumentException");
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class, () -> RandomUtil.randomInt(0),
+                    "exclude 为 0 时应抛 ServiceException，而非 JDK 原生的 IllegalArgumentException");
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class, () -> RandomUtil.randomInt(-1),
+                    "exclude 为负数时同样应抛 ServiceException");
         }
 
         @Test
@@ -298,12 +298,12 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("randomInt(min, max) 在 min 大于等于 max 时抛 IllegalArgumentException")
+        @DisplayName("randomInt(min, max) 在 min 大于等于 max 时抛 ServiceException")
         void minNotLessThanMax() {
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(5, 5),
-                    "min 等于 max 时区间为空，抛 IllegalArgumentException");
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(5, 3),
-                    "min 大于 max 时抛 IllegalArgumentException");
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class, () -> RandomUtil.randomInt(5, 5),
+                    "min 等于 max 时区间为空，应抛 ServiceException");
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class, () -> RandomUtil.randomInt(5, 3),
+                    "min 大于 max 时应抛 ServiceException");
         }
 
         @Test
@@ -316,20 +316,30 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("四参重载：includeMin=false 且 min == max 时抛 IllegalArgumentException")
+        @DisplayName("四参重载：includeMin=false 且 min == max 时抛 ServiceException")
         void fourArgsOriginReachesBound() {
-            // min 由 5 自增为 6，max 由 5 自增为 6，调整后 origin == bound
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(5, 5, false, true),
-                    "调整后 origin 等于 bound，抛 IllegalArgumentException");
+            // min 由 5 自增为 6，max 由 5 自增为 6，调整后 origin == bound，区间为空
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                    () -> RandomUtil.randomInt(5, 5, false, true),
+                    "调整后 origin 等于 bound，应抛 ServiceException");
         }
 
         @Test
-        @DisplayName("四参重载：min 大于 max 时抛 IllegalArgumentException")
+        @DisplayName("四参重载：min 大于 max 时抛 ServiceException")
         void fourArgsInvalidRange() {
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(5, 3, true, true),
-                    "min 大于 max 时抛 IllegalArgumentException");
-            assertThrows(IllegalArgumentException.class, () -> RandomUtil.randomInt(5, 3, false, false),
-                    "即使不包含端点，min 大于 max 仍抛 IllegalArgumentException");
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                    () -> RandomUtil.randomInt(5, 3, true, true), "min 大于 max 时应抛 ServiceException");
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                    () -> RandomUtil.randomInt(5, 3, false, false), "即使不包含端点，min 大于 max 仍抛 ServiceException");
+        }
+
+        @Test
+        @DisplayName("四参重载：max 为 Integer.MAX_VALUE 时不发生整型回绕")
+        void fourArgsNoIntegerOverflow() {
+            // 旧实现对 int 做 max++，MAX_VALUE 会回绕成 MIN_VALUE，得到一个非法的负区间
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
+                    () -> RandomUtil.randomInt(1, Integer.MAX_VALUE, true, true),
+                    "边界运算必须用 long，回绕得到的非法区间应被拒绝");
         }
 
         @Test
@@ -363,12 +373,16 @@ public class RandomUtilTest {
         }
 
         @Test
-        @DisplayName("四参重载：includeMax=true 且 max 为 Integer.MAX_VALUE 时整数溢出抛异常")
+        @DisplayName("四参重载：includeMax=true 且 max 为 Integer.MAX_VALUE 时不发生整型回绕")
         void fourArgsIntegerOverflowOnMax() {
-            // max 自增后从 Integer.MAX_VALUE 回绕为 Integer.MIN_VALUE，导致 bound <= origin
-            assertThrows(IllegalArgumentException.class,
+            // 旧实现对 int 做 max++，MAX_VALUE 回绕成 MIN_VALUE，区间变成负数并由 JDK 抛裸异常；
+            // 现在改用 long 运算并显式拒绝装不进 int 的开区间上界
+            assertThrows(cn.hamm.airpower.core.exception.ServiceException.class,
                     () -> RandomUtil.randomInt(1, Integer.MAX_VALUE, true, true),
-                    "includeMax=true 时 max++ 溢出，抛 IllegalArgumentException（源码未防溢出）");
+                    "开区间上界 2^31 超出 int 表示范围，必须抛 ServiceException");
+            // 不含最大值时上界就是 Integer.MAX_VALUE，应当正常工作
+            assertDoesNotThrow(() -> RandomUtil.randomInt(1, Integer.MAX_VALUE, true, false),
+                    "不含最大值时区间合法，应当放行");
         }
     }
 

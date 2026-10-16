@@ -3,8 +3,6 @@ package cn.hamm.airpower.core.common;
 import cn.hamm.airpower.core.desensitize.Desensitize;
 import cn.hamm.airpower.core.desensitize.DesensitizeUtil;
 import cn.hamm.airpower.core.reflect.ReflectUtil;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -19,9 +17,7 @@ import java.util.function.Consumer;
  *
  * @author Hamm.cn
  */
-@Getter
 @Slf4j
-@EqualsAndHashCode
 public class RootModel {
     /**
      * 是否是继承自 RootModel

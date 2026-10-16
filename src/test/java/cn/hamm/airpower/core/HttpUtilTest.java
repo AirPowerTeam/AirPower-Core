@@ -1,8 +1,8 @@
 package cn.hamm.airpower.core;
 
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.http.HttpConstant;
 import cn.hamm.airpower.core.http.HttpMethod;
-import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.http.HttpUtil;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -52,52 +52,43 @@ class HttpUtilTest {
      * 本地测试服务器
      */
     /**
+     * 测试服务器已处理的请求次数（用于确认请求确实到达服务端，避免「请求头为 null」断言被空跑误判）
+     */
+    private static final AtomicInteger receivedCount = new AtomicInteger();
+    /**
      * 测试服务器收到的 Content-Type 头个数
      * <p>HttpRequest.Builder.header() 是追加语义，重复头在这里被计数暴露出来</p>
      */
     private static int recordedContentTypeCount;
-
     private static HttpServer server;
-
     /**
      * 测试服务器线程池
      */
     private static ExecutorService executor;
-
     /**
      * 测试服务器基础地址
      */
     private static String baseUrl;
-
     /**
      * 服务端收到的请求方法
      */
     private static volatile String recordedMethod;
-
     /**
      * 服务端收到的请求体
      */
     private static volatile String recordedBody;
-
     /**
      * 服务端收到的 Content-Type 请求头
      */
     private static volatile String recordedContentType;
-
     /**
      * 服务端收到的自定义请求头
      */
     private static volatile String recordedCustomHeader;
-
     /**
      * 服务端收到的 Cookie 请求头
      */
     private static volatile String recordedCookie;
-
-    /**
-     * 测试服务器已处理的请求次数（用于确认请求确实到达服务端，避免「请求头为 null」断言被空跑误判）
-     */
-    private static final AtomicInteger receivedCount = new AtomicInteger();
 
     /**
      * 启动本地测试服务器（随机端口）
@@ -516,22 +507,38 @@ class HttpUtilTest {
     @Timeout(20)
     class ExceptionTest {
         @Test
-        @DisplayName("url 为 null 时应抛出 ServiceException 并保留原始异常")
+        @DisplayName("url 为 null 时应抛出 ServiceException，消息直指根因")
         void testUrlIsNull() {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().get(), "url 为 null 时应抛出业务异常");
-            assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
+            // getHttpRequest() 已移出 send() 的 try，不会再被包装成「发起请求失败」：
+            // 一个明确的参数错误不该被伪装成网络故障
+            assertEquals("请求地址不能为空", exception.getMessage(), "消息应直指根因，不被二次包装");
             assertEquals(Json.SERVICE_ERROR, exception.getCode(), "异常码应为默认的服务错误码");
-            assertNotNull(exception.getCause(), "包装异常应保留原始异常作为 cause，便于上层定位根因");
         }
 
         @Test
-        @DisplayName("url 为非法字符串时应抛出 ServiceException")
+        @DisplayName("url 为非法字符串时应抛出 ServiceException（不得泄漏 JDK 原生异常）")
         void testUrlIsIllegal() {
             ServiceException exception = assertThrows(ServiceException.class,
-                    () -> HttpUtil.create().setUrl("这不是一个URL").get(), "非法 url 应抛出业务异常");
-            assertTrue(exception.getMessage().startsWith("发起请求失败"), "异常消息应以「发起请求失败」开头");
-            assertNotNull(exception.getCause(), "包装异常应保留 URI 解析的原始异常作为 cause");
+                    () -> HttpUtil.create().setUrl("这不是一个URL").get(),
+                    "非法 url 必须抛 ServiceException；URI.create 原本抛的 IllegalArgumentException "
+                            + "会逃逸 @ExceptionHandler(ServiceException)");
+            assertTrue(exception.getMessage().startsWith("非法的请求地址"),
+                    "消息应说明是地址非法，实际：" + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("url 含非法字符时应抛出 ServiceException 并保留 URI 解析异常为 cause")
+        void testUrlWithIllegalChars() {
+            // 这里的字符串会让 URI.create 本身抛 IllegalArgumentException（而非解析成相对引用）
+            ServiceException exception = assertThrows(ServiceException.class,
+                    () -> HttpUtil.create().setUrl("http://exa mple.com").get(),
+                    "含空格的 url 必须抛 ServiceException");
+            assertTrue(exception.getMessage().startsWith("非法的请求地址"),
+                    "消息应说明是地址非法，实际：" + exception.getMessage());
+            assertInstanceOf(IllegalArgumentException.class, exception.getCause(),
+                    "应保留 URI 解析的原始异常作为 cause");
         }
 
         @Test
@@ -539,10 +546,7 @@ class HttpUtilTest {
         void testUrlIsEmpty() {
             ServiceException exception = assertThrows(ServiceException.class,
                     () -> HttpUtil.create().setUrl("").get(), "空 url 应抛出业务异常");
-            assertEquals("发起请求失败，请求地址不能为空", exception.getMessage(),
-                    "应由 send 统一加上「发起请求失败」前缀，同时保留明确的根因提示");
-            assertInstanceOf(ServiceException.class, exception.getCause(), "应保留原始异常作为 cause");
-            assertEquals("请求地址不能为空", exception.getCause().getMessage(), "根因消息应说明是地址为空");
+            assertEquals("请求地址不能为空", exception.getMessage(), "根因消息应说明是地址为空");
         }
 
         @Test

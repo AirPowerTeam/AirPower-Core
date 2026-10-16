@@ -8,10 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -81,6 +78,8 @@ public class TaskUtil {
                     try {
                         TraceUtil.setTraceId(traceId);
                         run.run();
+                    } catch (VirtualMachineError | LinkageError e) {
+                        throw e;
                     } catch (Throwable e) {
                         // 必须传异常对象本身，只打印 getMessage() 会丢掉堆栈，线上问题无从定位
                         log.error("异步执行任务失败", e);
@@ -92,7 +91,7 @@ public class TaskUtil {
             } catch (RejectedExecutionException e) {
                 // 队列已满。不回退到调用方线程执行，否则会占住 Web 请求线程
                 log.warn("异步任务队列已满（容量 {}），任务被拒绝", QUEUE_CAPACITY);
-                throw new ServiceException("系统繁忙，请稍后重试");
+                throw new ServiceException("任务系统繁忙，请稍后重试");
             }
         }
     }
@@ -104,8 +103,27 @@ public class TaskUtil {
      * @apiNote 供测试判定饱和与排空用。仅凭「提交一次成功」判断排空不可靠：
      * 那一刻队列里可能还压着任务
      */
-    static boolean isIdle() {
+    public static boolean isIdle() {
         return EXECUTOR.getActiveCount() == 0 && EXECUTOR.getQueue().isEmpty();
+    }
+
+    /**
+     * 关闭线程池并等待在途任务排空
+     *
+     * @param timeout 最长等待时间
+     * @param unit    时间单位
+     * @return true 表示已优雅排空；false 表示超时或被中断
+     */
+    public static boolean shutdownAndAwait(long timeout, @NotNull TimeUnit unit) {
+        EXECUTOR.shutdown();
+        try {
+            return EXECUTOR.awaitTermination(timeout, unit);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("等待异步任务池排空时被中断");
+            EXECUTOR.shutdownNow();
+            return false;
+        }
     }
 
     /**

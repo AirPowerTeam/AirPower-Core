@@ -1,7 +1,9 @@
 package cn.hamm.airpower.core.validate;
 
 import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.exception.ServiceException;
 import jakarta.validation.*;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -18,13 +20,20 @@ import static cn.hamm.airpower.core.validate.PatternConstant.*;
  *
  * @author Hamm.cn
  */
+@Slf4j
 public class ValidateUtil {
+    /**
+     * 正则输入的最大长度
+     */
+    public static final int MAX_REGEX_INPUT = 256;
+
     /**
      * 验证器实例
      */
     private static volatile Validator validator;
+
     /**
-     * ValidatorFactory 实例（延迟初始化，应用关闭时统一关闭）
+     * ValidatorFactory 实例
      */
     private static ValidatorFactory validatorFactory;
 
@@ -198,8 +207,8 @@ public class ValidateUtil {
         if (idCard.length() != id2Length) {
             return false;
         }
-        // 前 17 位必须是数字，校验位允许大写 X 或小写 x
-        if (!isDigits(idCard, id2Length - 1)) {
+        // 前 17 位必须是 ASCII 数字，校验位允许大写 X 或小写 x
+        if (!isAsciiDigits(idCard, id2Length - 1)) {
             return false;
         }
         char checkCode = idCard.charAt(idCard.length() - 1);
@@ -207,22 +216,24 @@ public class ValidateUtil {
             checkCode = 'X';
         }
         int sum = IntStream.range(0, id2Length - 1)
-                .map(i -> Character.digit(idCard.charAt(i), 10) * factor[i])
+                .map(i -> (idCard.charAt(i) - '0') * factor[i])
                 .sum();
         // 求和后取余数11，得到的余数与校验码进行匹配，匹配成功，说明通过验证。
         return flags[sum % id2Mod] == checkCode;
     }
 
     /**
-     * 判断前 {@code length} 个字符是否都是数字
+     * 判断前 {@code length} 个字符是否都是 ASCII 数字
      *
      * @param value  字符串
      * @param length 校验长度
-     * @return 是否为纯数字
+     * @return 是否为纯 ASCII 数字
      */
-    private static boolean isDigits(String value, int length) {
+    @Contract(pure = true)
+    private static boolean isAsciiDigits(String value, int length) {
         for (int i = 0; i < length; i++) {
-            if (!Character.isDigit(value.charAt(i))) {
+            char c = value.charAt(i);
+            if (c < '0' || c > '9') {
                 return false;
             }
         }
@@ -235,13 +246,27 @@ public class ValidateUtil {
      * @param value   参数
      * @param pattern 正则
      * @return 验证结果
+     * @apiNote 超过 {@link #MAX_REGEX_INPUT} 的输入直接判为不匹配。{@link java.util.regex}
+     * 对分组重复会逐层压栈且不做尾调用消除，超长输入可能触发 {@link StackOverflowError}；
+     * 它继承 {@link Error}，上层 {@code catch (Exception)} 捕获不到，会击穿整套错误处理。
+     * 这里在唯一的收口处限长，并兜底捕获；代价是拒绝超长输入，远高于 RFC 5321 的上限。
      */
     public static boolean validRegex(String value, Pattern pattern) {
         if (Objects.isNull(value) || Objects.isNull(pattern)) {
             // 空值与空正则一律视为不匹配，避免抛出空指针
             return false;
         }
-        return pattern.matcher(value).matches();
+        if (value.length() > MAX_REGEX_INPUT) {
+            return false;
+        }
+        try {
+            return pattern.matcher(value).matches();
+        } catch (StackOverflowError e) {
+            // 兜底：即便限长后仍可能被调用方自定义的病态正则触发，这里必须吞掉
+            // ——本方法是 isXxx 谓词，返回 false 才是安全方向
+            log.warn("正则匹配触发栈溢出，已按不匹配处理, pattern={}", pattern.pattern(), e);
+            return false;
+        }
     }
 
     /**
@@ -254,13 +279,20 @@ public class ValidateUtil {
      */
     public static <M extends RootModel> void valid(M model, Class<?>... actions) {
         if (Objects.isNull(model)) {
-            return;
+            // fail-closed：本方法的唯一职责就是拒绝不合法数据。静默放过 null 会让
+            // 「先判断再校验」的调用方拿到无条件通过，随后 NPE 或写入半成品实体
+            throw new ServiceException("待校验的数据不能为空");
         }
-        initValidator();
+        // 热路径不再进 synchronized：volatile 读一次，仅在未初始化时走加锁慢路径
+        Validator current = validator;
+        if (Objects.isNull(current)) {
+            initValidator();
+            current = validator;
+        }
         Class<?>[] groups = Objects.isNull(actions) ? new Class<?>[0] : actions;
         Set<ConstraintViolation<M>> violations = groups.length == 0
-                ? validator.validate(model)
-                : validator.validate(model, groups);
+                ? current.validate(model)
+                : current.validate(model, groups);
         if (violations.isEmpty()) {
             return;
         }

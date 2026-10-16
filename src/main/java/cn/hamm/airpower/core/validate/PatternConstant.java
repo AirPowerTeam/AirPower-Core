@@ -29,11 +29,12 @@ public class PatternConstant {
 
     /**
      * 邮箱
-     *
-     * @apiNote 开头的负向前瞻禁止出现连续两个点，且域名至少两段
      */
     public static final Pattern EMAIL = compile(
-            "^(?!.*\\.\\.)[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+            "^(?!.*\\.\\.)"
+                    + "[a-zA-Z0-9](?:[a-zA-Z0-9._%+-]{0,62}[a-zA-Z0-9])?"
+                    + "@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+                    + "(?:\\.[a-zA-Z]{2,})+$"
     );
 
     /**
@@ -55,7 +56,7 @@ public class PatternConstant {
      * 座机电话
      */
     public static final Pattern TEL_PHONE = compile(
-            "^(((0\\d{2,3})-)?((\\d{7,8})|(400\\d{7})|(800\\d{7}))(-(\\d{1,4}))?)$"
+            "^(?:\\+?86)?(?:0\\d{2,3}-?)?(?:\\d{7,8}|400\\d{7}|800\\d{7})(?:-\\d{1,4})?$"
     );
 
     /**

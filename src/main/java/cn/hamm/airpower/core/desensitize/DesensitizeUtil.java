@@ -2,6 +2,7 @@ package cn.hamm.airpower.core.desensitize;
 
 import cn.hamm.airpower.core.StringUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -13,6 +14,7 @@ import java.util.Objects;
  *
  * @author Hamm.cn
  */
+@Slf4j
 public class DesensitizeUtil {
     /**
      * IPv4 地址的段数
@@ -52,7 +54,6 @@ public class DesensitizeUtil {
             throw new ServiceException("待脱敏文本不能为 null");
         }
         if (!StringUtil.hasText(symbol)) {
-            // 符号为空会导致原文被静默删除（symbol.repeat 抛 NPE，或空串拼接丢数据）
             symbol = DEFAULT_SYMBOL;
         }
         if (head < 0 || tail < 0 || head + tail >= text.length()) {
@@ -74,20 +75,20 @@ public class DesensitizeUtil {
      * @param ipv4   IPv4 地址
      * @param symbol 符号
      * @return 脱敏后的 IPv4 地址
-     * @apiNote 只保留首尾两段，中间两段整体替换；传入内容不是合法 IPv4 时<b>原样返回</b>，
-     * 不做脱敏
+     * @apiNote 只保留首尾两段，中间两段整体替换
      */
     public static @NotNull String desensitizeIpv4Address(@Nullable String ipv4, String symbol) {
-        // 脱敏是「尽力而为」的展示逻辑，入参为空时返回空串而不是抛异常
         if (!StringUtil.hasText(ipv4)) {
-            return Objects.isNull(ipv4) ? "" : ipv4;
+            return "";
         }
         if (!StringUtil.hasText(symbol)) {
             symbol = DEFAULT_SYMBOL;
         }
-        String[] strings = ipv4.split("\\" + IP_DELIMITER);
-        if (strings.length != IPV4_PART_COUNT) {
-            return ipv4;
+        String trimmed = ipv4.strip();
+        String[] strings = trimmed.split("\\" + IP_DELIMITER);
+        if (strings.length != IPV4_PART_COUNT || !isAllDigits(strings)) {
+            log.warn("IP 脱敏失败：输入不是合法 IPv4，已整串替换, length={}", ipv4.length());
+            return symbol.repeat(Math.max(ipv4.length(), 1));
         }
         strings[1] = symbol + symbol + symbol;
         strings[2] = strings[1];
@@ -175,5 +176,26 @@ public class DesensitizeUtil {
             }
         }
         return replace(valueString, head, tail, symbol);
+    }
+
+    /**
+     * 判断 IPv4 的每一段是否都是十进制数字
+     *
+     * @param strings 按点切分后的片段
+     * @return 是否全为数字
+     */
+    private static boolean isAllDigits(String @NotNull [] strings) {
+        for (String part : strings) {
+            if (part.isEmpty() || part.length() > 3) {
+                return false;
+            }
+            for (int i = 0; i < part.length(); i++) {
+                char c = part.charAt(i);
+                if (c < '0' || c > '9') {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }

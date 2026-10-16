@@ -43,7 +43,12 @@ public class StringUtil {
             int strLen = str.length();
             if (strLen != 0) {
                 for (int i = 0; i < strLen; ++i) {
-                    if (!Character.isWhitespace(str.charAt(i))) {
+                    char c = str.charAt(i);
+                    // 必须同时排除 isWhitespace 与 isSpaceChar：
+                    // Character.isWhitespace 不认 U+00A0(NBSP)、U+202F 等「不可断空格」，
+                    // 于是 32 个不间断空格会被判为「有文本」，配合长度下限校验
+                    // 就构成一个零熵的「密钥」——能通过非空与长度两道检查
+                    if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) {
                         return true;
                     }
                 }

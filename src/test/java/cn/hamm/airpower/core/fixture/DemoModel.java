@@ -1,16 +1,12 @@
 package cn.hamm.airpower.core.fixture;
 
-import cn.hamm.airpower.core.common.RootModel;
-import cn.hamm.airpower.core.reflect.Description;
-import cn.hamm.airpower.core.desensitize.Desensitize;
 import cn.hamm.airpower.core.common.Meta;
 import cn.hamm.airpower.core.common.ReadOnly;
+import cn.hamm.airpower.core.common.RootModel;
+import cn.hamm.airpower.core.desensitize.Desensitize;
 import cn.hamm.airpower.core.desensitize.DesensitizeType;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.EqualsAndHashCode;
+import cn.hamm.airpower.core.reflect.Description;
+import lombok.*;
 import lombok.experimental.Accessors;
 
 import java.util.List;
@@ -25,7 +21,7 @@ import java.util.List;
  */
 @Data
 @Accessors(chain = true)
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = false)
 public class DemoModel extends RootModel {
     /**
      * 主键
@@ -113,6 +109,36 @@ public class DemoModel extends RootModel {
     @Description("含空元素的子模型集合")
     @Meta
     private List<DemoModel> childrenWithNull;
+    /**
+     * 基本类型 boolean，未标 {@code @Meta}
+     *
+     * <p>Lombok 对基本类型 boolean 生成的是 {@code isInternalFlag()} 而不是
+     * {@code getIsInternalFlag()}，按字段名硬拼 getter 会找不到方法。</p>
+     */
+    @Description("内部标记")
+    private boolean isInternalFlag;
+    /**
+     * 无 getter 的字段，未标 {@code @Meta}
+     */
+    @Description("隐藏字段")
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private String hidden;
+    /**
+     * key 为字符串、value 为模型的 Map
+     * <p>用来验证 {@code @ReadOnly} / {@code @Meta} / {@code @Desensitize}
+     * 三条递归路径是否都覆盖了 Map 形态</p>
+     */
+    @Description("按 key 索引的子模型")
+    @Meta
+    private java.util.Map<String, DemoModel> mapOfChild;
+    /**
+     * 集合类型的脱敏字段
+     */
+    @Description("手机号列表")
+    @Meta
+    @Desensitize(value = DesensitizeType.MOBILE)
+    private List<String> mobileList;
 
     /**
      * Getter 上标记 {@code @Meta}，字段未标记
@@ -123,38 +149,4 @@ public class DemoModel extends RootModel {
     public String getTitle() {
         return title;
     }
-
-    /**
-     * 基本类型 boolean，未标 {@code @Meta}
-     *
-     * <p>Lombok 对基本类型 boolean 生成的是 {@code isInternalFlag()} 而不是
-     * {@code getIsInternalFlag()}，按字段名硬拼 getter 会找不到方法。</p>
-     */
-    @Description("内部标记")
-    private boolean isInternalFlag;
-
-    /**
-     * 无 getter 的字段，未标 {@code @Meta}
-     */
-    @Description("隐藏字段")
-    @Getter(AccessLevel.NONE)
-    @Setter(AccessLevel.NONE)
-    private String hidden;
-
-    /**
-     * key 为字符串、value 为模型的 Map
-     * <p>用来验证 {@code @ReadOnly} / {@code @Meta} / {@code @Desensitize}
-     * 三条递归路径是否都覆盖了 Map 形态</p>
-     */
-    @Description("按 key 索引的子模型")
-    @Meta
-    private java.util.Map<String, DemoModel> mapOfChild;
-
-    /**
-     * 集合类型的脱敏字段
-     */
-    @Description("手机号列表")
-    @Meta
-    @Desensitize(value = DesensitizeType.MOBILE)
-    private List<String> mobileList;
 }

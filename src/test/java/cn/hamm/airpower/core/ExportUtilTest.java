@@ -1,12 +1,12 @@
 package cn.hamm.airpower.core;
 
-import cn.hamm.airpower.core.reflect.Description;
 import cn.hamm.airpower.core.common.RootModel;
-import cn.hamm.airpower.core.export.Export;
 import cn.hamm.airpower.core.datetime.DateTimeUtil;
 import cn.hamm.airpower.core.exception.ServiceException;
+import cn.hamm.airpower.core.export.Export;
 import cn.hamm.airpower.core.export.ExportUtil;
 import cn.hamm.airpower.core.fixture.ExportDemoModel;
+import cn.hamm.airpower.core.reflect.Description;
 import cn.hamm.airpower.core.reflect.ReflectUtil;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -103,7 +103,7 @@ class ExportUtilTest {
      */
     @Data
     @Accessors(chain = true)
-    @EqualsAndHashCode(callSuper = true)
+    @EqualsAndHashCode(callSuper = false)
     static class BranchModel extends RootModel {
         /**
          * 纯文本列

@@ -9,10 +9,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.annotation.Annotation;
 import java.lang.invoke.SerializedLambda;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Parameter;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -45,6 +42,13 @@ public class ReflectUtil {
      * {@code ClassLoader} 下互相串号
      */
     private final static ConcurrentHashMap<Class<?>, Field[]> DECLARED_FIELD_LIST_MAP = new ConcurrentHashMap<>();
+
+    /**
+     * 字段缓存的容量上限
+     *
+     * @apiNote 模型类数量有限且稳定，正常运行永远不会触达这个阈值
+     */
+    private static final int FIELD_CACHE_LIMIT = 512;
 
     /**
      * 获取字段的 Getter 方法名
@@ -89,6 +93,8 @@ public class ReflectUtil {
         try {
             field.setAccessible(true);
             return field.get(object);
+        } catch (InaccessibleObjectException | SecurityException e) {
+            throw new ServiceException("字段(" + field.getName() + ")不可访问，请检查模块是否已 --add-opens 开放", e);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
             throw new ServiceException("获取对象指定属性的值失败, " + e.getMessage());
@@ -114,6 +120,8 @@ public class ReflectUtil {
                 return;
             }
             field.set(object, value);
+        } catch (InaccessibleObjectException | SecurityException e) {
+            throw new ServiceException("字段(" + field.getName() + ")不可访问，请检查模块是否已 --add-opens 开放", e);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
             throw new ServiceException("设置对象指定属性的值失败, " + e.getMessage());
@@ -295,6 +303,9 @@ public class ReflectUtil {
         if (Objects.isNull(clazz)) {
             throw new ServiceException("无法获取 null 的字段列表");
         }
+        if (FIELD_LIST_MAP.size() > FIELD_CACHE_LIMIT) {
+            FIELD_LIST_MAP.clear();
+        }
         return FIELD_LIST_MAP.computeIfAbsent(clazz, ReflectUtil::getCacheFieldList);
     }
 
@@ -336,6 +347,9 @@ public class ReflectUtil {
      */
     @Contract(pure = true)
     public static Field @NotNull [] getDeclaredFields(@NotNull Class<?> clazz) {
+        if (DECLARED_FIELD_LIST_MAP.size() > FIELD_CACHE_LIMIT) {
+            DECLARED_FIELD_LIST_MAP.clear();
+        }
         return DECLARED_FIELD_LIST_MAP.computeIfAbsent(clazz, Class::getDeclaredFields);
     }
 
