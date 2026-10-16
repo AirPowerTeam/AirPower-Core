@@ -3,6 +3,10 @@ package cn.hamm.airpower.core;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Locale;
+
 /**
  * <h2>字符串工具类</h2>
  *
@@ -172,5 +176,37 @@ public class StringUtil {
                 return new String(chars);
             }
         }
+    }
+
+    /**
+     * 以常量时间比较两个字符串是否相等
+     *
+     * @param a 字符串 A
+     * @param b 字符串 B
+     * @return 是否相等
+     */
+    @Contract("null, null -> true")
+    public static boolean equalsConstantTime(@Nullable String a, @Nullable String b) {
+        if (a == null || b == null) {
+            //noinspection StringEquality
+            return a == b;
+        }
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 以常量时间比较两个字符串是否相等（忽略大小写）
+     *
+     * @param a 字符串 A
+     * @param b 字符串 B
+     * @return 是否相等
+     */
+    @Contract("null, null -> true")
+    public static boolean equalsIgnoreCaseConstantTime(@Nullable String a, @Nullable String b) {
+        if (a == null || b == null) {
+            //noinspection StringEquality
+            return a == b;
+        }
+        return equalsConstantTime(a.toUpperCase(Locale.ROOT), b.toUpperCase(Locale.ROOT));
     }
 }

@@ -4,6 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -336,5 +338,77 @@ public class StringUtilTest {
             assertEquals("Abc", StringUtil.capitalize(StringUtil.uncapitalize("Abc")),
                     "大写先小写再大写应回到原值");
         }
+    }
+
+    @Nested
+    @DisplayName("常量时间比较")
+    class ConstantTimeEquals {
+
+        @Test
+        @DisplayName("相等与不等的判定应与 String.equals 一致")
+        void matchesStringEquals() {
+            assertTrue(StringUtil.equalsConstantTime("abc", "abc"));
+            assertFalse(StringUtil.equalsConstantTime("abc", "abd"));
+            assertFalse(StringUtil.equalsConstantTime("abc", "abcd"));
+            assertFalse(StringUtil.equalsConstantTime("abcd", "abc"));
+            assertTrue(StringUtil.equalsConstantTime("", ""));
+        }
+
+        @Test
+        @DisplayName("null 处理不抛空指针，且语义明确")
+        void nullSafe() {
+            assertTrue(StringUtil.equalsConstantTime(null, null), "同为 null 应视为相等");
+            assertFalse(StringUtil.equalsConstantTime("a", null));
+            assertFalse(StringUtil.equalsConstantTime(null, "a"));
+        }
+
+        @Test
+        @DisplayName("大小写敏感（否则会削弱口令与签名的强度）")
+        void caseSensitive() {
+            assertFalse(StringUtil.equalsConstantTime("Abc", "abc"),
+                    "口令/签名比较必须区分大小写");
+            assertFalse(StringUtil.equalsConstantTime("0X1F", "0x1f"));
+        }
+
+        @Test
+        @DisplayName("Unicode 内容按 UTF-8 字节比较，不因字符集实现而误判")
+        void unicodeContent() {
+            assertTrue(StringUtil.equalsConstantTime("验证码①", "验证码①"));
+            assertFalse(StringUtil.equalsConstantTime("验证码①", "验证码②"));
+            assertTrue(StringUtil.equalsConstantTime("🔐密钥", "🔐密钥"),
+                    "补充平面字符（代理对）也必须正确比较");
+            // 代理对相邻的两个码点只差一个字节位，最容易在字节级比较里被写错
+            assertFalse(StringUtil.equalsConstantTime("🔐密钥", "🔑密钥"),
+                    "仅码点不同的补充平面字符必须判为不等");
+            assertFalse(StringUtil.equalsConstantTime("\uD83D\uDD10", "\uD83D\uDD11"),
+                    "未配对的代理项也必须判为不等");
+        }
+
+        @Test
+        @DisplayName("忽略大小写版本：语义正确且 null 安全")
+        void ignoreCaseSemantics() {
+            assertTrue(StringUtil.equalsIgnoreCaseConstantTime("a1B2c3", "A1b2C3"));
+            assertFalse(StringUtil.equalsIgnoreCaseConstantTime("a1B2c3", "a1B2c4"));
+            assertTrue(StringUtil.equalsIgnoreCaseConstantTime(null, null));
+            assertFalse(StringUtil.equalsIgnoreCaseConstantTime("x", null));
+        }
+
+        @Test
+        @DisplayName("忽略大小写必须用 Locale.ROOT，不受土耳其语 i 的影响")
+        void turkishLocaleDoesNotBreak() {
+            Locale previous = Locale.getDefault();
+            try {
+                // 土耳其语下 "i".toUpperCase() 得到 U+0130（İ，带点），
+                // "I".toLowerCase() 得到 U+0131（ı，无点）——
+                // 若用默认 Locale 归一化，同一个验证码在不同机器上会得到不同结果
+                Locale.setDefault(new Locale("tr", "TR"));
+                assertTrue(StringUtil.equalsIgnoreCaseConstantTime("FILE", "file"),
+                        "土耳其语环境下 FILE 与 file 仍应判定为相等");
+                assertFalse(StringUtil.equalsIgnoreCaseConstantTime("FILE", "fileX"));
+            } finally {
+                Locale.setDefault(previous);
+            }
+        }
+
     }
 }
