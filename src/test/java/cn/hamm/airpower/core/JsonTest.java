@@ -439,9 +439,9 @@ class JsonTest {
         }
 
         @Test
-        @DisplayName("parse 文本 null 返回 null 对象")
+        @DisplayName("parse 文本 null 抛异常")
         void parseJsonNullLiteral() {
-            assertNull(Json.parse("null", Json.class), "JSON 字面量 null 应反序列化为 Java null");
+            assertThrows(ServiceException.class, () -> Json.parse("null", Json.class));
         }
 
         @Test
