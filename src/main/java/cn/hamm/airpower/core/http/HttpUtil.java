@@ -465,7 +465,7 @@ public class HttpUtil {
         }
 
         @Override
-        public void onSubscribe(Flow.Subscription subscription) {
+        public void onSubscribe(Flow.@NotNull Subscription subscription) {
             // 必须把 subscription 存下来：不存就永远无法 cancel()，
             // 「限制响应体大小」就只限制了本方的堆占用，管不住网络传输本身
             this.subscription = subscription;

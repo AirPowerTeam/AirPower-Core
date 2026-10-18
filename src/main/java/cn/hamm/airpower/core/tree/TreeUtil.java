@@ -61,7 +61,6 @@ public class TreeUtil {
     private static <E extends IEntity<E> & ITree<E>> @Unmodifiable @NotNull List<E> buildTreeListOptimized(
             @NotNull List<E> list, long parentId
     ) {
-        @SuppressWarnings("AlibabaCollectionInitShouldAssignCapacity")
         Map<Long, List<E>> parentMap = new HashMap<>();
         Set<Long> declaredIds = new HashSet<>();
         for (E item : list) {
