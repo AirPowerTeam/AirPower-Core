@@ -92,8 +92,6 @@ public class ReflectUtil {
             return field.get(object);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new ServiceException("反射操作属性失败，" + e.getMessage());
-        } finally {
-            field.setAccessible(false);
         }
     }
 
