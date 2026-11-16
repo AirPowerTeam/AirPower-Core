@@ -31,11 +31,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Slf4j
 public class AccessTokenUtil {
     /**
-     * 请先设置密钥环境变量
-     */
-    private static final String SET_ENV_TOKEN_SECRET_FIRST = "请在环境变量配置 airpower.accessTokenSecret";
-
-    /**
      * 令牌密钥最短长度
      */
     private static final int MIN_SECRET_LENGTH = 32;
@@ -157,16 +152,14 @@ public class AccessTokenUtil {
     /**
      * 校验令牌密钥
      *
-     * @param secret  密钥
-     * @param isBuild 是否为签发场景（只影响错误文案）
+     * @param secret 密钥
      */
-    private static void checkSecret(String secret, boolean isBuild) {
+    private static void checkSecret(String secret) {
         if (!StringUtil.hasText(secret)) {
-            throwException(SET_ENV_TOKEN_SECRET_FIRST);
+            throwException("请在环境变量配置 airpower.accessTokenSecret");
         }
         if (secret.length() < MIN_SECRET_LENGTH) {
-            throwException((isBuild ? "身份令牌创建失败" : "身份令牌校验失败")
-                    + "，令牌密钥最短限制为 " + MIN_SECRET_LENGTH + " 位字符，当前为 " + secret.length() + " 位");
+            throwException("令牌密钥最短限制为 " + MIN_SECRET_LENGTH + " 位字符，当前为 " + secret.length() + " 位");
         }
     }
 
@@ -188,7 +181,7 @@ public class AccessTokenUtil {
      * @return AccessToken
      */
     public final String build(String secret) {
-        checkSecret(secret, true);
+        checkSecret(secret);
         if (verifiedToken.getPayloads().isEmpty()) {
             throw new ServiceException("没有任何负载数据");
         }
@@ -283,7 +276,7 @@ public class AccessTokenUtil {
      * @return VerifiedToken
      */
     public final VerifiedToken verify(String accessToken, String secret) {
-        checkSecret(secret, false);
+        checkSecret(secret);
         if (!StringUtil.hasText(accessToken)) {
             throwException("身份令牌为空，请重新登录");
         }
