@@ -91,8 +91,9 @@ public class ReflectUtil {
             field.setAccessible(true);
             return field.get(object);
         } catch (IllegalAccessException | IllegalArgumentException e) {
-            // 调用方传入 null 对象导致的 NPE 不在此捕获，交由上层按调用错误处理
-            throw new ServiceException("获取对象指定属性的值失败, " + e.getMessage());
+            throw new ServiceException("反射操作属性失败，" + e.getMessage());
+        } finally {
+            field.setAccessible(false);
         }
     }
 
@@ -127,6 +128,7 @@ public class ReflectUtil {
      * @param type 基本类型
      * @return 零值装箱结果
      */
+    @Contract(pure = true)
     private static @NotNull Object defaultPrimitiveValue(@NotNull Class<?> type) {
         if (boolean.class == type) {
             return Boolean.FALSE;
@@ -345,7 +347,6 @@ public class ReflectUtil {
      *
      * @param lambda 表达式
      * @return 函数名
-     * @apiNote 仅去掉 {@code get} 前缀，方法名中间的 {@code get} 会被保留
      */
     public static @NotNull String getLambdaFunctionName(@NotNull IFunction<?, ?> lambda) {
         String methodName = getSerializedLambda(lambda).getImplMethodName();

@@ -3,13 +3,7 @@ package cn.hamm.airpower.core;
 import cn.hamm.airpower.core.annotation.Description;
 import cn.hamm.airpower.core.annotation.Meta;
 import cn.hamm.airpower.core.exception.ServiceException;
-import cn.hamm.airpower.core.fixture.AnnotatedImpl;
-import cn.hamm.airpower.core.fixture.AnnotatedInterface;
-import cn.hamm.airpower.core.fixture.DemoModel;
-import cn.hamm.airpower.core.fixture.DemoTree;
-import cn.hamm.airpower.core.fixture.Gender;
-import cn.hamm.airpower.core.fixture.InheritedImpl;
-import cn.hamm.airpower.core.fixture.SameNameProbe;
+import cn.hamm.airpower.core.fixture.*;
 import cn.hamm.airpower.core.interfaces.IFunction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,13 +15,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,6 +47,17 @@ class ReflectUtilTest {
      */
     private static Field childField() throws NoSuchFieldException {
         return Child.class.getDeclaredField("childField");
+    }
+
+    /**
+     * 查找被测字段
+     *
+     * @param name 字段名
+     * @return 字段
+     * @throws NoSuchFieldException 字段不存在
+     */
+    static Field fieldOf(String name) throws NoSuchFieldException {
+        return DemoTree.class.getDeclaredField(name);
     }
 
     /**
@@ -186,16 +185,6 @@ class ReflectUtilTest {
     }
 
     /**
-     * 内部类：编译器会生成 {@code this$0} 合成字段
-     */
-    class InnerHolder {
-        /**
-         * 名称
-         */
-        String name;
-    }
-
-    /**
      * 只有有参构造器的模型
      */
     static class WithArgsModel extends RootModel<WithArgsModel> {
@@ -257,6 +246,16 @@ class ReflectUtilTest {
         public String getForgetLabel() {
             return "forgetLabel";
         }
+    }
+
+    /**
+     * 内部类：编译器会生成 {@code this$0} 合成字段
+     */
+    class InnerHolder {
+        /**
+         * 名称
+         */
+        String name;
     }
 
     @Nested
@@ -675,17 +674,6 @@ class ReflectUtilTest {
                             Child.class.getDeclaredMethod("childPlainMethod", int.class).getParameters()[0]),
                     "未标注的参数应返回参数名（需开启 -parameters）");
         }
-    }
-
-    /**
-     * 查找被测字段
-     *
-     * @param name 字段名
-     * @return 字段
-     * @throws NoSuchFieldException 字段不存在
-     */
-    static Field fieldOf(String name) throws NoSuchFieldException {
-        return DemoTree.class.getDeclaredField(name);
     }
 
     @Nested
@@ -1176,6 +1164,21 @@ class ReflectUtilTest {
     class TurkishLocaleTest {
 
         /**
+         * 查找字段并包装查找失败
+         *
+         * @param clazz 类
+         * @param name  字段名
+         * @return 字段
+         */
+        private static Field findField(Class<?> clazz, String name) {
+            try {
+                return clazz.getDeclaredField(name);
+            } catch (NoSuchFieldException e) {
+                throw new IllegalStateException("测试夹具缺少字段 " + clazz.getSimpleName() + "." + name, e);
+            }
+        }
+
+        /**
          * 在指定默认 Locale 下执行
          *
          * @param locale   目标 Locale
@@ -1205,21 +1208,6 @@ class ReflectUtilTest {
             });
         }
 
-        /**
-         * 查找字段并包装查找失败
-         *
-         * @param clazz 类
-         * @param name  字段名
-         * @return 字段
-         */
-        private static Field findField(Class<?> clazz, String name) {
-            try {
-                return clazz.getDeclaredField(name);
-            } catch (NoSuchFieldException e) {
-                throw new IllegalStateException("测试夹具缺少字段 " + clazz.getSimpleName() + "." + name, e);
-            }
-        }
-
         @Test
         @DisplayName("按 Getter 查找注解在土耳其语环境下仍然有效")
         void getAnnotationByGetterWorksInTurkishLocale() throws Exception {
@@ -1227,7 +1215,7 @@ class ReflectUtilTest {
             // Getter 名一旦被土耳其语规则污染，这条查找链就断了
             withDefaultLocale(new Locale("tr", "TR"), () -> {
                 assertNotNull(CollectionUtil.getExportFieldList(
-                                cn.hamm.airpower.core.fixture.ExportDemoModel.class).stream()
+                                        cn.hamm.airpower.core.fixture.ExportDemoModel.class).stream()
                                 .filter(field -> "id".equals(field.getName()))
                                 .findFirst().orElse(null),
                         "土耳其语环境下 id 列仍应被识别为导出列");

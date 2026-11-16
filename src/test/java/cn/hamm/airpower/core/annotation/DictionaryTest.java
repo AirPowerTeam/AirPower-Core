@@ -1,13 +1,13 @@
 package cn.hamm.airpower.core.annotation;
 
 import cn.hamm.airpower.core.ValidateUtil;
+import cn.hamm.airpower.core.exception.ServiceException;
 import cn.hamm.airpower.core.fixture.Gender;
 import cn.hamm.airpower.core.fixture.ValidDemoModel;
 import jakarta.validation.Constraint;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
-import cn.hamm.airpower.core.exception.ServiceException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.Documented;
