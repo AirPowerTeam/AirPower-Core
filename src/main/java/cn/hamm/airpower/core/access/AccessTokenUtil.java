@@ -31,11 +31,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Slf4j
 public class AccessTokenUtil {
     /**
-     * 无效的令牌
-     */
-    private static final String ACCESS_TOKEN_INVALID = "身份令牌无效，请重新获取身份令牌";
-
-    /**
      * 请先设置密钥环境变量
      */
     private static final String SET_ENV_TOKEN_SECRET_FIRST = "请在环境变量配置 airpower.accessTokenSecret";
@@ -120,7 +115,7 @@ public class AccessTokenUtil {
         try {
             return Long.parseLong(value);
         } catch (NumberFormatException e) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("令牌中的过期时间格式错误");
             return 0L;
         }
     }
@@ -136,8 +131,8 @@ public class AccessTokenUtil {
         try {
             return Json.parse2Map(new String(Base64.getUrlDecoder().decode(value.getBytes(UTF_8))));
         } catch (Exception e) {
-            throwException(ACCESS_TOKEN_INVALID);
-            return new HashMap<>();
+            throwException("解析令牌中的负载数据失败");
+            return new HashMap<>(0);
         }
     }
 
@@ -147,6 +142,7 @@ public class AccessTokenUtil {
      * @param bytes 字节数组
      * @return 十六进制字符串，每个字节占两位
      */
+    @Contract("_ -> new")
     private static @NotNull String toHex(byte @NotNull [] bytes) {
         char[] hexChars = new char[bytes.length * 2];
         char[] digits = "0123456789abcdef".toCharArray();
@@ -289,28 +285,28 @@ public class AccessTokenUtil {
     public final VerifiedToken verify(String accessToken, String secret) {
         checkSecret(secret, false);
         if (!StringUtil.hasText(accessToken)) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("身份令牌为空，请重新登录");
         }
         String source = "";
         try {
             source = new String(Base64.getUrlDecoder().decode(accessToken.getBytes(UTF_8)));
         } catch (Exception exception) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("解析身份令牌失败，无效的身份令牌");
         }
         if (!StringUtil.hasText(source)) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("无效的身份令牌");
         }
         String[] list = source.split("\\" + TOKEN_DELIMITER);
         if (list.length != TOKEN_PART_COUNT) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("身份令牌格式错误");
         }
         //noinspection AlibabaUndefineMagicConstant
         if (!constantTimeEquals(hmacSha256(secret, list[0] + TOKEN_DELIMITER + list[2]), list[1])) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("身份令牌签名错误");
         }
         long expireTimestamps = parseExpireTimestamps(list[0]);
         if (expireTimestamps < System.currentTimeMillis()) {
-            throwException(ACCESS_TOKEN_INVALID);
+            throwException("身份令牌已过期，请重新登录");
         }
         return new VerifiedToken().setExpireTimestamps(expireTimestamps).setPayloads(parsePayloads(list[2]));
     }
@@ -371,12 +367,12 @@ public class AccessTokenUtil {
         public final long getPayloadId() {
             Object userId = getPayload(Constant.ID);
             if (Objects.isNull(userId)) {
-                throwException(ACCESS_TOKEN_INVALID);
+                throwException("令牌中缺少 ID 负载");
             }
             try {
                 return Long.parseLong(userId.toString());
             } catch (NumberFormatException e) {
-                throwException(ACCESS_TOKEN_INVALID);
+                throwException("令牌中的 ID 负载格式错误");
                 return 0L;
             }
         }
