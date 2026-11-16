@@ -19,13 +19,13 @@
         <gpg.keyname>5FE4833A28EDA3991EA4F1D239A8BA7AF33610A8</gpg.keyname>
 
         <!-- Dependency Versions -->
-        <jackson.version>2.22.3</jackson.version>
+        <jackson.version>2.22.4</jackson.version>
         <lombok.version>1.18.48</lombok.version>
         <jakarta.validation.version>3.1.1</jakarta.validation.version>
         <jetbrains.annotations.version>26.1.0</jetbrains.annotations.version>
         <slf4j.version>2.0.17</slf4j.version>
-        <logback.version>1.6.5</logback.version>
-        <hibernate-validator.version>8.0.2.Final</hibernate-validator.version>
+        <logback.version>1.6.6</logback.version>
+        <hibernate-validator.version>9.1.5.Final</hibernate-validator.version>
         <jakarta-el-api.version>4.0.0</jakarta-el-api.version>
         <jakarta-el.version>4.0.2</jakarta-el.version>
 
