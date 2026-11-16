@@ -162,7 +162,7 @@ public class AccessTokenUtil {
      */
     private static void checkSecret(String secret, boolean isBuild) {
         if (!StringUtil.hasText(secret)) {
-            throwException(isBuild ? "身份令牌创建失败，" + SET_ENV_TOKEN_SECRET_FIRST : SET_ENV_TOKEN_SECRET_FIRST);
+            throwException(SET_ENV_TOKEN_SECRET_FIRST);
         }
         if (secret.length() < MIN_SECRET_LENGTH) {
             throwException((isBuild ? "身份令牌创建失败" : "身份令牌校验失败")
